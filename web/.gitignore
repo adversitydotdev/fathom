@@ -42,3 +42,9 @@ next-env.d.ts
 
 # alternate build output (NEXT_DIST_DIR)
 /.next-*/
+
+# playwright
+/e2e/.results/
+/e2e/.report/
+/e2e/.screenshots/
+/.next-e2e/
