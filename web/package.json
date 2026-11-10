@@ -13,7 +13,8 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "drive": "node e2e/drive.mjs",
-    "e2e:serve": "NEXT_DIST_DIR=.next-e2e OPENGRC_API_MOCKING=enabled sh -c 'next build && next start --port ${E2E_PORT:-3200}'"
+    "e2e:serve": "NEXT_DIST_DIR=.next-e2e OPENGRC_API_MOCKING=enabled sh -c 'next build && next start --port ${E2E_PORT:-3200}'",
+    "compare": "node e2e/compare.mjs"
   },
   "dependencies": {
     "@radix-ui/react-slot": "^1.5.0",
@@ -41,6 +42,8 @@
     "eslint-config-next": "16.4.6",
     "msw": "^3.0.4",
     "openapi-typescript": "^7.13.0",
+    "pixelmatch": "^8.0.0",
+    "pngjs": "^7.0.0",
     "tailwindcss": "4.3.3",
     "typescript": "^5"
   },

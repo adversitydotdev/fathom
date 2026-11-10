@@ -17,8 +17,11 @@ Prove UI changes in a real browser against a production build in mock mode. In m
 | `pnpm drive check` | Is the server up and hydrating? |
 | `pnpm drive aria <path>` | Accessibility tree as YAML. Pick selectors from this before writing a spec. |
 | `pnpm drive shot <path> [--theme light] [--width 390]` | One full-page screenshot. Prints the file path. |
+| `pnpm compare <base-dir> <head-dir> --out <dir>` | Pixel-diff two sweep runs. Writes before/after/diff PNGs and a markdown summary. See the header of `e2e/compare.mjs` for diffing your branch against `main`. |
 
 `mise run verify` from the repo root runs everything, Python and Go included.
+
+In CI, every PR gets one comment with before/after/diff images of each page the PR changed visually, compared against `main`. The images live on the orphan `ci-screenshots` branch. Pushes to `main` refresh that baseline. The sweep project runs before the other specs so their writes to the mock data never leak into screenshots. Keep it that way, or the diff fills with noise.
 
 Port 3100 belongs to `pnpm dev:mock` (see `.claude/launch.json`). e2e uses 3200 so it never reuses a dev server, because `next dev` compiles routes on first hit and makes timing flaky.
 
