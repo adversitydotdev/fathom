@@ -1,0 +1,1456 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  OpenGRC account. One public Fargate task, a single-AZ PostgreSQL instance,
+  a private S3 bucket, and SSM Parameter Store. NAT, RDS Proxy, and SQS are
+  off until their parameters are set. Leave EnableServices false until images
+  are pushed. TaskSize, EnableJobService, and EnableLoadBalancer are how an
+  active program grows.
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: Service
+        Parameters:
+          - EnableServices
+          - TaskSize
+          - CpuArchitecture
+          - RepositoryPrefix
+          - ApiImageTag
+          - WebImageTag
+          - EnableJobService
+          - JobTaskSize
+      - Label:
+          default: Database
+        Parameters:
+          - DatabaseInstanceClass
+          - DatabaseAllocatedStorage
+          - DatabaseMaxAllocatedStorage
+          - DatabaseEngineVersion
+          - DatabaseFamily
+          - DatabaseName
+          - DatabaseUsername
+          - DatabasePasswordVersion
+          - DeletionProtection
+      - Label:
+          default: Name, mail, and the load balancer
+        Parameters:
+          - DomainName
+          - HostedZoneId
+          - EnableLoadBalancer
+          - CertificateArn
+          - EnableNatGateway
+          - EnableRdsProxy
+          - EnableQueue
+          - AvailabilityZoneA
+          - AvailabilityZoneB
+
+Parameters:
+  EnableServices:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Start the tasks. Leave this false until the API and web images have been
+      pushed to the repositories this stack creates.
+  TaskSize:
+    Type: String
+    Default: small
+    AllowedValues: [small, medium, large, xlarge, 2xlarge]
+    Description: >
+      API task size. small is 0.25 vCPU and 1 GB. medium is 0.5 vCPU and 2 GB.
+      large is 1 vCPU and 2 GB. xlarge is 2 vCPU and 4 GB. 2xlarge is 4 vCPU
+      and 8 GB.
+  CpuArchitecture:
+    Type: String
+    Default: ARM64
+    AllowedValues: [ARM64, X86_64]
+    Description: Images must be built for this architecture. ARM64 is the priced default.
+  RepositoryPrefix:
+    Type: String
+    Default: opengrc
+    AllowedPattern: "^[a-z][a-z0-9-]{0,40}$"
+    Description: Lowercase prefix for the two ECR repositories, as prefix/api and prefix/web. One pair per account.
+  ApiImageTag:
+    Type: String
+    Default: latest
+    AllowedPattern: "^[A-Za-z0-9_.-]{1,128}$"
+    Description: Tag in the API repository.
+  WebImageTag:
+    Type: String
+    Default: latest
+    AllowedPattern: "^[A-Za-z0-9_.-]{1,128}$"
+    Description: Tag in the web repository.
+  EnableJobService:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Run the schedule and claimed jobs on a second task of the same API image.
+      The API task then serves requests and does not run the schedule.
+  JobTaskSize:
+    Type: String
+    Default: small
+    AllowedValues: [small, medium, large, xlarge, 2xlarge]
+    Description: Size of the job task. Used when EnableJobService is true.
+  DatabaseInstanceClass:
+    Type: String
+    Default: db.t4g.micro
+    AllowedValues: [db.t4g.micro, db.t4g.small, db.t4g.medium, db.t4g.large]
+    Description: Single-AZ PostgreSQL instance class.
+  DatabaseAllocatedStorage:
+    Type: Number
+    Default: 20
+    MinValue: 20
+    MaxValue: 16384
+    Description: Initial gp3 storage in GB. 20 is the minimum.
+  DatabaseMaxAllocatedStorage:
+    Type: Number
+    Default: 100
+    MinValue: 21
+    MaxValue: 65536
+    Description: Storage autoscaling ceiling in GB. Must be greater than DatabaseAllocatedStorage.
+  DatabaseEngineVersion:
+    Type: String
+    Default: "18.6"
+    Description: RDS for PostgreSQL engine version.
+  DatabaseFamily:
+    Type: String
+    Default: postgres18
+    AllowedPattern: "^postgres[0-9]+$"
+    Description: Parameter group family. postgres18 for engine 18.x. Keep this on the same major version as DatabaseEngineVersion.
+  DatabaseName:
+    Type: String
+    Default: opengrc
+    AllowedPattern: "^[a-z][a-z0-9]{0,62}$"
+    Description: Initial database name.
+  DatabaseUsername:
+    Type: String
+    Default: opengrc
+    AllowedPattern: "^[a-z][a-z0-9]{0,62}$"
+    Description: Master username.
+  DatabasePasswordVersion:
+    Type: String
+    Default: "1"
+    AllowedPattern: "^[1-9][0-9]*$"
+    Description: >
+      Version of the SecureString at /opengrc/STACK/database/password. Create that
+      parameter before the first deploy. Increment this after rotating it so the
+      database password changes. RDS rejects a slash, at-sign, quote, or space.
+  DeletionProtection:
+    Type: String
+    Default: "true"
+    AllowedValues: ["true", "false"]
+    Description: Block deletion of the database instance. Set false before deleting the stack.
+  DomainName:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$"
+    Description: Domain for the SES identity, and for the alias record when a hosted zone and load balancer are set. Leave empty to skip mail.
+  HostedZoneId:
+    Type: String
+    Default: ""
+    Description: Route 53 hosted zone for DomainName. When set, the stack writes the SES DKIM records and, with the load balancer, an alias to it.
+  EnableLoadBalancer:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Stable HTTPS name. Requires EnableServices and CertificateArn. The load
+      balancer terminates TLS. Tasks keep public addresses for outbound calls
+      unless EnableNatGateway is true.
+  CertificateArn:
+    Type: String
+    Default: ""
+    Description: ACM certificate in this region for DomainName. Required when EnableLoadBalancer is true.
+  EnableNatGateway:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Move tasks into the private subnet and send their outbound traffic
+      through one NAT gateway. Bills about $36.50 a month in us-east-1 before
+      any data, even when no task is running. Requires EnableLoadBalancer once
+      services are started, because the tasks no longer have public addresses.
+      S3 uses a free gateway endpoint, so evidence does not pass through the NAT.
+  EnableRdsProxy:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Put RDS Proxy in front of PostgreSQL and point the tasks at it. The proxy
+      pools connections. It bills per vCPU of the database whether or not the
+      tasks are running, and it stores the database password in Secrets Manager.
+  EnableQueue:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: >
+      Create an SQS queue and a dead-letter queue. OPENGRC_QUEUE_URL is set to
+      the queue, and empty when this is false. The job row remains the record
+      of the work. The message is the wake-up.
+  AvailabilityZoneA:
+    Type: String
+    Default: ""
+    Description: AZ for the task and the database. Empty uses the region's first AZ.
+  AvailabilityZoneB:
+    Type: String
+    Default: ""
+    Description: Second AZ for the database subnet group and the load balancer. Empty uses the region's second AZ.
+
+Rules:
+  LoadBalancerNeedsCertificate:
+    RuleCondition: !And
+      - !Equals [!Ref EnableLoadBalancer, "true"]
+      - !Equals [!Ref EnableServices, "true"]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref CertificateArn, ""]]
+        AssertDescription: EnableLoadBalancer requires CertificateArn when services are started.
+  NatNeedsLoadBalancer:
+    RuleCondition: !And
+      - !Equals [!Ref EnableNatGateway, "true"]
+      - !Equals [!Ref EnableServices, "true"]
+    Assertions:
+      - Assert: !Equals [!Ref EnableLoadBalancer, "true"]
+        AssertDescription: EnableNatGateway removes the tasks' public addresses, so EnableLoadBalancer is required once services are started.
+  ZoneNeedsDomain:
+    RuleCondition: !Not [!Equals [!Ref HostedZoneId, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref DomainName, ""]]
+        AssertDescription: HostedZoneId requires DomainName.
+  AvailabilityZonesTogether:
+    RuleCondition: !Or
+      - !Not [!Equals [!Ref AvailabilityZoneA, ""]]
+      - !Not [!Equals [!Ref AvailabilityZoneB, ""]]
+    Assertions:
+      - Assert: !And
+          - !Not [!Equals [!Ref AvailabilityZoneA, ""]]
+          - !Not [!Equals [!Ref AvailabilityZoneB, ""]]
+        AssertDescription: Set both availability zones, or leave both empty.
+
+Conditions:
+  ServicesOn: !Equals [!Ref EnableServices, "true"]
+  ServicesDirect: !And
+    - !Condition ServicesOn
+    - !Not [!Condition AlbRequested]
+  JobEnabled: !Equals [!Ref EnableJobService, "true"]
+  JobOn: !And
+    - !Condition ServicesOn
+    - !Condition JobEnabled
+  AlbRequested: !Equals [!Ref EnableLoadBalancer, "true"]
+  AlbOn: !And
+    - !Condition ServicesOn
+    - !Condition AlbRequested
+  TaskPublicHttps: !Not [!Condition AlbRequested]
+  HasDomain: !Not [!Equals [!Ref DomainName, ""]]
+  HasZone: !And
+    - !Condition HasDomain
+    - !Not [!Equals [!Ref HostedZoneId, ""]]
+  DnsAlias: !And
+    - !Condition AlbOn
+    - !Condition HasZone
+  HasAzA: !Not [!Equals [!Ref AvailabilityZoneA, ""]]
+  HasAzB: !Not [!Equals [!Ref AvailabilityZoneB, ""]]
+  ProtectDatabase: !Equals [!Ref DeletionProtection, "true"]
+  NatOn: !Equals [!Ref EnableNatGateway, "true"]
+  ProxyOn: !Equals [!Ref EnableRdsProxy, "true"]
+  QueueOn: !Equals [!Ref EnableQueue, "true"]
+  DirectDatabase: !Not [!Condition ProxyOn]
+  JobDirectDatabase: !And
+    - !Condition JobEnabled
+    - !Condition DirectDatabase
+  JobProxyIngress: !And
+    - !Condition JobEnabled
+    - !Condition ProxyOn
+  AlbWithoutNat: !And
+    - !Condition AlbOn
+    - !Not [!Condition NatOn]
+  AlbWithNat: !And
+    - !Condition AlbOn
+    - !Condition NatOn
+  JobWithoutNat: !And
+    - !Condition JobOn
+    - !Not [!Condition NatOn]
+  JobWithNat: !And
+    - !Condition JobOn
+    - !Condition NatOn
+
+Mappings:
+  TaskSize:
+    small:
+      Cpu: "256"
+      Memory: "1024"
+    medium:
+      Cpu: "512"
+      Memory: "2048"
+    large:
+      Cpu: "1024"
+      Memory: "2048"
+    xlarge:
+      Cpu: "2048"
+      Memory: "4096"
+    2xlarge:
+      Cpu: "4096"
+      Memory: "8192"
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.42.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public
+
+  PublicDefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !If [HasAzA, !Ref AvailabilityZoneA, !Select [0, !GetAZs ""]]
+      CidrBlock: 10.42.0.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-a
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !If [HasAzB, !Ref AvailabilityZoneB, !Select [1, !GetAZs ""]]
+      CidrBlock: 10.42.1.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-public-b
+
+  # The second private subnet has no tasks. A DB subnet group requires two
+  # availability zones even when the instance runs in one. Private subnets
+  # reach the internet only when EnableNatGateway adds a route.
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !If [HasAzA, !Ref AvailabilityZoneA, !Select [0, !GetAZs ""]]
+      CidrBlock: 10.42.10.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-a
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !If [HasAzB, !Ref AvailabilityZoneB, !Select [1, !GetAZs ""]]
+      CidrBlock: 10.42.11.0/24
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-private-b
+
+  PublicSubnetARoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateSubnetARoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBRoute:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  NatEip:
+    Condition: NatOn
+    Type: AWS::EC2::EIP
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-nat
+
+  NatGateway:
+    Condition: NatOn
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      ConnectivityType: public
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+
+  PrivateDefaultRoute:
+    Condition: NatOn
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  S3Endpoint:
+    Condition: NatOn
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+
+  ApiSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: OpenGRC API and web task
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-api
+
+  ApiIngressPublic:
+    Condition: TaskPublicHttps
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ApiSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: 0.0.0.0/0
+      Description: HTTPS on the task, when no load balancer is configured
+
+  JobSecurityGroup:
+    Condition: JobEnabled
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: OpenGRC job task
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-jobs
+
+  DatabaseSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: OpenGRC PostgreSQL
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-database
+
+  DatabaseIngressApi:
+    Condition: DirectDatabase
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ApiSecurityGroup
+      Description: API task
+
+  DatabaseIngressJob:
+    Condition: JobDirectDatabase
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref JobSecurityGroup
+      Description: Job task
+
+  AlbSecurityGroup:
+    Condition: AlbOn
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: OpenGRC load balancer
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-alb
+
+  AlbEgressToTask:
+    Condition: AlbOn
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref AlbSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      DestinationSecurityGroupId: !Ref ApiSecurityGroup
+      Description: Web container behind the load balancer
+
+  AlbIngressToTask:
+    Condition: AlbOn
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ApiSecurityGroup
+      IpProtocol: tcp
+      FromPort: 3000
+      ToPort: 3000
+      SourceSecurityGroupId: !Ref AlbSecurityGroup
+      Description: Load balancer to the web container
+
+  Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub opengrc-${AWS::AccountId}-${AWS::Region}
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: expire-noncurrent-versions
+            Status: Enabled
+            Prefix: ""
+            NoncurrentVersionExpiration:
+              NoncurrentDays: 30
+            AbortIncompleteMultipartUpload:
+              DaysAfterInitiation: 7
+
+  ApiRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: !Sub ${RepositoryPrefix}/api
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep the last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+
+  WebRepository:
+    Type: AWS::ECR::Repository
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: !Sub ${RepositoryPrefix}/web
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep the last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {"type": "expire"}
+              }
+            ]
+          }
+
+  DatabaseHostParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /opengrc/${AWS::StackName}/database/host
+      Type: String
+      Tier: Standard
+      Value: !If [ProxyOn, !GetAtt DatabaseProxy.Endpoint, !GetAtt Database.Endpoint.Address]
+
+  DatabasePortParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /opengrc/${AWS::StackName}/database/port
+      Type: String
+      Tier: Standard
+      Value: !GetAtt Database.Endpoint.Port
+
+  DatabaseNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /opengrc/${AWS::StackName}/database/name
+      Type: String
+      Tier: Standard
+      Value: !Ref DatabaseName
+
+  DatabaseUserParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub /opengrc/${AWS::StackName}/database/user
+      Type: String
+      Tier: Standard
+      Value: !Ref DatabaseUsername
+
+  DatabaseSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: OpenGRC private subnets
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+  DatabaseParameterGroup:
+    Type: AWS::RDS::DBParameterGroup
+    Properties:
+      Family: !Ref DatabaseFamily
+      Description: OpenGRC PostgreSQL
+      Parameters:
+        rds.force_ssl: "1"
+
+  Database:
+    Type: AWS::RDS::DBInstance
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      Engine: postgres
+      EngineVersion: !Ref DatabaseEngineVersion
+      DBInstanceClass: !Ref DatabaseInstanceClass
+      DBName: !Ref DatabaseName
+      MasterUsername: !Ref DatabaseUsername
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:/opengrc/${AWS::StackName}/database/password:${DatabasePasswordVersion}}}"
+      DBParameterGroupName: !Ref DatabaseParameterGroup
+      DBSubnetGroupName: !Ref DatabaseSubnetGroup
+      VPCSecurityGroups:
+        - !Ref DatabaseSecurityGroup
+      AvailabilityZone: !GetAtt PrivateSubnetA.AvailabilityZone
+      AllocatedStorage: !Ref DatabaseAllocatedStorage
+      MaxAllocatedStorage: !Ref DatabaseMaxAllocatedStorage
+      StorageType: gp3
+      StorageEncrypted: true
+      MultiAZ: false
+      PubliclyAccessible: false
+      BackupRetentionPeriod: 7
+      AutoMinorVersionUpgrade: true
+      AllowMajorVersionUpgrade: false
+      CopyTagsToSnapshot: true
+      DeletionProtection: !If [ProtectDatabase, true, false]
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}
+
+  ProxySecret:
+    Condition: ProxyOn
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub opengrc/${AWS::StackName}/database
+      SecretString: !Sub
+        - '{"username":"${User}","password":"{{resolve:ssm-secure:/opengrc/${AWS::StackName}/database/password:${Version}}}"}'
+        - User: !Ref DatabaseUsername
+          Version: !Ref DatabasePasswordVersion
+
+  ProxyRole:
+    Condition: ProxyOn
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: rds.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: read-database-secret
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: secretsmanager:GetSecretValue
+                Resource: !Ref ProxySecret
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub secretsmanager.${AWS::Region}.amazonaws.com
+
+  ProxySecurityGroup:
+    Condition: ProxyOn
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: OpenGRC RDS proxy
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !Ref ApiSecurityGroup
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub ${AWS::StackName}-proxy
+
+  ProxyIngressJob:
+    Condition: JobProxyIngress
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref ProxySecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref JobSecurityGroup
+      Description: Job task
+
+  DatabaseIngressProxy:
+    Condition: ProxyOn
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref ProxySecurityGroup
+      Description: RDS proxy
+
+  DatabaseProxy:
+    Condition: ProxyOn
+    Type: AWS::RDS::DBProxy
+    Properties:
+      DBProxyName: !Sub ${RepositoryPrefix}-db
+      EngineFamily: POSTGRESQL
+      RequireTLS: true
+      IdleClientTimeout: 1800
+      RoleArn: !GetAtt ProxyRole.Arn
+      Auth:
+        - AuthScheme: SECRETS
+          IAMAuth: DISABLED
+          SecretArn: !Ref ProxySecret
+          ClientPasswordAuthType: POSTGRES_SCRAM_SHA_256
+      VpcSubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+      VpcSecurityGroupIds:
+        - !Ref ProxySecurityGroup
+
+  DatabaseProxyTarget:
+    Condition: ProxyOn
+    Type: AWS::RDS::DBProxyTargetGroup
+    Properties:
+      DBProxyName: !Ref DatabaseProxy
+      TargetGroupName: default
+      DBInstanceIdentifiers:
+        - !Ref Database
+
+  SesIdentity:
+    Condition: HasDomain
+    Type: AWS::SES::EmailIdentity
+    Properties:
+      EmailIdentity: !Ref DomainName
+      DkimAttributes:
+        SigningEnabled: true
+
+  SesDkimRecord1:
+    Condition: HasZone
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt SesIdentity.DkimDNSTokenName1
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !GetAtt SesIdentity.DkimDNSTokenValue1
+
+  SesDkimRecord2:
+    Condition: HasZone
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt SesIdentity.DkimDNSTokenName2
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !GetAtt SesIdentity.DkimDNSTokenValue2
+
+  SesDkimRecord3:
+    Condition: HasZone
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !GetAtt SesIdentity.DkimDNSTokenName3
+      Type: CNAME
+      TTL: "300"
+      ResourceRecords:
+        - !GetAtt SesIdentity.DkimDNSTokenValue3
+
+  ApiLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /opengrc/${AWS::StackName}/api
+      RetentionInDays: 30
+
+  WebLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /opengrc/${AWS::StackName}/web
+      RetentionInDays: 30
+
+  JobLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /opengrc/${AWS::StackName}/jobs
+      RetentionInDays: 30
+
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: pull-and-log
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: ecr:GetAuthorizationToken
+                Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                Resource:
+                  - !GetAtt ApiRepository.Arn
+                  - !GetAtt WebRepository.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource:
+                  - !Sub ${ApiLogGroup.Arn}:*
+                  - !Sub ${WebLogGroup.Arn}:*
+                  - !Sub ${JobLogGroup.Arn}:*
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/database/password
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: evidence-and-config
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt Bucket.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                  - s3:AbortMultipartUpload
+                Resource: !Sub ${Bucket.Arn}/*
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                  - ssm:GetParameters
+                  - ssm:GetParametersByPath
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/*
+              - Effect: Allow
+                Action: kms:Decrypt
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    kms:ViaService: !Sub ssm.${AWS::Region}.amazonaws.com
+
+  MailPolicy:
+    Condition: HasDomain
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: mail
+      Roles:
+        - !Ref TaskRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - ses:SendEmail
+              - ses:SendRawEmail
+            Resource: !Sub arn:aws:ses:${AWS::Region}:${AWS::AccountId}:identity/${DomainName}
+
+  JobDeadLetterQueue:
+    Condition: QueueOn
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${RepositoryPrefix}-jobs-dlq
+      MessageRetentionPeriod: 1209600
+
+  JobQueue:
+    Condition: QueueOn
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub ${RepositoryPrefix}-jobs
+      VisibilityTimeout: 7200
+      ReceiveMessageWaitTimeSeconds: 20
+      MessageRetentionPeriod: 1209600
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt JobDeadLetterQueue.Arn
+        maxReceiveCount: 5
+
+  QueuePolicy:
+    Condition: QueueOn
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: jobs
+      Roles:
+        - !Ref TaskRole
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - sqs:SendMessage
+              - sqs:ReceiveMessage
+              - sqs:DeleteMessage
+              - sqs:ChangeMessageVisibility
+              - sqs:GetQueueAttributes
+            Resource:
+              - !GetAtt JobQueue.Arn
+              - !GetAtt JobDeadLetterQueue.Arn
+
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${AWS::StackName}
+      ClusterSettings:
+        - Name: containerInsights
+          Value: disabled
+
+  ApiTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-api
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: !Ref CpuArchitecture
+        OperatingSystemFamily: LINUX
+      Cpu: !FindInMap [TaskSize, !Ref TaskSize, Cpu]
+      Memory: !FindInMap [TaskSize, !Ref TaskSize, Memory]
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: opengrc
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApiRepository}:${ApiImageTag}
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Environment:
+            - Name: OPENGRC_PROCESS
+              Value: api
+            - Name: OPENGRC_RUN_SCHEDULER
+              Value: !If [JobEnabled, "false", "true"]
+            - Name: OPENGRC_BIND
+              Value: 0.0.0.0:8080
+            - Name: OPENGRC_TLS
+              Value: "false"
+            - Name: OPENGRC_DATABASE_HOST
+              Value: !If [ProxyOn, !GetAtt DatabaseProxy.Endpoint, !GetAtt Database.Endpoint.Address]
+            - Name: OPENGRC_DATABASE_PORT
+              Value: !GetAtt Database.Endpoint.Port
+            - Name: OPENGRC_DATABASE_NAME
+              Value: !Ref DatabaseName
+            - Name: OPENGRC_DATABASE_USER
+              Value: !Ref DatabaseUsername
+            - Name: OPENGRC_DATABASE_SSLMODE
+              Value: require
+            - Name: OPENGRC_S3_BUCKET
+              Value: !Ref Bucket
+            - Name: OPENGRC_SSM_PREFIX
+              Value: !Sub /opengrc/${AWS::StackName}
+            - Name: OPENGRC_QUEUE_URL
+              Value: !If [QueueOn, !Ref JobQueue, ""]
+          Secrets:
+            - Name: OPENGRC_DATABASE_PASSWORD
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/database/password:${DatabasePasswordVersion}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApiLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: api
+        - Name: web
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WebRepository}:${WebImageTag}
+          PortMappings:
+            - ContainerPort: !If [AlbOn, 3000, 443]
+              Protocol: tcp
+          Environment:
+            - Name: OPENGRC_API_ORIGIN
+              Value: http://127.0.0.1:8080
+            - Name: OPENGRC_BIND
+              Value: !If [AlbOn, "0.0.0.0:3000", "0.0.0.0:443"]
+            - Name: OPENGRC_TLS
+              Value: !If [AlbOn, "false", "true"]
+            - Name: OPENGRC_SSM_PREFIX
+              Value: !Sub /opengrc/${AWS::StackName}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref WebLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: web
+
+  JobTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${AWS::StackName}-jobs
+      RequiresCompatibilities: [FARGATE]
+      NetworkMode: awsvpc
+      RuntimePlatform:
+        CpuArchitecture: !Ref CpuArchitecture
+        OperatingSystemFamily: LINUX
+      Cpu: !FindInMap [TaskSize, !Ref JobTaskSize, Cpu]
+      Memory: !FindInMap [TaskSize, !Ref JobTaskSize, Memory]
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      TaskRoleArn: !GetAtt TaskRole.Arn
+      ContainerDefinitions:
+        - Name: opengrc
+          Essential: true
+          Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApiRepository}:${ApiImageTag}
+          Environment:
+            - Name: OPENGRC_PROCESS
+              Value: jobs
+            - Name: OPENGRC_RUN_SCHEDULER
+              Value: "true"
+            - Name: OPENGRC_BIND
+              Value: 127.0.0.1:8080
+            - Name: OPENGRC_TLS
+              Value: "false"
+            - Name: OPENGRC_DATABASE_HOST
+              Value: !If [ProxyOn, !GetAtt DatabaseProxy.Endpoint, !GetAtt Database.Endpoint.Address]
+            - Name: OPENGRC_DATABASE_PORT
+              Value: !GetAtt Database.Endpoint.Port
+            - Name: OPENGRC_DATABASE_NAME
+              Value: !Ref DatabaseName
+            - Name: OPENGRC_DATABASE_USER
+              Value: !Ref DatabaseUsername
+            - Name: OPENGRC_DATABASE_SSLMODE
+              Value: require
+            - Name: OPENGRC_S3_BUCKET
+              Value: !Ref Bucket
+            - Name: OPENGRC_SSM_PREFIX
+              Value: !Sub /opengrc/${AWS::StackName}
+            - Name: OPENGRC_QUEUE_URL
+              Value: !If [QueueOn, !Ref JobQueue, ""]
+          Secrets:
+            - Name: OPENGRC_DATABASE_PASSWORD
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/database/password:${DatabasePasswordVersion}
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref JobLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: jobs
+
+  ApiService:
+    Condition: ServicesDirect
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref ApiTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnetA
+          SecurityGroups:
+            - !Ref ApiSecurityGroup
+      PropagateTags: TASK_DEFINITION
+
+  ApiServiceBehindLoadBalancer:
+    Condition: AlbWithoutNat
+    Type: AWS::ECS::Service
+    DependsOn: AlbHttpsListener
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref ApiTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnetA
+          SecurityGroups:
+            - !Ref ApiSecurityGroup
+      HealthCheckGracePeriodSeconds: 120
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 3000
+          TargetGroupArn: !Ref TargetGroup
+      PropagateTags: TASK_DEFINITION
+
+  ApiServicePrivate:
+    Condition: AlbWithNat
+    Type: AWS::ECS::Service
+    DependsOn:
+      - AlbHttpsListener
+      - PrivateDefaultRoute
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref ApiTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnetA
+          SecurityGroups:
+            - !Ref ApiSecurityGroup
+      HealthCheckGracePeriodSeconds: 120
+      LoadBalancers:
+        - ContainerName: web
+          ContainerPort: 3000
+          TargetGroupArn: !Ref TargetGroup
+      PropagateTags: TASK_DEFINITION
+
+  JobService:
+    Condition: JobWithoutNat
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref JobTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnetA
+          SecurityGroups:
+            - !Ref JobSecurityGroup
+      PropagateTags: TASK_DEFINITION
+
+  JobServicePrivate:
+    Condition: JobWithNat
+    Type: AWS::ECS::Service
+    DependsOn: PrivateDefaultRoute
+    Properties:
+      Cluster: !Ref Cluster
+      TaskDefinition: !Ref JobTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      PlatformVersion: LATEST
+      EnableExecuteCommand: false
+      DeploymentConfiguration:
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: DISABLED
+          Subnets:
+            - !Ref PrivateSubnetA
+          SecurityGroups:
+            - !Ref JobSecurityGroup
+      PropagateTags: TASK_DEFINITION
+
+  LoadBalancer:
+    Condition: AlbOn
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
+      LoadBalancerAttributes:
+        - Key: routing.http.drop_invalid_header_fields.enabled
+          Value: "true"
+
+  TargetGroup:
+    Condition: AlbOn
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 3000
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !Ref Vpc
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: "30"
+
+  AlbHttpsListener:
+    Condition: AlbOn
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 443
+      Protocol: HTTPS
+      Certificates:
+        - CertificateArn: !Ref CertificateArn
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  AlbHttpListener:
+    Condition: AlbOn
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: redirect
+          RedirectConfig:
+            Protocol: HTTPS
+            Port: "443"
+            StatusCode: HTTP_301
+
+  AliasRecord:
+    Condition: DnsAlias
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt LoadBalancer.DNSName
+        HostedZoneId: !GetAtt LoadBalancer.CanonicalHostedZoneID
+        EvaluateTargetHealth: true
+
+Outputs:
+  BucketName:
+    Description: Private bucket for evidence, policy bodies, and rendered files.
+    Value: !Ref Bucket
+  ApiRepositoryUri:
+    Description: Push the API image here before setting EnableServices to true.
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApiRepository}
+  WebRepositoryUri:
+    Description: Push the web image here before setting EnableServices to true.
+    Value: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${WebRepository}
+  ConfigurationPrefix:
+    Description: >
+      SSM prefix. The database password is database/password. With TLS on the
+      task, put the PEM certificate at tls/certificate and the key at
+      tls/private-key. A model key, when used, is model/api-key. Harness values
+      are under harness/.
+    Value: !Sub /opengrc/${AWS::StackName}
+  DatabaseEndpoint:
+    Description: PostgreSQL endpoint. The instance accepts connections only from the task security groups.
+    Value: !GetAtt Database.Endpoint.Address
+  ClusterName:
+    Value: !Ref Cluster
+  ServiceName:
+    Condition: ServicesDirect
+    Description: API service. Its public address changes when the task is replaced.
+    Value: !GetAtt ApiService.Name
+  ServiceNameBehindLoadBalancer:
+    Condition: AlbWithoutNat
+    Description: API service registered with the load balancer.
+    Value: !GetAtt ApiServiceBehindLoadBalancer.Name
+  ServiceNamePrivate:
+    Condition: AlbWithNat
+    Description: API service in the private subnet, registered with the load balancer.
+    Value: !GetAtt ApiServicePrivate.Name
+  JobServiceName:
+    Condition: JobWithoutNat
+    Value: !GetAtt JobService.Name
+  JobServiceNamePrivate:
+    Condition: JobWithNat
+    Value: !GetAtt JobServicePrivate.Name
+  QueueUrl:
+    Condition: QueueOn
+    Value: !Ref JobQueue
+  ProxyEndpoint:
+    Condition: ProxyOn
+    Description: Tasks use this endpoint while EnableRdsProxy is true.
+    Value: !GetAtt DatabaseProxy.Endpoint
+  LoadBalancerDnsName:
+    Condition: AlbOn
+    Description: Stable name of the service when no alias record is in use.
+    Value: !GetAtt LoadBalancer.DNSName
+  ApplicationUrl:
+    Condition: DnsAlias
+    Value: !Sub https://${DomainName}
+  SesDkimName1:
+    Condition: HasDomain
+    Value: !GetAtt SesIdentity.DkimDNSTokenName1
+  SesDkimValue1:
+    Condition: HasDomain
+    Value: !GetAtt SesIdentity.DkimDNSTokenValue1
+  SesDkimName2:
+    Condition: HasDomain
+    Value: !GetAtt SesIdentity.DkimDNSTokenName2
+  SesDkimValue2:
+    Condition: HasDomain
+    Value: !GetAtt SesIdentity.DkimDNSTokenValue2
+  SesDkimName3:
+    Condition: HasDomain
+    Value: !GetAtt SesIdentity.DkimDNSTokenName3
+  SesDkimValue3:
+    Condition: HasDomain
+    Value: !GetAtt SesIdentity.DkimDNSTokenValue3
