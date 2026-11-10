@@ -48,8 +48,12 @@ export const test = base.extend<{ shot: (name: string) => Promise<void> }>({
 
 /** Waits for hydration (see src/components/hydrated.tsx) and webfonts. */
 export async function settle(page: Page) {
-  await expect(page.locator("html[data-hydrated]")).toBeAttached({ timeout: 15_000 });
-  await page.evaluate(() => document.fonts.ready);
+  // Retried: a page can hydrate and then client-redirect (`/` does), which
+  // destroys the context mid-evaluate. Settle on whichever page stays.
+  await expect(async () => {
+    await expect(page.locator("html[data-hydrated]")).toBeAttached({ timeout: 2_000 });
+    await page.evaluate(() => document.fonts.ready);
+  }).toPass({ timeout: 15_000 });
 }
 
 export async function setTheme(page: Page, theme: "light" | "dark") {

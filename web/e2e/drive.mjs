@@ -1,18 +1,18 @@
 #!/usr/bin/env node
 // Ad-hoc driver for agents and humans. Needs a running server:
-//   pnpm e2e:serve            (production build, mock mode, :3100)
+//   pnpm e2e:serve            (production build, mock mode, :3200)
 // Then:
 //   pnpm drive shot <path> [--theme light|dark] [--out file.png] [--width 1440]
 //   pnpm drive aria <path> [--theme ...]      accessibility tree as YAML; use it to pick selectors
 //   pnpm drive check                          is the server up and hydrating?
-// E2E_BASE_URL overrides http://localhost:3100.
+// E2E_BASE_URL overrides http://localhost:3200.
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { chromium } from "@playwright/test";
 
-const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3100";
+const BASE = process.env.E2E_BASE_URL ?? "http://localhost:3200";
 const SHOTS = path.join(path.dirname(fileURLToPath(import.meta.url)), ".screenshots");
 
 const [cmd, target = "/", ...rest] = process.argv.slice(2);
@@ -40,8 +40,17 @@ try {
     console.error(`cannot reach ${BASE}: ${e.message}\nstart it with: pnpm e2e:serve`);
     process.exit(1);
   });
-  await page.locator("html[data-hydrated]").waitFor({ state: "attached", timeout: 15_000 });
-  await page.evaluate(() => document.fonts.ready);
+  // Retried: `/` hydrates then client-redirects, destroying the first context.
+  for (let i = 0; ; i++) {
+    try {
+      await page.locator("html[data-hydrated]").waitFor({ state: "attached", timeout: 15_000 });
+      await page.evaluate(() => document.fonts.ready);
+      break;
+    } catch (e) {
+      if (i >= 3) throw e;
+      await page.waitForLoadState("load");
+    }
+  }
 
   if (cmd === "check") {
     console.log(`ok ${res.status()} ${page.url()}`);

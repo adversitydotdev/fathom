@@ -7,7 +7,7 @@ import { defineConfig, devices } from "@playwright/test";
  * dist dir keep it off a running `pnpm dev`. Set E2E_BASE_URL to drive a
  * server you already started instead.
  */
-const port = Number(process.env.E2E_PORT ?? 3100);
+const port = Number(process.env.E2E_PORT ?? 3200);
 const baseURL = process.env.E2E_BASE_URL ?? `http://localhost:${port}`;
 
 export default defineConfig({
