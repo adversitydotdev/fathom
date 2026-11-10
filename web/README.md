@@ -1,6 +1,6 @@
 # OpenGRC web
 
-The screen from [RFC 0003 section 8](../docs/rfcs/0003-application.md). Next.js, TypeScript, Tailwind, and shadcn/ui. It renders what the API returns and never computes status itself.
+The screen from [RFC 0003 section 8](../docs/rfcs/0003-application.md). Next.js, TypeScript, Tailwind v4, [Spectrum UI](https://ui.spectrumhq.in/) components, and shadcn/ui on Radix underneath them. It renders what the API returns and never computes status itself.
 
 ## Run against fixtures
 
@@ -41,4 +41,16 @@ The client (`src/lib/api/client.ts`) and the fixtures are typed against it, so a
 | `src/lib/api` | Generated types, typed client, `unwrap` |
 | `src/lib/data.ts` | Request-scoped loaders, one per API call |
 | `src/components/status.tsx` | Computed-state badges, bars, legends. The only place status colors live |
+| `src/components/spectrumui` | Spectrum UI components, copied in and adapted. Each adapted file says what changed |
+| `src/components/ui` | shadcn/ui primitives (Radix). Spectrum items depend on these |
 | `src/mocks` | Fixtures, MSW handlers, and the dispatcher |
+
+## Components
+
+Spectrum UI is the component source (RFC 0003 section 8). Its registry is configured in `components.json`:
+
+```
+pnpm dlx shadcn@latest add @spectrumui/<name>
+```
+
+Spectrum builds on shadcn/ui with Radix primitives (`asChild`, `@radix-ui/*`), so shadcn here uses the `radix-nova` style. Do not switch it to the Base UI style. Many Spectrum registry items are fixed demos rather than components with props; for those, copy the pattern into `src/components/spectrumui` and note the source, as `status-badge.tsx` does. Keep shadcn primitives for what Spectrum does not ship, such as `Card`.

@@ -1,9 +1,9 @@
 "use client";
 
-import { Loader2, Play } from "lucide-react";
+import { Play } from "lucide-react";
 import { useState, useTransition } from "react";
 
-import { Button } from "@/components/ui/button";
+import { LoadingButton } from "@/components/spectrumui/loading-button-dependencies";
 
 import { runTest, type RunState } from "./actions";
 
@@ -21,15 +21,17 @@ export function RunTestButton({ testId, implementationId }: { testId: string; im
   return (
     <span className="flex items-center gap-2">
       {state.error && <span className="text-xs text-gap-ink">{state.error}</span>}
-      <Button
+      <LoadingButton
         variant="outline"
         size="sm"
+        className="h-7 gap-1 px-2.5 text-xs"
+        loading={pending}
         disabled={pending}
         onClick={() => start(async () => setState(await runTest(testId, implementationId)))}
       >
-        {pending ? <Loader2 className="animate-spin" /> : <Play />}
+        {!pending && <Play className="size-3" aria-hidden />}
         Run
-      </Button>
+      </LoadingButton>
     </span>
   );
 }

@@ -1,20 +1,32 @@
-import { Sparkles } from "lucide-react";
+import {
+  CircleCheck,
+  CircleDashed,
+  CircleDot,
+  CircleMinus,
+  CirclePause,
+  CircleX,
+  type LucideIcon,
+  Sparkles,
+} from "lucide-react";
 import { cn } from "cn";
 
+import { StatusBadge, type StatusTone } from "@/components/spectrumui/status-badge";
 import type { ControlState, RequirementState } from "@/lib/api/types";
 
-const controlStyle: Record<ControlState, { label: string; pill: string; bar: string }> = {
-  met: { label: "met", pill: "bg-met-soft text-met-ink", bar: "bg-met" },
-  gap: { label: "gap", pill: "bg-gap-soft text-gap-ink", bar: "bg-gap" },
-  waived: { label: "waived", pill: "bg-waived-soft text-waived-ink", bar: "bg-waived" },
-  out_of_scope: { label: "out of scope", pill: "bg-oos-soft text-oos-ink", bar: "bg-oos" },
+type Style = { label: string; tone: StatusTone; icon: LucideIcon; bar: string };
+
+const controlStyle: Record<ControlState, Style> = {
+  met: { label: "met", tone: "met", icon: CircleCheck, bar: "bg-met" },
+  gap: { label: "gap", tone: "gap", icon: CircleX, bar: "bg-gap" },
+  waived: { label: "waived", tone: "waived", icon: CirclePause, bar: "bg-waived" },
+  out_of_scope: { label: "out of scope", tone: "neutral", icon: CircleMinus, bar: "bg-oos" },
 };
 
-const requirementStyle: Record<RequirementState, { label: string; pill: string; bar: string }> = {
-  covered: { label: "covered", pill: "bg-met-soft text-met-ink", bar: "bg-met" },
-  gap: { label: "gap", pill: "bg-gap-soft text-gap-ink", bar: "bg-gap" },
-  contribution: { label: "contribution", pill: "bg-contribution-soft text-contribution-ink", bar: "bg-contribution" },
-  unmapped: { label: "unmapped", pill: "bg-oos-soft text-oos-ink", bar: "bg-oos" },
+const requirementStyle: Record<RequirementState, Style> = {
+  covered: { label: "covered", tone: "met", icon: CircleCheck, bar: "bg-met" },
+  gap: { label: "gap", tone: "gap", icon: CircleX, bar: "bg-gap" },
+  contribution: { label: "contribution", tone: "contribution", icon: CircleDot, bar: "bg-contribution" },
+  unmapped: { label: "unmapped", tone: "neutral", icon: CircleDashed, bar: "bg-oos" },
 };
 
 export const CONTROL_STATES = Object.keys(controlStyle) as ControlState[];
@@ -24,26 +36,22 @@ export function controlStateLabel(state: ControlState) {
   return controlStyle[state].label;
 }
 
-function Pill({ className, children }: { className: string; children: React.ReactNode }) {
-  return (
-    <span className={cn("inline-flex h-5 items-center rounded-full px-2 text-xs font-medium whitespace-nowrap", className)}>
-      {children}
-    </span>
-  );
-}
-
 export function ControlStateBadge({ state }: { state: ControlState }) {
   const s = controlStyle[state];
-  return <Pill className={s.pill}>{s.label}</Pill>;
+  return (
+    <StatusBadge tone={s.tone} icon={s.icon}>
+      {s.label}
+    </StatusBadge>
+  );
 }
 
 export function RequirementStateBadge({ state }: { state: RequirementState }) {
   const s = requirementStyle[state];
-  return <Pill className={s.pill}>{s.label}</Pill>;
-}
-
-export function FailedPill({ children }: { children: React.ReactNode }) {
-  return <Pill className="bg-gap-soft text-gap-ink">{children}</Pill>;
+  return (
+    <StatusBadge tone={s.tone} icon={s.icon}>
+      {s.label}
+    </StatusBadge>
+  );
 }
 
 type Segment = { key: string; value: number; className: string; label: string };

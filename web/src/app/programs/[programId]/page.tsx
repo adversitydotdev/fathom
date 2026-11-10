@@ -1,15 +1,24 @@
 import {
   AlertTriangle,
+  BookDown,
   ChevronRight,
+  FileOutput,
   FlaskConical,
   Gavel,
+  GitBranch,
+  History,
+  PackageOpen,
   Paperclip,
   PauseCircle,
+  Play,
+  Plug,
   Sparkles,
 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { RecentActivity } from "@/components/spectrumui/recent-activity";
+import { Eyebrow, PageTitle } from "@/components/typography";
 import {
   Legend,
   SegmentBar,
@@ -17,7 +26,7 @@ import {
   requirementSegments,
 } from "@/components/status";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { RequirementState } from "@/lib/api/types";
+import type { Job, RequirementState } from "@/lib/api/types";
 import {
   evaluationInstant,
   getBaseline,
@@ -73,18 +82,20 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
   const base = `/programs/${programId}`;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-xl font-medium">{program.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {system.name} · baseline <span className="font-mono text-xs">{baseline.name}</span>
+    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+      <PageTitle
+        eyebrow={`Program · ${system.name}`}
+        title={program.name}
+        aside={
+          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            Evaluated at <span className="text-foreground">{isoDate(summary.at)}</span>
           </p>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Evaluated at <span className="font-mono">{isoDate(summary.at)}</span>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Baseline <span className="font-mono text-xs text-foreground">{baseline.name}</span>
         </p>
-      </div>
+      </PageTitle>
 
       <section aria-label="Control status" className="flex flex-col gap-3">
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -179,36 +190,30 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Recent jobs</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="divide-y text-sm">
-                {jobs.data.map((j) => (
-                  <li key={j.id} className="flex items-center justify-between gap-3 py-2">
-                    <span className="font-mono text-xs">{j.type}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="font-mono text-xs text-muted-foreground">{isoDate(j.created)}</span>
-                      <span className={j.status === "failed" ? "text-xs text-gap-ink" : "text-xs text-muted-foreground"}>{j.status}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </CardContent>
-          </Card>
         </div>
       </div>
+
+      <RecentActivity
+        title="Recent jobs"
+        titleIcon={<Play />}
+        items={jobs.data.map((j) => ({
+          icon: <JobIcon type={j.type} />,
+          title: JOB_LABEL[j.type],
+          duration: j.finished ? duration(j.created, j.finished) : undefined,
+          description: j.status === "failed" ? `Failed: ${j.error?.title ?? "see job"}` : j.status,
+          timeAgo: isoDate(j.created).slice(5),
+        }))}
+      />
     </div>
   );
 }
 
 function Metric({ label, value, hint, tone, href }: { label: string; value: number; hint?: string; tone?: "gap"; href: string }) {
   return (
-    <Link href={href} className="rounded-lg bg-muted/60 px-4 py-3 transition-colors hover:bg-muted">
-      <div className="text-xs text-muted-foreground">{label}</div>
+    <Link href={href} className="flex flex-col gap-3 rounded-2xl border bg-card px-4 py-4 transition-colors hover:border-foreground/25">
+      <Eyebrow>{label}</Eyebrow>
       <div className="flex items-baseline gap-2">
-        <span className={tone === "gap" && value > 0 ? "text-2xl font-medium text-gap-ink" : "text-2xl font-medium"}>{value}</span>
+        <span className={tone === "gap" && value > 0 ? "text-3xl font-medium tabular-nums text-gap-ink" : "text-3xl font-medium tabular-nums"}>{value}</span>
         {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
       </div>
     </Link>
@@ -225,4 +230,32 @@ function Attention({ icon: Icon, label, value }: { icon: React.ComponentType<{ c
       <span className="font-medium tabular-nums">{value ?? 0}</span>
     </li>
   );
+}
+
+const JOB_LABEL: Record<Job["type"], string> = {
+  library_pull: "Library pull",
+  provider_import: "Provider import",
+  test_run: "Test run",
+  render: "Render",
+  git_export: "Git export",
+  restore: "Restore",
+  connector: "Connector",
+};
+
+function JobIcon({ type }: { type: Job["type"] }) {
+  const Icon = {
+    library_pull: BookDown,
+    provider_import: PackageOpen,
+    test_run: FlaskConical,
+    render: FileOutput,
+    git_export: GitBranch,
+    restore: History,
+    connector: Plug,
+  }[type];
+  return <Icon />;
+}
+
+function duration(from: string, to: string): string {
+  const s = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 1000));
+  return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${s % 60}s`;
 }

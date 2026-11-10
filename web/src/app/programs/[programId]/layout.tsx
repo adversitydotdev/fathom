@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { AtPicker, ProgramSwitcher } from "@/components/shell/header-controls";
 import { Sidebar, SidebarSkeleton } from "@/components/shell/sidebar";
+import { ThemeToggle } from "@/components/theme";
 import { apiMocking } from "@/lib/env";
 import { getProgram, getPrograms, getSystem } from "@/lib/data";
 
@@ -14,24 +15,25 @@ export default function ProgramLayout({ children, params }: LayoutProps<"/progra
         </Suspense>
       </aside>
       <div className="flex min-w-0 flex-col">
-        <header className="flex items-center gap-2 border-b px-6 py-2.5">
+        <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/80 px-6 py-3 backdrop-blur">
           {apiMocking && (
             <span
-              className="rounded-full bg-waived-soft px-2 py-0.5 text-xs font-medium text-waived-ink"
+              className="rounded-full border border-waived/40 bg-waived-soft px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-waived-ink uppercase"
               title="OPENGRC_API_MOCKING=enabled: /v1 is served from src/mocks"
             >
-              Fixtures, no auth
+              Fixtures · no auth
             </span>
           )}
           <div className="flex-1" />
-          <Suspense fallback={<div className="h-8 w-56 rounded-md border" />}>
+          <Suspense fallback={<div className="h-8 w-56 rounded-full border" />}>
             <Switcher params={params} />
           </Suspense>
-          <Suspense fallback={<div className="h-8 w-44 rounded-md border" />}>
+          <Suspense fallback={<div className="h-8 w-44 rounded-full border" />}>
             <AtPicker />
           </Suspense>
+          <ThemeToggle />
         </header>
-        <main className="flex-1 px-6 py-6">{children}</main>
+        <main className="flex-1 px-6 py-8 lg:px-10">{children}</main>
       </div>
     </div>
   );

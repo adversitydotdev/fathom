@@ -3,7 +3,8 @@
 import { CalendarDays, ChevronDown, RotateCcw } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
-import { cn } from "cn";
+
+import { Spinner } from "@/components/spectrumui/spinner-dependencies";
 
 type ProgramOption = { id: string; name: string };
 
@@ -20,7 +21,8 @@ export function ProgramSwitcher({
   const search = useSearchParams();
   const [pending, start] = useTransition();
   return (
-    <label className={cn("relative flex items-center gap-2 rounded-md border px-2.5 py-1 text-sm", pending && "opacity-60")}>
+    <label className="relative flex h-8 items-center gap-2 rounded-full border bg-card pr-2 pl-3.5 text-sm">
+      {pending && <Spinner size="small" className="size-3.5 text-muted-foreground" />}
       <span className="text-muted-foreground">{systemName} /</span>
       <select
         className="appearance-none bg-transparent pr-5 font-medium outline-none"
@@ -62,22 +64,26 @@ export function AtPicker() {
   };
 
   return (
-    <div className={cn("flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-sm", pending && "opacity-60")}>
-      <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
-      <span className="text-muted-foreground">At</span>
+    <div className="flex h-8 items-center gap-1.5 rounded-full border bg-card px-3.5 text-sm">
+      {pending ? (
+        <Spinner size="small" className="size-4 text-muted-foreground" />
+      ) : (
+        <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
+      )}
+      <span className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">At</span>
       <input
         type="date"
         aria-label="Evaluation date"
         value={at}
         onChange={(e) => set(e.target.value)}
-        className="bg-transparent font-mono text-xs outline-none"
+        className="bg-transparent font-mono text-xs outline-none [color-scheme:light] dark:[color-scheme:dark]"
       />
       {at ? (
         <button type="button" onClick={() => set("")} className="text-muted-foreground hover:text-foreground" aria-label="Evaluate now">
           <RotateCcw className="size-3.5" />
         </button>
       ) : (
-        <span className="text-xs text-muted-foreground">now</span>
+        <span className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">now</span>
       )}
     </div>
   );

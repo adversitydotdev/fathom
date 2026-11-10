@@ -4,6 +4,8 @@ const apiMocking = process.env.OPENGRC_API_MOCKING === "enabled";
 const apiOrigin = process.env.OPENGRC_API_ORIGIN ?? "http://127.0.0.1:8080";
 
 const nextConfig: NextConfig = {
+  // Lets a production build run beside `next dev` without sharing .next.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   cacheComponents: true,
   partialPrefetching: true,
   turbopack: {

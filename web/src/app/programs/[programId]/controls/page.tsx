@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { PageTitle } from "@/components/typography";
 import { createdByAgent } from "@/lib/agents";
 import {
   evaluationInstant,
@@ -48,13 +49,16 @@ export default async function ControlsPage({ params, searchParams }: PageProps<"
   });
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-x-3">
-        <h1 className="text-xl font-medium">Controls</h1>
-        <p className="text-sm text-muted-foreground">
-          {rows.length} on the baseline · at <span className="font-mono text-xs">{isoDate(status.at)}</span>
-        </p>
-      </div>
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <PageTitle
+        eyebrow={program.name}
+        title="Controls"
+        aside={
+          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            {rows.length} on the baseline · at <span className="text-foreground">{isoDate(status.at)}</span>
+          </p>
+        }
+      />
       <ControlsTable rows={rows} programId={programId} at={atParam} />
     </div>
   );

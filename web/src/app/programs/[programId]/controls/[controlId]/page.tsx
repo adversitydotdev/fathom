@@ -15,7 +15,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cn } from "cn";
 
+import { InlineCode } from "@/components/spectrumui/inline-code";
 import { ControlStateBadge } from "@/components/status";
+import { PageTitle } from "@/components/typography";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createdByAgent } from "@/lib/agents";
 import type { Evidence, Implementation, Party, Result } from "@/lib/api/types";
@@ -89,23 +91,28 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
   const backHref = `/programs/${programId}/controls${atParam ? `?at=${atParam}` : ""}`;
 
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-5">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <div>
-        <nav className="mb-1 text-xs text-muted-foreground" aria-label="Breadcrumb">
-          <Link href={backHref} className="hover:text-foreground">
-            Controls
-          </Link>{" "}
-          / <span className="font-mono">{control.display_id}</span>
-        </nav>
-        <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-xl font-medium">{control.name}</h1>
-          {entry && <ControlStateBadge state={entry.state} />}
-          <span className="text-xs text-muted-foreground">
-            {control.family} · {control.control_type} · {control.frequency} · {control.origin === "custom" ? "custom" : "library"}
-          </span>
-        </div>
+        <PageTitle
+          eyebrow={
+            <nav aria-label="Breadcrumb">
+              <Link href={backHref} className="hover:text-foreground">
+                Controls
+              </Link>{" "}
+              / <span className="text-foreground">{control.display_id}</span>
+            </nav>
+          }
+          title={control.name}
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            {entry && <ControlStateBadge state={entry.state} />}
+            <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+              {control.family} · {control.control_type} · {control.frequency} · {control.origin === "custom" ? "custom" : "library"}
+            </span>
+          </div>
+        </PageTitle>
         {entry && entry.failed && entry.failed.length > 0 && (
-          <div className="mt-3 flex flex-col gap-1 rounded-lg bg-gap-soft px-3 py-2 text-sm text-gap-ink" role="status">
+          <div className="mt-4 flex flex-col gap-1 rounded-2xl border border-gap/30 bg-gap-soft px-4 py-3 text-sm text-gap-ink" role="status">
             {entry.failed.map((f) => (
               <span key={f} className="flex items-start gap-2">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -119,12 +126,14 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
         )}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
-        <div className="flex flex-col gap-5">
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]">
+        <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Statement</CardTitle>
-              <CardAction className="font-mono text-xs text-muted-foreground">{control.id}</CardAction>
+              <CardAction>
+                <InlineCode className="text-xs font-normal text-muted-foreground">{control.id}</InlineCode>
+              </CardAction>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 leading-relaxed">
               <Statement text={control.statement} parameters={control.parameters} values={systemImpl?.parameter_values} />
@@ -141,7 +150,7 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
                 {system.name} has no implementation of this control. Create one with{" "}
-                <code className="font-mono text-xs">POST /v1/implementations</code>.
+                <InlineCode className="text-xs font-normal">POST /v1/implementations</InlineCode>.
               </CardContent>
             </Card>
           )}
@@ -151,7 +160,7 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
           ))}
         </div>
 
-        <div className="flex flex-col gap-5">
+        <div className="flex flex-col gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Required tests</CardTitle>
@@ -313,7 +322,7 @@ function ImplementationCard({ impl, parties, title }: { impl: Implementation; pa
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         {byAgent && (
-          <div className="flex items-start gap-2 rounded-lg bg-muted px-3 py-2 text-xs">
+          <div className="flex items-start gap-2 rounded-xl border border-agent/25 bg-agent/8 px-3 py-2 text-xs">
             <Sparkles className="mt-0.5 size-3.5 shrink-0 text-agent" aria-hidden />
             <span>
               Drafted by <span className="font-medium">{parties.get(impl.created_by_ref!)?.name}</span>. An agent can only write{" "}
@@ -332,7 +341,9 @@ function ImplementationCard({ impl, parties, title }: { impl: Implementation; pa
           {impl.component_ref && (
             <>
               <dt className="text-muted-foreground">Component</dt>
-              <dd className="font-mono text-xs leading-5">{impl.component_ref}</dd>
+              <dd>
+                <InlineCode className="text-xs font-normal">{impl.component_ref}</InlineCode>
+              </dd>
             </>
           )}
           <dt className="text-muted-foreground">Owner</dt>
