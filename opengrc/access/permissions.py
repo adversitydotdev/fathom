@@ -33,13 +33,24 @@ class Permission(StrEnum):
     IMPLEMENTATIONS_ATTEST = "implementations:attest", "Mark implementations implemented"
 
     TESTS_WRITE = "tests:write", "Author tests"
+    # A `run` block is a command the harness will execute on the task
+    # (RFC 0003 section 5), so writing one is a permission of its own.
+    TESTS_DEFINE_RUN = "tests:define-run", "Write or change a test's run block"
     TESTS_RUN = "tests:run", "Run tests through the harness"
     EVIDENCE_WRITE = "evidence:write", "Record results and upload evidence"
+
+    SYSTEMS_WRITE = "systems:write", "Create and edit parties, components, and systems"
+    POLICIES_WRITE = "policies:write", "Draft policies and procedures"
+    POLICIES_ADOPT = "policies:adopt", "Adopt policies and procedures"
 
     FINDINGS_WRITE = "findings:write", "Record assessor findings"
     EXCEPTIONS_APPROVE = "exceptions:approve", "Waive an implementation"
     RISKS_WRITE = "risks:write", "Edit risks and milestones"
+    RISKS_ACCEPT = "risks:accept", "Accept a risk"
+    OBJECTS_REVOKE = "objects:revoke", "Revoke organization objects"
 
+    PROVIDERS_IMPORT = "providers:import", "Import provider bundles"
     EXPORTS_RUN = "exports:run", "Write the git snapshot"
+    RESTORE_RUN = "restore:run", "Restore a snapshot into an empty database"
     CONNECTORS_RUN = "connectors:run", "Start connector jobs"
     MEMBERS_MANAGE = "members:manage", "Manage people, agents, and their roles"

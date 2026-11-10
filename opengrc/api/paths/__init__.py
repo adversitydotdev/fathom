@@ -2,12 +2,12 @@
 response are declared. It never imports handlers; handlers import it.
 """
 
-from opengrc.api.paths import controls, meta
+from opengrc.api.paths import collections, meta, views
 from opengrc.api.paths.endpoint import Endpoint
 
 
 def all_endpoints() -> tuple[Endpoint, ...]:
-    return (*meta.ALL, *controls.ALL)
+    return (*meta.ALL, *collections.ALL, *views.ALL)
 
 
-__all__ = ["Endpoint", "all_endpoints", "controls", "meta"]
+__all__ = ["Endpoint", "all_endpoints", "collections", "meta", "views"]

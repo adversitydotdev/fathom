@@ -6,10 +6,12 @@ changed them would make two installations disagree about one bundle.
 """
 
 from collections.abc import AsyncIterator, Mapping, Sequence
-from dataclasses import dataclass
-from typing import Protocol
+from dataclasses import dataclass, field
+from datetime import date, datetime
+from typing import Literal, Protocol
 
-from opengrc.kernel.models import Envelope
+from opengrc.kernel.graph import Graph
+from opengrc.kernel.models import Envelope, Implementation, Program, Test
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,33 +28,91 @@ class SecretHandle:
     names: Sequence[str]
 
 
+class Secrets(Protocol):
+    """The harness's secret store. A missing value ends the run as `error`."""
+
+    def get(self, name: str) -> str | None: ...
+
+
+@dataclass(frozen=True)
+class ImportedBundle:
+    """What an importer read: the manifest fields a pin needs, and the objects."""
+
+    id: str
+    name: str | None
+    version: str
+    objects: Sequence[Envelope]
+    library_version: str | None = None
+    warnings: list[str] = field(default_factory=list)
+
+
 class Importer(Protocol):
-    name: str
+    name: str  # "opengrc", "oscal-component"
 
-    def accepts(self, media_type: str) -> bool: ...
+    def import_bytes(self, content: bytes, graph: Graph) -> ImportedBundle:
+        """`graph` is the pinned library, for resolving catalog ids. Raises ValueError."""
+        ...
 
-    def import_bytes(self, content: bytes) -> Sequence[Envelope]: ...
+
+@dataclass(frozen=True)
+class RenderRequest:
+    graph: Graph
+    program: Program
+    at: datetime
+    framework_id: str | None = None
 
 
 class Renderer(Protocol):
-    name: str  # the view: "git", "oscal"
+    name: str  # the view: "ssp", "oscal"
 
-    def render(self, graph: Sequence[Envelope]) -> Sequence[RenderedFile]: ...
+    def render(self, request: RenderRequest) -> Sequence[RenderedFile]: ...
+
+
+@dataclass(frozen=True)
+class CollectedFile:
+    name: str
+    media_type: str
+    content: bytes
+
+
+@dataclass(frozen=True)
+class RunRequest:
+    test: Test
+    implementation: Implementation
+    evaluation_date: date
+    parameters: Mapping[str, str]
+    secrets: SecretHandle
+
+
+@dataclass(frozen=True)
+class RunReport:
+    """The harness turns this into one `result` and one `evidence` per file."""
+
+    outcome: Literal["pass", "fail", "error"]
+    summary: str
+    observed: datetime
+    files: Sequence[CollectedFile] = ()
 
 
 class Runner(Protocol):
     name: str  # matches the test's run block: "shell", or an org-defined runner
 
-    async def run(
-        self, test: Envelope, implementation: Envelope, secrets: SecretHandle
-    ) -> Sequence[Envelope]:
-        """Returns a `result` and its `evidence`. Failure is a result with outcome: error."""
+    async def run(self, request: RunRequest) -> RunReport:
+        """A failure is a report with outcome error, never an exception."""
         ...
+
+
+@dataclass(frozen=True)
+class CollectionRequest:
+    system_id: str | None
+    component_id: str | None
+    implementation: Implementation | None
 
 
 class Connector(Protocol):
     name: str
+    description: str
 
-    def collect(self, job: Mapping[str, object]) -> AsyncIterator[Envelope]:
-        """Yields `evidence`. Shipped as a subprocess speaking RFC 0001 JSON."""
+    def collect(self, request: CollectionRequest) -> AsyncIterator[CollectedFile]:
+        """Yields files that become `evidence`. Shipped as a subprocess speaking RFC 0001 JSON."""
         ...

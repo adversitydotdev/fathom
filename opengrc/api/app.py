@@ -1,7 +1,7 @@
 from fastapi import APIRouter, FastAPI
 
 from opengrc.api import paths, problems
-from opengrc.api.handlers import controls, meta
+from opengrc.api.handlers import meta, objects, views
 from opengrc.api.registrar import Registrar
 from opengrc.container import Container
 
@@ -20,7 +20,9 @@ def create_app(container: Container) -> FastAPI:
     registrar = Registrar(router, container.authenticator, container.authorizer, container.features)
 
     meta.register(registrar, container.version)
-    controls.register(registrar, container.controls)
+    for collection in paths.collections.ALL_COLLECTIONS:
+        objects.register_collection(registrar, container.objects, collection)
+    views.register(registrar, container)
 
     registrar.require_complete(paths.all_endpoints())
     app.include_router(router)  # after registration: include_router copies routes

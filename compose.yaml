@@ -1,0 +1,57 @@
+# Local stand-ins for the production bindings in RFC 0003 section 9:
+# Postgres 18 for RDS (the template's default engine), and SeaweedFS as an
+# S3-compatible store for the evidence bucket.
+#
+#   docker compose up -d
+#   OPENGRC_DATABASE_URL=postgresql://opengrc:opengrc@localhost:5432/opengrc \
+#   OPENGRC_S3_ENDPOINT=http://localhost:8333 OPENGRC_S3_BUCKET=opengrc \
+#   AWS_ACCESS_KEY_ID=opengrc AWS_SECRET_ACCESS_KEY=opengrc-secret uv run opengrc
+
+name: opengrc
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: opengrc
+      POSTGRES_PASSWORD: opengrc
+      POSTGRES_DB: opengrc
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opengrc -d opengrc"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  s3:
+    image: chrislusf/seaweedfs:4.53
+    command: >
+      server -dir=/data -ip.bind=0.0.0.0 -s3 -s3.port=8333
+      -s3.config=/etc/seaweedfs/s3.json
+    ports:
+      - "8333:8333"
+    volumes:
+      - s3:/data
+      - ./deploy/local/s3.json:/etc/seaweedfs/s3.json:ro
+
+  # Creates the private bucket, the way the CloudFormation stack does in prod.
+  s3-bucket:
+    image: amazon/aws-cli:2.27.0
+    depends_on: [s3]
+    environment:
+      AWS_ACCESS_KEY_ID: opengrc
+      AWS_SECRET_ACCESS_KEY: opengrc-secret
+      AWS_DEFAULT_REGION: us-east-1
+    entrypoint: >
+      sh -c "for i in $$(seq 1 30); do
+               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket opengrc 2>/dev/null && exit 0;
+               aws --endpoint-url http://s3:8333 s3api create-bucket --bucket opengrc && exit 0;
+               sleep 1;
+             done; exit 1"
+
+volumes:
+  postgres:
+  s3:

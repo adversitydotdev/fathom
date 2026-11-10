@@ -35,7 +35,19 @@ ROLES: tuple[RoleDefinition, ...] = (
         name="Agent",
         description="Drafts objects a person later accepts. Cannot attest or review.",
         inherits=(Role.VIEWER,),
-        permissions=frozenset({P.MAPPINGS_WRITE, P.IMPLEMENTATIONS_WRITE, P.EVIDENCE_WRITE}),
+        # The gates in RFC 0003 section 4 still apply on top of these: an agent
+        # never sets a status past `planned`, writes a run block, or revokes.
+        permissions=frozenset(
+            {
+                P.MAPPINGS_WRITE,
+                P.IMPLEMENTATIONS_WRITE,
+                P.EVIDENCE_WRITE,
+                P.TESTS_WRITE,
+                P.TESTS_RUN,
+                P.POLICIES_WRITE,
+                P.RISKS_WRITE,
+            }
+        ),
     ),
     RoleDefinition(
         id=Role.CONTRIBUTOR,
@@ -47,9 +59,9 @@ ROLES: tuple[RoleDefinition, ...] = (
                 P.CONTROLS_WRITE,
                 P.CONTROLS_REVOKE,
                 P.IMPLEMENTATIONS_ATTEST,
-                P.TESTS_WRITE,
-                P.TESTS_RUN,
-                P.RISKS_WRITE,
+                P.TESTS_DEFINE_RUN,
+                P.SYSTEMS_WRITE,
+                P.OBJECTS_REVOKE,
             }
         ),
     ),
@@ -72,7 +84,11 @@ ROLES: tuple[RoleDefinition, ...] = (
                 P.PROGRAMS_WRITE,
                 P.PROGRAMS_RENDER,
                 P.EXCEPTIONS_APPROVE,
+                P.POLICIES_ADOPT,
+                P.RISKS_ACCEPT,
+                P.PROVIDERS_IMPORT,
                 P.EXPORTS_RUN,
+                P.RESTORE_RUN,
                 P.CONNECTORS_RUN,
                 P.MEMBERS_MANAGE,
             }
