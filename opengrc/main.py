@@ -7,17 +7,21 @@
     OPENGRC_LIBRARY_REPO    A git repository of this project. Pulls resolve `version`
                             through a `library-v{version}` or `v{version}` tag. Unset: the
                             `library/` directory beside the package.
-    OPENGRC_BLOB_DIR        Directory for evidence bytes, document bodies, and render
-                            files. Unset: memory.
+    OPENGRC_DATABASE_URL    Postgres: RDS in production, the compose stack locally
+                            (`postgresql://...`). Run `alembic upgrade head` first.
+                            Unset: an in-memory store that a restart loses.
+    OPENGRC_S3_BUCKET       Bucket for evidence bytes, document bodies, and render files.
+    OPENGRC_S3_ENDPOINT     Only for an S3-compatible server, such as the compose stack.
+    OPENGRC_S3_PREFIX       Key prefix inside the bucket. Optional.
+    OPENGRC_BLOB_DIR        A directory instead of S3. Unset with no bucket: memory.
     OPENGRC_EXPORT_REMOTE   Git remote for the snapshot. Unset: export is disabled.
     OPENGRC_RUN_SCHEDULER   `true` runs the export schedule in this process (RFC 0003 2).
     OPENGRC_EXPORT_INTERVAL Seconds between scheduled exports. Default 86400.
     OPENGRC_HARNESS_USER    Operating-system user the shell runner switches to.
     OPENGRC_HARNESS_<NAME>  The value of `run.env` name <NAME> for the harness.
 
-The store is the in-memory implementation. A Postgres store is the same
-protocol (`opengrc.operations.store.ObjectStore`) over SQLModel rows and is
-the next piece; until it lands, a restart loses the organization database.
+Credentials for S3 come from the standard AWS chain: the task role on
+Fargate, AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY locally.
 """
 
 import asyncio
@@ -35,12 +39,15 @@ from opengrc import container
 from opengrc.access import ActorKind, Principal, Role
 from opengrc.adapters.blobs import FileBlobs
 from opengrc.adapters.library import DirectoryLibrary, GitLibrary
+from opengrc.adapters.s3 import S3Blobs
 from opengrc.api.app import create_app
 from opengrc.auth import ApiTokenAuthenticator
 from opengrc.auth.authenticator import digest
 from opengrc.operations.exports import ExportSettings
 from opengrc.operations.jobs import BackgroundExecutor
+from opengrc.operations.store import BlobStore, ObjectStore
 from opengrc.persistence.memory import MemoryBlobs, MemoryStore
+from opengrc.persistence.postgres import PostgresStore
 
 log = logging.getLogger("opengrc")
 ORGANIZATION = "organization"
@@ -80,11 +87,27 @@ def authenticator_from(raw: str) -> ApiTokenAuthenticator:
 def build_from_env(environ: dict[str, str] | None = None) -> container.Container:
     env = dict(os.environ if environ is None else environ)
     repo = env.get("OPENGRC_LIBRARY_REPO")
-    blob_dir = env.get("OPENGRC_BLOB_DIR")
+    database = env.get("OPENGRC_DATABASE_URL")
+    store: ObjectStore = PostgresStore(database) if database else MemoryStore()
+    bucket, blob_dir = env.get("OPENGRC_S3_BUCKET"), env.get("OPENGRC_BLOB_DIR")
+    blobs: BlobStore
+    if bucket:
+        blobs = S3Blobs(
+            bucket,
+            prefix=env.get("OPENGRC_S3_PREFIX", ""),
+            endpoint_url=env.get("OPENGRC_S3_ENDPOINT") or None,
+            region=env.get("AWS_REGION") or env.get("AWS_DEFAULT_REGION") or None,
+        )
+    elif blob_dir:
+        blobs = FileBlobs(Path(blob_dir))
+    else:
+        blobs = MemoryBlobs()
+    if not database:
+        log.warning("OPENGRC_DATABASE_URL is unset; the organization database is in memory")
     return container.build(
         authenticator=authenticator_from(env.get("OPENGRC_API_TOKENS", "")),
-        store=MemoryStore(),
-        blobs=FileBlobs(Path(blob_dir)) if blob_dir else MemoryBlobs(),
+        store=store,
+        blobs=blobs,
         executor=BackgroundExecutor(),
         library_source=GitLibrary(repo) if repo else DirectoryLibrary(container.REPOSITORY_LIBRARY),
         export=ExportSettings(remote=env.get("OPENGRC_EXPORT_REMOTE") or None),
@@ -118,6 +141,8 @@ def app_from_env() -> FastAPI:
         if scheduler and c.exports is not None and os.environ.get("OPENGRC_EXPORT_REMOTE"):
             task = asyncio.create_task(export_schedule(c, interval))
         yield
+        if isinstance(c.store, PostgresStore):
+            await c.store.close()
         if task is not None:
             task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

@@ -34,8 +34,14 @@ def _migrate(connection) -> None:
         context.run_migrations()
 
 
+def connect_args() -> dict:
+    """`schema` (set by the test suite) targets one Postgres schema."""
+    schema = config.get_main_option("schema")
+    return {"server_settings": {"search_path": schema}} if schema else {}
+
+
 async def run_online() -> None:
-    engine = create_async_engine(url())
+    engine = create_async_engine(url(), connect_args=connect_args())
     async with engine.connect() as connection:
         await connection.run_sync(_migrate)
     await engine.dispose()

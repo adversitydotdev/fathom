@@ -28,3 +28,18 @@ def test_tokens_from_the_environment():
         headers={**bot, "If-Match": party.json()["modified"]},
     )
     assert revoke.status_code == 403
+
+
+def test_database_and_bucket_from_the_environment():
+    from opengrc.adapters.s3 import S3Blobs
+    from opengrc.persistence.postgres import PostgresStore
+
+    c = build_from_env(
+        {
+            "OPENGRC_DATABASE_URL": "postgresql://u:p@db.example:5432/opengrc",
+            "OPENGRC_S3_BUCKET": "opengrc-123-us-east-1",
+        }
+    )
+    assert isinstance(c.store, PostgresStore)
+    assert c.store.engine.url.drivername == "postgresql+asyncpg"
+    assert isinstance(c.blobs, S3Blobs)
