@@ -1,0 +1,4658 @@
+openapi: 3.1.0
+info:
+  title: OpenGRC API
+  version: 0.1.0
+  summary: HTTP API for one organization's OpenGRC program.
+  description: |
+    Resources are the objects in RFC 0001. Computed routes return views the
+    kernel derives and does not store. The design notes, including how Vanta,
+    Drata, Secureframe, and Paramify map onto these routes, are in RFC 0004.
+
+    Library objects and imported provider objects are readable here and are
+    not editable. Revoke with `POST /{collection}/{id}/revoke`. There is no
+    DELETE. A write sends `If-Match` set to the object's current `modified`
+    value.
+
+    Long operations return 202 and a job. Poll `GET /jobs/{id}`.
+
+    Every `*Write` body also accepts the properties of `EnvelopeWrite`, and a
+    property the server does not know is stored and returned unchanged.
+  license:
+    name: Apache-2.0
+servers:
+  - url: https://{host}/v1
+    variables:
+      host:
+        default: localhost:8080
+tags:
+  - name: Meta
+  - name: Library
+  - name: Frameworks
+  - name: Requirements
+  - name: Controls
+  - name: Mappings
+  - name: Baselines
+  - name: Tests
+  - name: Parties
+  - name: Components
+  - name: Systems
+  - name: Programs
+  - name: Implementations
+  - name: Results
+  - name: Evidence
+  - name: Findings
+  - name: Policies
+  - name: Procedures
+  - name: Risks
+  - name: Exceptions
+  - name: Mapping reviews
+  - name: Providers
+  - name: Jobs
+  - name: Connectors
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      tags: [Meta]
+      operationId: getHealth
+      summary: Process health.
+      security: []
+      responses:
+        "200":
+          description: The process is serving.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Health"
+
+  /library:
+    get:
+      tags: [Library]
+      operationId: getLibrary
+      summary: The pinned library revision.
+      responses:
+        "200":
+          description: The pin. Empty before the first pull.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LibraryPin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /library/pull:
+    post:
+      tags: [Library]
+      operationId: pullLibrary
+      summary: Replace the library projection with one revision of this repository.
+      description: RFC 0002 section 5. Returns a job. Organization objects are left in place.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LibraryPullRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /frameworks:
+    get:
+      tags: [Frameworks]
+      operationId: listFrameworks
+      summary: List frameworks in the pinned library.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: A page of frameworks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FrameworkPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /frameworks/{id}:
+    get:
+      tags: [Frameworks]
+      operationId: getFramework
+      summary: Get one framework.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The framework.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Framework"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /requirements:
+    get:
+      tags: [Requirements]
+      operationId: listRequirements
+      summary: List requirements.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: framework_id
+          in: query
+          schema:
+            type: string
+        - name: class
+          in: query
+          schema:
+            $ref: "#/components/schemas/RequirementClass"
+        - name: q
+          in: query
+          description: Case-insensitive match on name and display_id.
+          schema:
+            type: string
+        - name: withdrawn
+          in: query
+          description: When true, include requirements the publisher withdrew. Default false.
+          schema:
+            type: boolean
+            default: false
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of requirements.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RequirementPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /requirements/{id}:
+    get:
+      tags: [Requirements]
+      operationId: getRequirement
+      summary: Get one requirement, including parts, parameters, and objectives.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The requirement.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Requirement"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /requirements/{id}/mappings:
+    get:
+      tags: [Requirements]
+      operationId: listRequirementMappings
+      summary: Mappings whose target is this requirement.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: A page of mappings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /controls:
+    get:
+      tags: [Controls]
+      operationId: listControls
+      summary: List library and custom controls.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: origin
+          in: query
+          schema:
+            $ref: "#/components/schemas/Origin"
+        - name: family
+          in: query
+          schema:
+            type: string
+        - name: q
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of controls.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ControlPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Controls]
+      operationId: createControl
+      summary: Create a custom control.
+      description: "`origin` is set to `custom`. A standard-library id is rejected."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ControlWrite"
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /controls/{id}:
+    get:
+      tags: [Controls]
+      operationId: getControl
+      summary: Get one control.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The control.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Controls]
+      operationId: updateControl
+      summary: Update a custom control.
+      description: Library controls return 409. Arrays replace. `If-Match` is the current `modified` value.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ControlWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /controls/{id}/revoke:
+    post:
+      tags: [Controls]
+      operationId: revokeControl
+      summary: Revoke a custom control.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked control.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Control"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /controls/{id}/mappings:
+    get:
+      tags: [Controls]
+      operationId: listControlMappings
+      summary: Mappings whose source is this control.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: A page of mappings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /controls/{id}/tests:
+    get:
+      tags: [Controls]
+      operationId: listControlTests
+      summary: Tests of this control.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: A page of tests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /controls/{id}/implementations:
+    get:
+      tags: [Controls]
+      operationId: listControlImplementations
+      summary: Implementations of this control.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: system_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page of implementations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImplementationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /mappings:
+    get:
+      tags: [Mappings]
+      operationId: listMappings
+      summary: List mappings.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: source_id
+          in: query
+          schema:
+            type: string
+        - name: target_id
+          in: query
+          description: Requirement id. A part fragment is allowed.
+          schema:
+            type: string
+        - name: relationship
+          in: query
+          schema:
+            $ref: "#/components/schemas/Relationship"
+        - name: review_status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ReviewStatus"
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of mappings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Mappings]
+      operationId: createMapping
+      summary: Author an organization mapping.
+      description: Does not modify a library mapping. Customer-facing coverage still requires a reviewed mapping, either here or through a mapping review.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mapping"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /mappings/{id}:
+    get:
+      tags: [Mappings]
+      operationId: getMapping
+      summary: Get one mapping.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The mapping.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mapping"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Mappings]
+      operationId: updateMapping
+      summary: Update an organization mapping.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mapping"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /mappings/{id}/revoke:
+    post:
+      tags: [Mappings]
+      operationId: revokeMapping
+      summary: Revoke an organization mapping.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked mapping.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mapping"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /baselines:
+    get:
+      tags: [Baselines]
+      operationId: listBaselines
+      summary: List library and organization baselines.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: extends_id
+          in: query
+          description: Baselines whose `extends_ref` is this baseline.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of baselines.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BaselinePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Baselines]
+      operationId: createBaseline
+      summary: Create an organization baseline.
+      description: A standard-library id is rejected. `extends_ref` may name a library baseline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BaselineWrite"
+      responses:
+        "201":
+          description: Created.
+          headers:
+            Location:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baseline"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /baselines/{id}:
+    get:
+      tags: [Baselines]
+      operationId: getBaseline
+      summary: Get one baseline.
+      description: The stored object. `extends_ref` is not applied.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The baseline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baseline"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Baselines]
+      operationId: updateBaseline
+      summary: Update an organization baseline.
+      description: Library baselines return 409. Arrays replace. `If-Match` is the current `modified` value.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BaselineWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baseline"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /baselines/{id}/revoke:
+    post:
+      tags: [Baselines]
+      operationId: revokeBaseline
+      summary: Revoke an organization baseline.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked baseline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Baseline"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /baselines/{id}/effective:
+    get:
+      tags: [Baselines]
+      operationId: getEffectiveBaseline
+      summary: The baseline after `extends_ref` is applied.
+      description: |
+        RFC 0001 section 7.5. A computed view, not a stored object. This is
+        the set of controls, requirements, and parameter bindings that program
+        status is computed against.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The effective baseline.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EffectiveBaseline"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tests:
+    get:
+      tags: [Tests]
+      operationId: listTests
+      summary: List tests.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: control_id
+          in: query
+          schema:
+            type: string
+        - name: method
+          in: query
+          schema:
+            $ref: "#/components/schemas/TestMethod"
+        - name: required
+          in: query
+          schema:
+            type: boolean
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of tests.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TestPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Tests]
+      operationId: createTest
+      summary: Author an organization test.
+      description: A library test is not created here. Use `fulfills_ref` to carry out a library test.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /tests/{id}:
+    get:
+      tags: [Tests]
+      operationId: getTest
+      summary: Get one test.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Tests]
+      operationId: updateTest
+      summary: Update an organization test.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TestWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /tests/{id}/revoke:
+    post:
+      tags: [Tests]
+      operationId: revokeTest
+      summary: Revoke an organization test.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /tests/{id}/runs:
+    post:
+      tags: [Tests]
+      operationId: runTest
+      summary: Ask the harness to execute this test.
+      description: |
+        The test must have a `run` block the harness recognizes. A manual test
+        is recorded with `POST /results` instead. The job's product is a result id.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [implementation_id]
+              properties:
+                implementation_id:
+                  type: string
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /parties:
+    get:
+      tags: [Parties]
+      operationId: listParties
+      summary: List parties.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/PartyKind"
+        - name: q
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of parties.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartyPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Parties]
+      operationId: createParty
+      summary: Create a party.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartyWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Party"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /parties/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Parties]
+      operationId: getParty
+      summary: Get one party.
+      responses:
+        "200":
+          description: The party.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Party"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Parties]
+      operationId: updateParty
+      summary: Update a party.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartyWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Party"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /parties/{id}/revoke:
+    post:
+      tags: [Parties]
+      operationId: revokeParty
+      summary: Revoke a party.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked party.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Party"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /components:
+    get:
+      tags: [Components]
+      operationId: listComponents
+      summary: List components, including imported provider components.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: kind
+          in: query
+          schema:
+            $ref: "#/components/schemas/ComponentKind"
+        - name: provider_id
+          in: query
+          description: Limit to components imported with this provider bundle.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of components.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ComponentPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Components]
+      operationId: createComponent
+      summary: Create a component owned by this organization.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /components/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Components]
+      operationId: getComponent
+      summary: Get one component.
+      responses:
+        "200":
+          description: The component.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Components]
+      operationId: updateComponent
+      summary: Update an organization component.
+      description: A component imported from a provider bundle returns 409.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComponentWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /components/{id}/revoke:
+    post:
+      tags: [Components]
+      operationId: revokeComponent
+      summary: Revoke an organization component.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked component.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Component"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /components/{id}/implementations:
+    get:
+      tags: [Components]
+      operationId: listComponentImplementations
+      summary: Implementations attached to this component.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+      responses:
+        "200":
+          description: A page of implementations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImplementationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /systems:
+    get:
+      tags: [Systems]
+      operationId: listSystems
+      summary: List systems.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: q
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of systems.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Systems]
+      operationId: createSystem
+      summary: Create a system.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /systems/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Systems]
+      operationId: getSystem
+      summary: Get one system.
+      responses:
+        "200":
+          description: The system.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Systems]
+      operationId: updateSystem
+      summary: Update a system.
+      description: Attaching a provider component is adding its id to `component_refs`.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SystemWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /systems/{id}/revoke:
+    post:
+      tags: [Systems]
+      operationId: revokeSystem
+      summary: Revoke a system.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked system.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/System"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /systems/{id}/gaps:
+    get:
+      tags: [Systems]
+      operationId: listSystemGaps
+      summary: Controls in gap for every program on this system.
+      description: Shorthand over program status for the readiness list. Each item names the program and the failed condition.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: at
+          in: query
+          description: Evaluation time. Defaults to the request time.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The gaps.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [at, gaps]
+                properties:
+                  at:
+                    type: string
+                    format: date-time
+                  gaps:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Gap"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /programs:
+    get:
+      tags: [Programs]
+      operationId: listPrograms
+      summary: List programs.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: system_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of programs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Programs]
+      operationId: createProgram
+      summary: Bind a system to a baseline.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProgramWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /programs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Programs]
+      operationId: getProgram
+      summary: Get one program.
+      responses:
+        "200":
+          description: The program.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Programs]
+      operationId: updateProgram
+      summary: Update a program.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProgramWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /programs/{id}/revoke:
+    post:
+      tags: [Programs]
+      operationId: revokeProgram
+      summary: Revoke a program.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked program.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Program"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /programs/{id}/summary:
+    get:
+      tags: [Programs]
+      operationId: getProgramSummary
+      summary: Counts for the readiness view.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: at
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The counts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramSummary"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /programs/{id}/status:
+    get:
+      tags: [Programs]
+      operationId: getProgramStatus
+      summary: Computed control status and requirement coverage.
+      description: |
+        RFC 0001 section 8, evaluated at `at`. This is the framework readiness
+        page. Clients display it. They do not recompute it.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: at
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: framework_id
+          in: query
+          description: Limit requirement coverage to one framework.
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The computation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProgramStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /programs/{id}/renders:
+    post:
+      tags: [Programs]
+      operationId: createProgramRender
+      summary: Render an OSCAL package or the narrative SSP for this program.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RenderRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /implementations:
+    get:
+      tags: [Implementations]
+      operationId: listImplementations
+      summary: List implementations.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: system_id
+          in: query
+          schema:
+            type: string
+        - name: control_id
+          in: query
+          schema:
+            type: string
+        - name: component_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/ImplementationStatus"
+        - name: responsibility
+          in: query
+          schema:
+            $ref: "#/components/schemas/Responsibility"
+        - name: origin
+          in: query
+          schema:
+            $ref: "#/components/schemas/ImplementationOrigin"
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of implementations.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImplementationPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Implementations]
+      operationId: createImplementation
+      summary: Record how a system or a component carries out a control.
+      description: |
+        Provide `system_ref`, `component_ref`, or both, and `control_ref` or
+        `requirement_ref` or both. A second non-revoked implementation for the
+        same pair returns 409. `origin: provider` is rejected. Provider rows
+        arrive through `POST /providers`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImplementationWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Implementation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /implementations/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Implementations]
+      operationId: getImplementation
+      summary: Get one implementation.
+      responses:
+        "200":
+          description: The implementation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Implementation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Implementations]
+      operationId: updateImplementation
+      summary: Update an organization implementation.
+      description: A provider implementation returns 409. Write a system implementation to override it.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImplementationWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Implementation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /implementations/{id}/revoke:
+    post:
+      tags: [Implementations]
+      operationId: revokeImplementation
+      summary: Revoke an organization implementation.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked implementation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Implementation"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /implementations/{id}/results:
+    get:
+      tags: [Implementations]
+      operationId: listImplementationResults
+      summary: Results for this implementation, newest first.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: outcome
+          in: query
+          schema:
+            $ref: "#/components/schemas/Outcome"
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /implementations/{id}/evidence:
+    get:
+      tags: [Implementations]
+      operationId: listImplementationEvidence
+      summary: Evidence attached to this implementation.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: valid_on
+          in: query
+          description: Keep evidence whose window contains this date.
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: A page of evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidencePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /results:
+    get:
+      tags: [Results]
+      operationId: listResults
+      summary: List results.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: test_id
+          in: query
+          schema:
+            type: string
+        - name: implementation_id
+          in: query
+          schema:
+            type: string
+        - name: outcome
+          in: query
+          schema:
+            $ref: "#/components/schemas/Outcome"
+        - name: observed_after
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: A page of results.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResultPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Results]
+      operationId: createResult
+      summary: Record a manual result.
+      description: A harness run creates its own result. This route is the person-entered outcome of a manual test.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ResultWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /results/{id}:
+    get:
+      tags: [Results]
+      operationId: getResult
+      summary: Get one result.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Result"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /evidence:
+    get:
+      tags: [Evidence]
+      operationId: listEvidence
+      summary: List evidence.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: implementation_id
+          in: query
+          schema:
+            type: string
+        - name: result_id
+          in: query
+          schema:
+            type: string
+        - name: method
+          in: query
+          schema:
+            $ref: "#/components/schemas/EvidenceMethod"
+        - name: valid_on
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EvidencePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Evidence]
+      operationId: createEvidence
+      summary: Create an evidence object.
+      description: The bytes, when any, are uploaded to `POST /evidence/{id}/content` after this returns. A link or an attestation may set `resource` here and skip the upload.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /evidence/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Evidence]
+      operationId: getEvidence
+      summary: Get one evidence object.
+      responses:
+        "200":
+          description: The evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Evidence]
+      operationId: updateEvidence
+      summary: Update evidence metadata.
+      description: |
+        `name` and `tags` may change at any time. The other fields may change
+        only while the evidence is incomplete, before its content is uploaded.
+        After that they return 409. A correction is a revoke and a new object.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EvidenceWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /evidence/{id}/revoke:
+    post:
+      tags: [Evidence]
+      operationId: revokeEvidence
+      summary: Revoke evidence.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked evidence.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /evidence/{id}/content:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Evidence]
+      operationId: getEvidenceContent
+      summary: Download evidence bytes.
+      responses:
+        "200":
+          description: The bytes.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Evidence]
+      operationId: uploadEvidenceContent
+      summary: Store evidence bytes and set the digest.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                media_type:
+                  type: string
+      responses:
+        "200":
+          description: The evidence, with `resource.digest` set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Evidence"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+
+  /findings:
+    get:
+      tags: [Findings]
+      operationId: listFindings
+      summary: List findings.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: system_id
+          in: query
+          schema:
+            type: string
+        - name: determination
+          in: query
+          schema:
+            $ref: "#/components/schemas/Determination"
+        - name: objective
+          in: query
+          description: Requirement id plus an `#obj.` fragment.
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of findings.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FindingPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Findings]
+      operationId: createFinding
+      summary: Record an assessor's determination against one objective.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindingWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /findings/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Findings]
+      operationId: getFinding
+      summary: Get one finding.
+      responses:
+        "200":
+          description: The finding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Findings]
+      operationId: updateFinding
+      summary: Update a finding.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FindingWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /findings/{id}/revoke:
+    post:
+      tags: [Findings]
+      operationId: revokeFinding
+      summary: Revoke a finding.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked finding.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Finding"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /policies:
+    get:
+      tags: [Policies]
+      operationId: listPolicies
+      summary: List policies.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/DocumentStatus"
+        - name: control_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of policies.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PolicyPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Policies]
+      operationId: createPolicy
+      summary: Create a policy.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /policies/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Policies]
+      operationId: getPolicy
+      summary: Get one policy.
+      responses:
+        "200":
+          description: The policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Policies]
+      operationId: updatePolicy
+      summary: Update a policy.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PolicyWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /policies/{id}/revoke:
+    post:
+      tags: [Policies]
+      operationId: revokePolicy
+      summary: Revoke a policy.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked policy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /policies/{id}/content:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Policies]
+      operationId: getPolicyContent
+      summary: Download the policy body.
+      responses:
+        "200":
+          description: The body.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Policies]
+      operationId: uploadPolicyContent
+      summary: Store the policy body and set the digest.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                media_type:
+                  type: string
+                  default: text/markdown
+      responses:
+        "200":
+          description: The policy, with `resource.digest` set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Policy"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /procedures:
+    get:
+      tags: [Procedures]
+      operationId: listProcedures
+      summary: List procedures.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: policy_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/DocumentStatus"
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of procedures.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcedurePage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Procedures]
+      operationId: createProcedure
+      summary: Create a procedure.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcedureWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /procedures/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Procedures]
+      operationId: getProcedure
+      summary: Get one procedure.
+      responses:
+        "200":
+          description: The procedure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Procedures]
+      operationId: updateProcedure
+      summary: Update a procedure.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProcedureWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /procedures/{id}/revoke:
+    post:
+      tags: [Procedures]
+      operationId: revokeProcedure
+      summary: Revoke a procedure.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked procedure.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /procedures/{id}/content:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Procedures]
+      operationId: getProcedureContent
+      summary: Download the procedure body.
+      responses:
+        "200":
+          description: The body.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Procedures]
+      operationId: uploadProcedureContent
+      summary: Store the procedure body and set the digest.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                media_type:
+                  type: string
+                  default: text/markdown
+      responses:
+        "200":
+          description: The procedure, with `resource.digest` set.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Procedure"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /risks:
+    get:
+      tags: [Risks]
+      operationId: listRisks
+      summary: List risks.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: system_id
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/RiskStatus"
+        - name: treatment
+          in: query
+          schema:
+            $ref: "#/components/schemas/Treatment"
+        - name: control_id
+          in: query
+          schema:
+            type: string
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of risks.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Risks]
+      operationId: createRisk
+      summary: Create a risk.
+      description: Milestones are a field on the risk. Sending `milestones` on a later patch replaces the list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Risk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /risks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Risks]
+      operationId: getRisk
+      summary: Get one risk.
+      responses:
+        "200":
+          description: The risk.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Risk"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Risks]
+      operationId: updateRisk
+      summary: Update a risk, including its milestones.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RiskWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Risk"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /risks/{id}/revoke:
+    post:
+      tags: [Risks]
+      operationId: revokeRisk
+      summary: Revoke a risk.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked risk.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Risk"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /exceptions:
+    get:
+      tags: [Exceptions]
+      operationId: listExceptions
+      summary: List exceptions.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: implementation_id
+          in: query
+          schema:
+            type: string
+        - name: expires_before
+          in: query
+          schema:
+            type: string
+            format: date
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of exceptions.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExceptionPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Exceptions]
+      operationId: createException
+      summary: Waive an implementation until a date.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExceptionWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Exception"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /exceptions/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Exceptions]
+      operationId: getException
+      summary: Get one exception.
+      responses:
+        "200":
+          description: The exception.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Exception"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Exceptions]
+      operationId: updateException
+      summary: Update an exception.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExceptionWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Exception"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /exceptions/{id}/revoke:
+    post:
+      tags: [Exceptions]
+      operationId: revokeException
+      summary: Revoke an exception.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked exception.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Exception"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /mapping-reviews:
+    get:
+      tags: [Mapping reviews]
+      operationId: listMappingReviews
+      summary: List this organization's reviews of library mappings.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: mapping_id
+          in: query
+          schema:
+            type: string
+        - name: review_status
+          in: query
+          schema:
+            type: string
+            enum: [reviewed, rejected]
+        - $ref: "#/components/parameters/revoked"
+      responses:
+        "200":
+          description: A page of reviews.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingReviewPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Mapping reviews]
+      operationId: createMappingReview
+      summary: Accept or reject a library mapping for this organization.
+      description: One non-revoked review per mapping. A second create returns 409. Change the existing review with PATCH. The server sets `library_version` from the current library pin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingReviewWrite"
+      responses:
+        "201":
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingReview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /mapping-reviews/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Mapping reviews]
+      operationId: getMappingReview
+      summary: Get one mapping review.
+      responses:
+        "200":
+          description: The review.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingReview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Mapping reviews]
+      operationId: updateMappingReview
+      summary: Update a mapping review.
+      parameters:
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MappingReviewWrite"
+      responses:
+        "200":
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingReview"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /mapping-reviews/{id}/revoke:
+    post:
+      tags: [Mapping reviews]
+      operationId: revokeMappingReview
+      summary: Revoke a mapping review.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The revoked review.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MappingReview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+
+  /providers:
+    get:
+      tags: [Providers]
+      operationId: listProviders
+      summary: List imported provider bundles.
+      responses:
+        "200":
+          description: The pins.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ProviderPin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Providers]
+      operationId: importProvider
+      summary: Import a provider bundle or an OSCAL component definition.
+      description: RFC 0002 section 7. Re-import of the same bundle id replaces that projection. Returns a job.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProviderImportRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /providers/{id}:
+    get:
+      tags: [Providers]
+      operationId: getProvider
+      summary: Get one provider pin.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The pin.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProviderPin"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /exports/git:
+    post:
+      tags: [Jobs]
+      operationId: exportGit
+      summary: Write the organization snapshot to the configured git remote.
+      description: RFC 0002 section 8. Returns a job. The database is not updated from the remote.
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The remote has commits this job did not write.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /restore:
+    post:
+      tags: [Jobs]
+      operationId: restoreOrganization
+      summary: Load an organization snapshot into an empty database.
+      description: |
+        RFC 0002 section 8.1. Runs once, into a database with no organization
+        objects. There is no merge. Returns a job, whose error names the object
+        that failed the graph check when the snapshot is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RestoreRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          description: The database already holds organization objects.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      operationId: listJobs
+      summary: List jobs.
+      parameters:
+        - $ref: "#/components/parameters/limit"
+        - $ref: "#/components/parameters/cursor"
+        - name: type
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobType"
+        - name: status
+          in: query
+          schema:
+            $ref: "#/components/schemas/JobStatus"
+      responses:
+        "200":
+          description: A page of jobs.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JobPage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /jobs/{id}:
+    get:
+      tags: [Jobs]
+      operationId: getJob
+      summary: Get one job.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The job.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Job"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /jobs/{id}/files/{filename}:
+    get:
+      tags: [Jobs]
+      operationId: getJobFile
+      summary: Download one file a succeeded render job produced.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The file.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: The job has not succeeded.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+
+  /connectors:
+    get:
+      tags: [Connectors]
+      operationId: listConnectors
+      summary: List connectors installed in this deployment.
+      description: |
+        The registry is empty until a connector is installed beside the API.
+        This is not a catalog of cloud products. RFC 0003 defines the port.
+      responses:
+        "200":
+          description: The installed connectors.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Connector"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /connectors/{id}/jobs:
+    post:
+      tags: [Connectors]
+      operationId: runConnector
+      summary: Ask a connector to collect evidence.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                system_id:
+                  type: string
+                component_id:
+                  type: string
+                implementation_id:
+                  type: string
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: |
+        A bearer token for this deployment. How a token is issued, and which
+        organization it selects, is a later revision. RFC 0004 open question 1.
+  parameters:
+    id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+    limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    cursor:
+      name: cursor
+      in: query
+      description: Opaque cursor from the previous page's `next_cursor`.
+      schema:
+        type: string
+    revoked:
+      name: revoked
+      in: query
+      description: When true, return revoked objects. Default false.
+      schema:
+        type: boolean
+        default: false
+    ifMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The object's current `modified` timestamp.
+      schema:
+        type: string
+  responses:
+    AcceptedJob:
+      description: The work was accepted.
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Job"
+    BadRequest:
+      description: The request violates the schema or a graph constraint.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Unauthorized:
+      description: No usable bearer token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: Unknown id.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: The id is taken, or the object is a library or provider row.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PreconditionFailed:
+      description: If-Match does not equal `modified`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnsupportedMediaType:
+      description: The upload is not an accepted media type.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+  schemas:
+    Problem:
+      type: object
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          description: A URN such as `urn:opengrc:problem:library-object`.
+          examples: ["urn:opengrc:problem:bad-request"]
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        errors:
+          type: array
+          items:
+            type: object
+            required: [detail]
+            properties:
+              pointer:
+                type: string
+                description: JSON pointer to the field.
+              detail:
+                type: string
+    Page:
+      type: object
+      properties:
+        next_cursor:
+          type: string
+        limit:
+          type: integer
+    Health:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          const: ok
+    LibraryPin:
+      type: object
+      required: [id, version]
+      properties:
+        id:
+          type: string
+          examples: ["bundle--ogrc-library"]
+        version:
+          type: string
+        commit:
+          type: string
+    LibraryPullRequest:
+      type: object
+      description: Provide `version` or `commit`.
+      properties:
+        version:
+          type: string
+        commit:
+          type: string
+    ProviderPin:
+      type: object
+      required: [id, version]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        version:
+          type: string
+        digest:
+          type: string
+        kind:
+          type: string
+          enum: [opengrc, oscal-component]
+    ProviderImportRequest:
+      type: object
+      required: [kind, url]
+      properties:
+        kind:
+          type: string
+          enum: [opengrc, oscal-component]
+        url:
+          type: string
+          format: uri
+        version:
+          type: string
+        digest:
+          type: string
+    RestoreRequest:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          format: uri
+          description: A git remote holding a snapshot, or the URL of an exchange-form bundle.
+        commit:
+          type: string
+          description: The snapshot commit, when `url` is a git remote. Defaults to the head of the default branch.
+    JobType:
+      type: string
+      enum: [library_pull, provider_import, test_run, render, git_export, restore, connector]
+    JobStatus:
+      type: string
+      enum: [queued, running, succeeded, failed]
+    Job:
+      type: object
+      required: [id, type, status, created]
+      properties:
+        id:
+          type: string
+        type:
+          $ref: "#/components/schemas/JobType"
+        status:
+          $ref: "#/components/schemas/JobStatus"
+        created:
+          type: string
+          format: date-time
+        finished:
+          type: string
+          format: date-time
+        error:
+          $ref: "#/components/schemas/Problem"
+        result_id:
+          type: string
+          description: Set when the job produced one object, such as a result.
+        files:
+          type: array
+          description: Names downloadable from `/jobs/{id}/files/{filename}` after a render succeeds.
+          items:
+            type: string
+    JobPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Job"
+        page:
+          $ref: "#/components/schemas/Page"
+    Connector:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+    RenderRequest:
+      type: object
+      required: [view]
+      properties:
+        view:
+          type: string
+          enum: [oscal, ssp]
+          description: "`oscal` is the package in RFC 0002 section 9. `ssp` is the narrative walk in RFC 0001 section 8.1."
+        framework_id:
+          type: string
+          description: Required when `view` is `oscal`.
+    ExternalReference:
+      type: object
+      properties:
+        source:
+          type: string
+        url:
+          type: string
+        description:
+          type: string
+    Resource:
+      type: object
+      properties:
+        uri:
+          type: string
+        media_type:
+          type: string
+        digest:
+          type: object
+          required: [algorithm, value]
+          properties:
+            algorithm:
+              type: string
+              const: sha-256
+            value:
+              type: string
+    Envelope:
+      type: object
+      required: [type, id, spec_version, created, modified]
+      properties:
+        type:
+          type: string
+        id:
+          type: string
+        spec_version:
+          type: string
+          const: 0.1.0
+        created:
+          type: string
+          format: date-time
+        modified:
+          type: string
+          format: date-time
+        name:
+          type: string
+        revoked:
+          type: boolean
+        created_by_ref:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        external_references:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalReference"
+        extensions:
+          type: object
+          additionalProperties: true
+        lang:
+          type: string
+    EnvelopeWrite:
+      type: object
+      description: Optional envelope fields every create and update accepts beside the fields of its type.
+      properties:
+        tags:
+          type: array
+          items:
+            type: string
+        external_references:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalReference"
+        extensions:
+          type: object
+          additionalProperties: true
+        lang:
+          type: string
+    Framework:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, publisher, version, reproduction]
+          properties:
+            publisher:
+              type: string
+            version:
+              type: string
+            reproduction:
+              type: string
+              enum: [permitted, citation-only]
+            source:
+              type: object
+              properties:
+                format:
+                  type: string
+                uri:
+                  type: string
+                path:
+                  type: string
+                commit:
+                  type: string
+    FrameworkPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Framework"
+        page:
+          $ref: "#/components/schemas/Page"
+    RequirementClass:
+      type: string
+      enum: [criterion, control, enhancement, clause, specification]
+    Requirement:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, framework_ref, class]
+          properties:
+            display_id:
+              type: string
+            framework_ref:
+              type: string
+            class:
+              $ref: "#/components/schemas/RequirementClass"
+            withdrawn:
+              type: boolean
+              default: false
+              description: The publisher retired the obligation. Not the same as `revoked`.
+            statement:
+              type: string
+            parameters:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  label:
+                    type: string
+            parts:
+              type: array
+              items:
+                type: object
+                required: [id, statement]
+                properties:
+                  id:
+                    type: string
+                  name:
+                    type: string
+                  statement:
+                    type: string
+            objectives:
+              type: array
+              items:
+                type: object
+                required: [id, statement]
+                properties:
+                  id:
+                    type: string
+                  statement:
+                    type: string
+                  methods:
+                    type: array
+                    items:
+                      type: object
+                      required: [method]
+                      properties:
+                        method:
+                          type: string
+                          enum: [examine, interview, test]
+                        statement:
+                          type: string
+    RequirementPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Requirement"
+        page:
+          $ref: "#/components/schemas/Page"
+    Origin:
+      type: string
+      enum: [standard, custom]
+    Control:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, origin, statement, objective]
+          properties:
+            display_id:
+              type: string
+            origin:
+              $ref: "#/components/schemas/Origin"
+            family:
+              type: string
+            control_type:
+              type: string
+              enum: [preventive, detective, corrective]
+            frequency:
+              type: string
+              enum: [continuous, daily, weekly, monthly, quarterly, annual, event-driven]
+            summary:
+              type: string
+            statement:
+              type: string
+            objective:
+              type: string
+            guidance:
+              type: string
+            parameters:
+              type: object
+              additionalProperties:
+                type: object
+                properties:
+                  label:
+                    type: string
+                  value:
+                    type: string
+    ControlWrite:
+      type: object
+      required: [name, statement, objective]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        display_id:
+          type: string
+        family:
+          type: string
+        control_type:
+          type: string
+          enum: [preventive, detective, corrective]
+        frequency:
+          type: string
+          enum: [continuous, daily, weekly, monthly, quarterly, annual, event-driven]
+        summary:
+          type: string
+        statement:
+          type: string
+        objective:
+          type: string
+        guidance:
+          type: string
+        parameters:
+          type: object
+          additionalProperties: true
+        tags:
+          type: array
+          items:
+            type: string
+    ControlPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Control"
+        page:
+          $ref: "#/components/schemas/Page"
+    Relationship:
+      type: string
+      enum: [equal-to, equivalent-to, subset-of, superset-of, intersects-with, no-relationship]
+    ReviewStatus:
+      type: string
+      enum: [draft, reviewed]
+    Mapping:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [source_ref, target_ref, relationship]
+          properties:
+            source_ref:
+              type: string
+            target_ref:
+              type: string
+            relationship:
+              $ref: "#/components/schemas/Relationship"
+            rationale:
+              type: string
+              enum: [functional, semantic, syntactic]
+            review_status:
+              $ref: "#/components/schemas/ReviewStatus"
+            confidence:
+              type: string
+              enum: [low, medium, high]
+            summary:
+              type: string
+            parameter_map:
+              type: object
+              additionalProperties:
+                type: string
+            combined_with_refs:
+              type: array
+              description: Mappings to the same target that, with this one, cover it. RFC 0001 section 7.4.
+              items:
+                type: string
+    MappingWrite:
+      type: object
+      required: [source_ref, target_ref, relationship]
+      properties:
+        id:
+          type: string
+        source_ref:
+          type: string
+        target_ref:
+          type: string
+        relationship:
+          $ref: "#/components/schemas/Relationship"
+        rationale:
+          type: string
+          enum: [functional, semantic, syntactic]
+        review_status:
+          $ref: "#/components/schemas/ReviewStatus"
+        confidence:
+          type: string
+          enum: [low, medium, high]
+        summary:
+          type: string
+        parameter_map:
+          type: object
+          additionalProperties:
+            type: string
+        combined_with_refs:
+          type: array
+          items:
+            type: string
+    MappingPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Mapping"
+        page:
+          $ref: "#/components/schemas/Page"
+    Baseline:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name]
+          properties:
+            extends_ref:
+              type: string
+              description: A baseline with no `extends_ref` of its own.
+            framework_refs:
+              type: array
+              items:
+                type: string
+            control_refs:
+              type: array
+              items:
+                type: string
+            requirement_refs:
+              type: array
+              description: Requirements in scope. Omitted means every non-revoked requirement of `framework_refs`.
+              items:
+                type: string
+            parameter_bindings:
+              type: object
+              additionalProperties:
+                type: object
+                additionalProperties:
+                  type: string
+    BaselineWrite:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        extends_ref:
+          type: string
+        framework_refs:
+          type: array
+          items:
+            type: string
+        control_refs:
+          type: array
+          items:
+            type: string
+        requirement_refs:
+          type: array
+          items:
+            type: string
+        parameter_bindings:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+    EffectiveBaseline:
+      type: object
+      required: [baseline_id, framework_ids, control_ids, requirement_ids, parameter_bindings]
+      properties:
+        baseline_id:
+          type: string
+        extends_id:
+          type: string
+        framework_ids:
+          type: array
+          items:
+            type: string
+        control_ids:
+          type: array
+          items:
+            type: string
+        requirement_ids:
+          type: array
+          description: Every requirement in scope, listed out even when the baseline names none.
+          items:
+            type: string
+        parameter_bindings:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+    BaselinePage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Baseline"
+        page:
+          $ref: "#/components/schemas/Page"
+    TestMethod:
+      type: string
+      enum: [automated, manual]
+    Test:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, control_ref, method]
+          properties:
+            control_ref:
+              type: string
+            fulfills_ref:
+              type: string
+            system_refs:
+              type: array
+              description: Systems this test checks. Omitted means every system.
+              items:
+                type: string
+            objective_refs:
+              type: array
+              items:
+                type: string
+            method:
+              $ref: "#/components/schemas/TestMethod"
+            interval:
+              type: string
+              enum: [continuous, daily, weekly, monthly, quarterly, annual, event-driven]
+            required:
+              type: boolean
+              default: false
+              description: Not read on a test that sets `fulfills_ref`.
+            description:
+              type: string
+            procedure_ref:
+              type: string
+            run:
+              $ref: "#/components/schemas/Run"
+    Run:
+      type: object
+      required: [runner, command]
+      properties:
+        runner:
+          type: string
+        command:
+          type: string
+        timeout:
+          type: string
+        env:
+          type: array
+          items:
+            type: string
+        evidence:
+          type: array
+          items:
+            type: object
+            required: [path, name, media_type]
+            properties:
+              path:
+                type: string
+              name:
+                type: string
+              media_type:
+                type: string
+    TestWrite:
+      type: object
+      required: [name, control_ref, method]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        control_ref:
+          type: string
+        fulfills_ref:
+          type: string
+        system_refs:
+          type: array
+          items:
+            type: string
+        objective_refs:
+          type: array
+          items:
+            type: string
+        method:
+          $ref: "#/components/schemas/TestMethod"
+        interval:
+          type: string
+        required:
+          type: boolean
+        description:
+          type: string
+        procedure_ref:
+          type: string
+        run:
+          $ref: "#/components/schemas/Run"
+    TestPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Test"
+        page:
+          $ref: "#/components/schemas/Page"
+    PartyKind:
+      type: string
+      enum: [person, team, role, organization]
+    Party:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, kind]
+          properties:
+            kind:
+              $ref: "#/components/schemas/PartyKind"
+    PartyWrite:
+      type: object
+      required: [name, kind]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/PartyKind"
+    PartyPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Party"
+        page:
+          $ref: "#/components/schemas/Page"
+    ComponentKind:
+      type: string
+      enum: [infrastructure, software, people, data, procedure, service]
+    Component:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, kind]
+          properties:
+            kind:
+              $ref: "#/components/schemas/ComponentKind"
+            description:
+              type: string
+            party_ref:
+              type: string
+    ComponentWrite:
+      type: object
+      required: [name, kind]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        kind:
+          $ref: "#/components/schemas/ComponentKind"
+        description:
+          type: string
+        party_ref:
+          type: string
+    ComponentPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Component"
+        page:
+          $ref: "#/components/schemas/Page"
+    System:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name]
+          properties:
+            function:
+              type: string
+            boundary:
+              type: string
+            component_refs:
+              type: array
+              items:
+                type: string
+            information_types:
+              type: array
+              items:
+                $ref: "#/components/schemas/InformationType"
+            parties:
+              type: array
+              items:
+                $ref: "#/components/schemas/SystemParty"
+    InformationType:
+      type: object
+      required: [name, confidentiality, integrity, availability]
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        confidentiality:
+          $ref: "#/components/schemas/Impact"
+        integrity:
+          $ref: "#/components/schemas/Impact"
+        availability:
+          $ref: "#/components/schemas/Impact"
+        component_refs:
+          type: array
+          items:
+            type: string
+    Impact:
+      type: string
+      enum: [low, moderate, high]
+    SystemParty:
+      type: object
+      required: [party_ref, role]
+      properties:
+        party_ref:
+          type: string
+        role:
+          type: string
+          enum: [subservice, customer, operator]
+        function:
+          type: string
+        authorization:
+          type: object
+          required: [identifier, authorized, expires]
+          properties:
+            identifier:
+              type: string
+            authorized:
+              type: string
+              format: date
+            expires:
+              type: string
+              format: date
+    SystemWrite:
+      type: object
+      required: [name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        function:
+          type: string
+        boundary:
+          type: string
+        component_refs:
+          type: array
+          items:
+            type: string
+        information_types:
+          type: array
+          items:
+            $ref: "#/components/schemas/InformationType"
+        parties:
+          type: array
+          items:
+            $ref: "#/components/schemas/SystemParty"
+    SystemPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/System"
+        page:
+          $ref: "#/components/schemas/Page"
+    Program:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, system_ref, baseline_ref]
+          properties:
+            system_ref:
+              type: string
+            baseline_ref:
+              type: string
+    ProgramWrite:
+      type: object
+      required: [name, system_ref, baseline_ref]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        system_ref:
+          type: string
+        baseline_ref:
+          type: string
+    ProgramPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Program"
+        page:
+          $ref: "#/components/schemas/Page"
+    ProgramSummary:
+      type: object
+      required: [program_id, at, controls, requirements]
+      properties:
+        program_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        controls:
+          type: object
+          required: [met, gap, waived, out_of_scope]
+          properties:
+            met:
+              type: integer
+            gap:
+              type: integer
+            waived:
+              type: integer
+            out_of_scope:
+              type: integer
+        requirements:
+          type: object
+          required: [covered, contribution, unmapped, gap]
+          properties:
+            covered:
+              type: integer
+            contribution:
+              type: integer
+            unmapped:
+              type: integer
+            gap:
+              type: integer
+        failing_tests:
+          type: integer
+        open_risks:
+          type: integer
+        expiring_evidence:
+          type: integer
+          description: Evidence whose `valid_until` is within 30 days of `at`.
+        expiring_exceptions:
+          type: integer
+          description: Exceptions whose `expires` is within 30 days of `at`.
+        open_findings:
+          type: integer
+          description: Findings with determination `not-satisfied`.
+    ControlState:
+      type: string
+      enum: [met, gap, waived, out_of_scope]
+    RequirementState:
+      type: string
+      description: The four requirement states in RFC 0001 section 8.
+      enum: [covered, contribution, unmapped, gap]
+    ControlStatus:
+      type: object
+      required: [control_id, state]
+      properties:
+        control_id:
+          type: string
+        state:
+          $ref: "#/components/schemas/ControlState"
+        implementation_id:
+          type: string
+        failed:
+          type: array
+          description: Which section 8 condition failed. Empty when state is met.
+          items:
+            type: string
+    RequirementCoverage:
+      type: object
+      required: [requirement_id, state]
+      properties:
+        requirement_id:
+          type: string
+        state:
+          $ref: "#/components/schemas/RequirementState"
+        mapping_ids:
+          type: array
+          items:
+            type: string
+    Gap:
+      type: object
+      required: [program_id, control_id, failed]
+      properties:
+        program_id:
+          type: string
+        control_id:
+          type: string
+        implementation_id:
+          type: string
+        failed:
+          type: array
+          items:
+            type: string
+    ProgramStatus:
+      type: object
+      required: [program_id, at, controls, requirements]
+      properties:
+        program_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        controls:
+          type: array
+          items:
+            $ref: "#/components/schemas/ControlStatus"
+        requirements:
+          type: array
+          items:
+            $ref: "#/components/schemas/RequirementCoverage"
+    ImplementationStatus:
+      type: string
+      enum: [planned, implemented, partial, not-applicable, exception]
+    Responsibility:
+      type: string
+      enum: [provider, customer, shared, subservice]
+    ImplementationOrigin:
+      type: string
+      enum: [organization, provider]
+    Implementation:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [status, responsibility]
+          properties:
+            system_ref:
+              type: string
+            component_ref:
+              type: string
+            control_ref:
+              type: string
+            requirement_ref:
+              type: string
+            status:
+              $ref: "#/components/schemas/ImplementationStatus"
+            responsibility:
+              $ref: "#/components/schemas/Responsibility"
+            subservice_ref:
+              type: string
+            origin:
+              $ref: "#/components/schemas/ImplementationOrigin"
+            parameter_values:
+              type: object
+              additionalProperties:
+                type: string
+            requirement_parameter_values:
+              type: object
+              additionalProperties:
+                type: object
+                additionalProperties:
+                  type: string
+            owner_ref:
+              type: string
+            narrative:
+              type: string
+            customer_responsibility:
+              type: string
+    ImplementationWrite:
+      type: object
+      required: [status, responsibility]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        system_ref:
+          type: string
+        component_ref:
+          type: string
+        control_ref:
+          type: string
+        requirement_ref:
+          type: string
+        status:
+          $ref: "#/components/schemas/ImplementationStatus"
+        responsibility:
+          $ref: "#/components/schemas/Responsibility"
+        subservice_ref:
+          type: string
+        parameter_values:
+          type: object
+          additionalProperties:
+            type: string
+        requirement_parameter_values:
+          type: object
+          additionalProperties:
+            type: object
+            additionalProperties:
+              type: string
+        owner_ref:
+          type: string
+        narrative:
+          type: string
+        customer_responsibility:
+          type: string
+    ImplementationPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Implementation"
+        page:
+          $ref: "#/components/schemas/Page"
+    Outcome:
+      type: string
+      enum: [pass, fail, error, skip]
+    Result:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [test_ref, implementation_ref, observed, outcome]
+          properties:
+            test_ref:
+              type: string
+            implementation_ref:
+              type: string
+            observed:
+              type: string
+              format: date-time
+            outcome:
+              $ref: "#/components/schemas/Outcome"
+            summary:
+              type: string
+            valid_until:
+              type: string
+              format: date-time
+            objective_refs:
+              type: array
+              items:
+                type: string
+            evidence_refs:
+              type: array
+              items:
+                type: string
+            subjects:
+              type: array
+              items:
+                type: object
+                required: [kind, name]
+                properties:
+                  kind:
+                    type: string
+                  name:
+                    type: string
+                  external_id:
+                    type: string
+    ResultWrite:
+      type: object
+      required: [test_ref, implementation_ref, observed, outcome]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        test_ref:
+          type: string
+        implementation_ref:
+          type: string
+        observed:
+          type: string
+          format: date-time
+        outcome:
+          $ref: "#/components/schemas/Outcome"
+        summary:
+          type: string
+        valid_until:
+          type: string
+          format: date-time
+        objective_refs:
+          type: array
+          items:
+            type: string
+        evidence_refs:
+          type: array
+          items:
+            type: string
+        subjects:
+          type: array
+          items:
+            type: object
+            properties:
+              kind:
+                type: string
+              name:
+                type: string
+              external_id:
+                type: string
+    ResultPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Result"
+        page:
+          $ref: "#/components/schemas/Page"
+    EvidenceMethod:
+      type: string
+      enum: [automated, upload, attestation, link]
+    Evidence:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, method]
+          properties:
+            collected:
+              type: string
+              format: date-time
+            valid_from:
+              type: string
+              format: date
+            valid_until:
+              type: string
+              format: date
+            method:
+              $ref: "#/components/schemas/EvidenceMethod"
+            implementation_ref:
+              type: string
+            result_ref:
+              type: string
+            resource:
+              $ref: "#/components/schemas/Resource"
+    EvidenceWrite:
+      type: object
+      required: [name, method]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        collected:
+          type: string
+          format: date-time
+        valid_from:
+          type: string
+          format: date
+        valid_until:
+          type: string
+          format: date
+        method:
+          $ref: "#/components/schemas/EvidenceMethod"
+        implementation_ref:
+          type: string
+        result_ref:
+          type: string
+        resource:
+          $ref: "#/components/schemas/Resource"
+    EvidencePage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Evidence"
+        page:
+          $ref: "#/components/schemas/Page"
+    Determination:
+      type: string
+      enum: [satisfied, not-satisfied]
+    Finding:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, system_ref, objective_ref, determination, observed, narrative]
+          properties:
+            system_ref:
+              type: string
+            objective_ref:
+              type: string
+            determination:
+              $ref: "#/components/schemas/Determination"
+            observed:
+              type: string
+              format: date
+            narrative:
+              type: string
+            implementation_ref:
+              type: string
+            evidence_refs:
+              type: array
+              items:
+                type: string
+            risk_ref:
+              type: string
+    FindingWrite:
+      type: object
+      required: [name, system_ref, objective_ref, determination, observed, narrative]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        system_ref:
+          type: string
+        objective_ref:
+          type: string
+        determination:
+          $ref: "#/components/schemas/Determination"
+        observed:
+          type: string
+          format: date
+        narrative:
+          type: string
+        implementation_ref:
+          type: string
+        evidence_refs:
+          type: array
+          items:
+            type: string
+        risk_ref:
+          type: string
+    FindingPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Finding"
+        page:
+          $ref: "#/components/schemas/Page"
+    DocumentStatus:
+      type: string
+      enum: [draft, adopted, retired]
+    Policy:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, status]
+          properties:
+            status:
+              $ref: "#/components/schemas/DocumentStatus"
+            version:
+              type: string
+            adopted:
+              type: string
+              format: date
+            reviewed:
+              type: string
+              format: date
+              description: Date of the last review. The next is due one `review_interval` later.
+            review_interval:
+              type: string
+            owner_ref:
+              type: string
+            control_refs:
+              type: array
+              items:
+                type: string
+            resource:
+              $ref: "#/components/schemas/Resource"
+    PolicyWrite:
+      type: object
+      required: [name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/DocumentStatus"
+        version:
+          type: string
+        adopted:
+          type: string
+          format: date
+        reviewed:
+          type: string
+          format: date
+        review_interval:
+          type: string
+        owner_ref:
+          type: string
+        control_refs:
+          type: array
+          items:
+            type: string
+    PolicyPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Policy"
+        page:
+          $ref: "#/components/schemas/Page"
+    Procedure:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, status]
+          properties:
+            status:
+              $ref: "#/components/schemas/DocumentStatus"
+            policy_ref:
+              type: string
+            control_refs:
+              type: array
+              items:
+                type: string
+            interval:
+              type: string
+            owner_ref:
+              type: string
+            resource:
+              $ref: "#/components/schemas/Resource"
+    ProcedureWrite:
+      type: object
+      required: [name, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        status:
+          $ref: "#/components/schemas/DocumentStatus"
+        policy_ref:
+          type: string
+        control_refs:
+          type: array
+          items:
+            type: string
+        interval:
+          type: string
+        owner_ref:
+          type: string
+    ProcedurePage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Procedure"
+        page:
+          $ref: "#/components/schemas/Page"
+    Treatment:
+      type: string
+      enum: [mitigate, accept, transfer, avoid]
+    RiskStatus:
+      type: string
+      enum: [open, treating, accepted, closed]
+    Milestone:
+      type: object
+      required: [name, due]
+      properties:
+        name:
+          type: string
+        due:
+          type: string
+          format: date
+        done:
+          type: string
+          format: date
+    Risk:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [name, statement, likelihood, impact, treatment, status]
+          properties:
+            system_ref:
+              type: string
+            statement:
+              type: string
+            likelihood:
+              type: integer
+              minimum: 1
+              maximum: 5
+            impact:
+              type: integer
+              minimum: 1
+              maximum: 5
+            residual_likelihood:
+              type: integer
+              minimum: 1
+              maximum: 5
+            residual_impact:
+              type: integer
+              minimum: 1
+              maximum: 5
+            treatment:
+              $ref: "#/components/schemas/Treatment"
+            status:
+              $ref: "#/components/schemas/RiskStatus"
+            owner_ref:
+              type: string
+            approver_ref:
+              type: string
+            control_refs:
+              type: array
+              items:
+                type: string
+            review_on:
+              type: string
+              format: date
+            milestones:
+              type: array
+              items:
+                $ref: "#/components/schemas/Milestone"
+    RiskWrite:
+      type: object
+      required: [name, statement, likelihood, impact, treatment, status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        system_ref:
+          type: string
+        statement:
+          type: string
+        likelihood:
+          type: integer
+          minimum: 1
+          maximum: 5
+        impact:
+          type: integer
+          minimum: 1
+          maximum: 5
+        residual_likelihood:
+          type: integer
+        residual_impact:
+          type: integer
+        treatment:
+          $ref: "#/components/schemas/Treatment"
+        status:
+          $ref: "#/components/schemas/RiskStatus"
+        owner_ref:
+          type: string
+        approver_ref:
+          type: string
+        control_refs:
+          type: array
+          items:
+            type: string
+        review_on:
+          type: string
+          format: date
+        milestones:
+          type: array
+          items:
+            $ref: "#/components/schemas/Milestone"
+    RiskPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Risk"
+        page:
+          $ref: "#/components/schemas/Page"
+    Exception:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [implementation_ref, justification, expires, approver_ref]
+          properties:
+            implementation_ref:
+              type: string
+            justification:
+              type: string
+            expires:
+              type: string
+              format: date
+            approver_ref:
+              type: string
+            risk_ref:
+              type: string
+    ExceptionWrite:
+      type: object
+      required: [implementation_ref, justification, expires, approver_ref]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        implementation_ref:
+          type: string
+        justification:
+          type: string
+        expires:
+          type: string
+          format: date
+        approver_ref:
+          type: string
+        risk_ref:
+          type: string
+    ExceptionPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Exception"
+        page:
+          $ref: "#/components/schemas/Page"
+    MappingReview:
+      allOf:
+        - $ref: "#/components/schemas/Envelope"
+        - type: object
+          required: [mapping_ref, library_version, review_status]
+          properties:
+            mapping_ref:
+              type: string
+            library_version:
+              type: string
+            mapping_modified:
+              type: string
+              format: date-time
+              description: The mapping's `modified` when the review was written. Set by the server. The review is stale once the mapping's `modified` differs.
+            review_status:
+              type: string
+              enum: [reviewed, rejected]
+            summary:
+              type: string
+    MappingReviewWrite:
+      type: object
+      required: [mapping_ref, review_status]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        mapping_ref:
+          type: string
+        review_status:
+          type: string
+          enum: [reviewed, rejected]
+        summary:
+          type: string
+    MappingReviewPage:
+      type: object
+      required: [data, page]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/MappingReview"
+        page:
+          $ref: "#/components/schemas/Page"
