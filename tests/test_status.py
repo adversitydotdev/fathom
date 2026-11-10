@@ -370,3 +370,48 @@ def test_unresolved_parameter_is_a_gap():
         c.control_id: c for c in status.evaluate(graph, graph.program(PROGRAM["id"]), AT).controls
     }
     assert "parameter access_review_frequency has no value" in result[C2].failed[0]
+
+
+def test_evidence_without_valid_until_does_not_meet():
+    own = {
+        "type": "implementation",
+        "id": "implementation--com.acme.ac-02",
+        **ENV,
+        "system_ref": SYSTEM["id"],
+        "control_ref": C2,
+        "status": "implemented",
+        "responsibility": "provider",
+    }
+    open_ended = {
+        "type": "evidence",
+        "id": "evidence--com.acme.e",
+        **ENV,
+        "name": "e",
+        "method": "link",
+        "implementation_ref": own["id"],
+    }
+    assert evaluate(own, open_ended)[C2].state == "gap"
+    future = {**open_ended, "valid_from": "2026-12-01", "valid_until": "2027-12-01"}
+    assert evaluate(own, future)[C2].state == "met"
+
+
+def test_requirement_override_without_parameter_map():
+    from opengrc.kernel.parameters import requirement_value
+
+    impl = parse(
+        {
+            "type": "implementation",
+            "id": "implementation--com.acme.ac-01",
+            **ENV,
+            "system_ref": SYSTEM["id"],
+            "control_ref": C1,
+            "status": "implemented",
+            "responsibility": "provider",
+            "requirement_parameter_values": {AC2: {"ac_02_odp_10": "weekly"}},
+        }
+    )
+    graph = graph_of()
+    value = requirement_value(
+        graph, AC2, "ac_02_odp_10", program_controls=[C1], implementations={C1: impl}, bindings={}
+    )
+    assert value == "weekly"

@@ -569,6 +569,13 @@ async def _prepare_review(body: dict[str, Any], ctx: WriteContext) -> dict[str, 
                 )
             ]
         )
+    if ctx.old is not None and "review_status" not in (ctx.patch or {}):
+        # Editing the summary is not a review of the current body (RFC 0002 section 6).
+        return {
+            **body,
+            "library_version": ctx.old.library_version,  # type: ignore[attr-defined]
+            "mapping_modified": ctx.old.mapping_modified,
+        }  # type: ignore[attr-defined]
     pin = await ctx.store.library_pin()  # type: ignore[attr-defined]
     return {
         **body,

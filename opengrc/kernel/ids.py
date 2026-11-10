@@ -5,6 +5,7 @@ from uuid import UUID, uuid4
 
 TYPE_RE = re.compile(r"^[a-z_]+$")
 REMAINDER_RE = re.compile(r"^[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?$")
+DOMAIN_RE = re.compile(r"^[a-z]{2,63}\.[a-z0-9-]*[a-z][a-z0-9-]*(?:[.]|$)")
 
 
 def split(object_id: str) -> tuple[str, str]:
@@ -40,8 +41,9 @@ def is_reserved(object_id: str) -> bool:
         pass
     if "_" in remainder:  # `_to_` and `_part_` are library mapping joins
         return True
-    domain, _, _ = remainder.partition("-")
-    return "." not in domain
+    # A domain prefix: a letters-only top label, then a label with a letter in it
+    # (`com.acme.badge-access`). `cc6.1` and `ac.01` are library-shaped slugs.
+    return not DOMAIN_RE.match(remainder)
 
 
 def base(ref: str) -> str:

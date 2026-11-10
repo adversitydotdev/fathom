@@ -69,8 +69,13 @@ def requirement_value(
         for m in graph.mappings_by_target.get(requirement_id, [])
         if m.parameter_map and key in m.parameter_map and m.source_ref in controls
     ]
-    for mapping, _ in candidates:
-        impl = implementations.get(mapping.source_ref)
+    sources = {
+        m.source_ref
+        for m in graph.mappings_by_target.get(requirement_id, [])
+        if m.source_ref in controls
+    }
+    for source in sorted(sources):
+        impl = implementations.get(source)
         override = (impl.requirement_parameter_values or {}).get(requirement_id, {}) if impl else {}
         if override.get(key):
             return override[key]

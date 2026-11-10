@@ -435,3 +435,47 @@ def test_effective_baseline(pulled: Api):
     assert effective["parameter_bindings"][C1] == {"shared_account_review": "monthly"}
     nested = pulled.post("/baselines", {"name": "x", "extends_ref": baseline["id"]}, expect=400)
     assert nested["errors"][0]["pointer"] == "/extends_ref"
+
+
+def test_constraints_hold_from_both_ends(pulled: Api):
+    base = {"name": "t", "control_ref": C1, "method": "automated"}
+    t1 = pulled.post("/tests", base)
+    other = pulled.post("/tests", base)
+    pulled.post("/tests", {**base, "fulfills_ref": t1["id"]})
+    pulled.patch(f"/tests/{t1['id']}", {"fulfills_ref": other["id"]}, t1["modified"], expect=400)
+    pulled.patch(f"/tests/{t1['id']}", {"control_ref": C2}, t1["modified"], expect=400)
+    b0 = pulled.post("/baselines", {"name": "b0"})
+    b1 = pulled.post("/baselines", {"name": "b1"})
+    pulled.post("/baselines", {"name": "b2", "extends_ref": b1["id"]})
+    pulled.patch(f"/baselines/{b1['id']}", {"extends_ref": b0["id"]}, b1["modified"], expect=400)
+    member = pulled.post(
+        "/mappings", {"source_ref": C1, "target_ref": f"{AC2}#j", "relationship": "subset-of"}
+    )
+    pulled.post(
+        "/mappings",
+        {
+            "source_ref": C2,
+            "target_ref": f"{AC2}#j",
+            "relationship": "subset-of",
+            "combined_with_refs": [member["id"]],
+        },
+    )
+    pulled.patch(
+        f"/mappings/{member['id']}", {"relationship": "equal-to"}, member["modified"], expect=400
+    )
+
+
+def test_library_shaped_ids_are_reserved(admin: Api):
+    for bad in ("control--ac.01", "control--cc6.1"):
+        admin.post(
+            "/controls", {"id": bad, "name": "x", "statement": "s", "objective": "o"}, expect=400
+        )
+
+
+def test_editing_a_review_does_not_rereview(pulled: Api):
+    mapping = "mapping--ogrc-ac-02_to_nist-sp-800-53-r5-ac-3"
+    review = pulled.post("/mapping-reviews", {"mapping_ref": mapping, "review_status": "reviewed"})
+    edited = pulled.patch(
+        f"/mapping-reviews/{review['id']}", {"summary": "typo"}, review["modified"]
+    )
+    assert edited["mapping_modified"] == review["mapping_modified"]

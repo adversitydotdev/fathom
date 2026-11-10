@@ -167,8 +167,8 @@ class Evaluator:
             evidence is not None
             and not evidence.is_revoked
             and evidence.complete
-            and on_or_after(evidence.valid_until, self.date)
-            and (evidence.valid_from is None or evidence.valid_from <= self.date)
+            and evidence.valid_until is not None
+            and evidence.valid_until >= self.date
         )
 
     def has_unexpired_evidence(self, implementation: Implementation) -> bool:
@@ -266,7 +266,7 @@ class Evaluator:
         for evidence in self.graph.evidence_by_implementation.get(half.id, []):
             if evidence.is_revoked or not evidence.complete:
                 continue
-            if not on_or_after(evidence.valid_until, self.date):
+            if evidence.valid_until is None or evidence.valid_until < self.date:
                 failures.append(f"provider's half {half.id}: evidence {evidence.id} has expired")
         return failures
 

@@ -44,6 +44,7 @@ class WriteContext:
     store: ObjectStore
     graph: Graph
     old: Envelope | None
+    patch: dict[str, Any] | None = None  # the fields a PATCH sent, before the merge
 
 
 # prepare(body, ctx) -> body: fill or refuse server-owned fields.
@@ -276,7 +277,9 @@ class ObjectService:
         writable = {k: v for k, v in merged.items() if k not in SERVER_FIELDS}
         self._validate_write(spec, writable)
         graph = await self.store.graph()
-        writable = await spec.prepare(writable, WriteContext(principal, self.store, graph, old))
+        writable = await spec.prepare(
+            writable, WriteContext(principal, self.store, graph, old, patch)
+        )
         obj = self._validate_object(
             spec,
             {

@@ -109,6 +109,16 @@ def _control(c: _Checker, obj: Control) -> None:
 
 
 def _mapping(c: _Checker, m: Mapping) -> None:
+    for other in c.others(Mapping):  # a member of another mapping's combined set
+        if m.id in (other.combined_with_refs or []) and not m.is_revoked:
+            if m.target_ref != other.target_ref:
+                c.fail("/target_ref", f"this mapping is in the combined set on {other.id}")
+            if ids.type_of(m.source_ref) != "control" or m.relationship not in CONTRIBUTION:
+                c.fail(
+                    "/relationship",
+                    f"a member of the combined set on {other.id} is "
+                    "a control mapping with subset-of or intersects-with",
+                )
     if c.ref("/target_ref", m.target_ref, "requirement", fragment=True):
         frag = ids.fragment(m.target_ref)
         requirement = c.graph.requirement(m.target_ref)
@@ -161,6 +171,8 @@ def _mapping(c: _Checker, m: Mapping) -> None:
 
 
 def _baseline(c: _Checker, b: Baseline) -> None:
+    if b.extends_ref and any(o.extends_ref == b.id for o in c.others(Baseline)):
+        c.fail("/extends_ref", "another baseline extends this one; one level deep")
     if b.extends_ref and c.ref("/extends_ref", b.extends_ref, "baseline"):
         base = c.graph.baseline(b.extends_ref)
         if base is not None and base.extends_ref:
@@ -192,6 +204,12 @@ def _baseline(c: _Checker, b: Baseline) -> None:
 
 def _test(c: _Checker, t: Test) -> None:
     c.ref("/control_ref", t.control_ref, "control")
+    for other in c.others(Test):  # tests that fulfill this one constrain it too
+        if other.fulfills_ref == t.id and not t.is_revoked:
+            if t.fulfills_ref:
+                c.fail("/fulfills_ref", f"{other.id} fulfills this test; one level deep")
+            if other.control_ref != t.control_ref:
+                c.fail("/control_ref", f"{other.id} fulfills this test with another control")
     if t.fulfills_ref and c.ref("/fulfills_ref", t.fulfills_ref, "test"):
         target = c.graph.test(t.fulfills_ref)
         if t.fulfills_ref == t.id:
