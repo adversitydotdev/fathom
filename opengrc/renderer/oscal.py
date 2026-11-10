@@ -24,8 +24,6 @@ from opengrc.kernel.models import (
     Risk,
 )
 from opengrc.kernel.parameters import (
-    control_values,
-    render,
     requirement_parameter_keys,
     requirement_value,
 )
@@ -597,6 +595,3 @@ class OscalRenderer:
             )
             for name, doc in documents.items()
         ]
-
-
-__all__ = ["OscalRenderer", "control_values", "render"]

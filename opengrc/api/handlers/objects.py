@@ -15,6 +15,7 @@ from opengrc.api.registrar import CurrentPrincipal, Registrar
 from opengrc.operations.objects import ObjectService
 from opengrc.operations.pagination import PageRequest
 from opengrc.operations.store import Row
+from opengrc.operations.types import valid_on
 
 IfMatch = Annotated[datetime, Header(alias="If-Match")]
 JsonObject = Annotated[dict[str, Any], Body()]
@@ -101,8 +102,6 @@ def _page(query: PageRequest) -> dict[str, Any]:
 
 def _filters(row: Row, query: PageRequest) -> bool:
     """The few filters sub-collections take: system_id, outcome, valid_on."""
-    from opengrc.operations.types import valid_on
-
     system_id = getattr(query, "system_id", None)
     if system_id is not None and getattr(row.obj, "system_ref", None) != system_id:
         return False
