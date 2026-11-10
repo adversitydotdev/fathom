@@ -1,0 +1,9 @@
+{
+  "identities": [
+    {
+      "name": "opengrc",
+      "credentials": [{ "accessKey": "opengrc", "secretKey": "opengrc-secret" }],
+      "actions": ["Admin", "Read", "Write", "List", "Tagging"]
+    }
+  ]
+}

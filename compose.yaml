@@ -1,9 +1,10 @@
 # Local stand-ins for the production bindings in RFC 0003 section 9:
-# Postgres for RDS, and an S3-compatible store for the evidence bucket.
+# Postgres 18 for RDS (the template's default engine), and SeaweedFS as an
+# S3-compatible store for the evidence bucket.
 #
 #   docker compose up -d
-#   OPENGRC_DATABASE_URL=postgresql+asyncpg://opengrc:opengrc@localhost:5432/opengrc \
-#   OPENGRC_S3_ENDPOINT=http://localhost:9000 OPENGRC_S3_BUCKET=opengrc \
+#   OPENGRC_DATABASE_URL=postgresql://opengrc:opengrc@localhost:5432/opengrc \
+#   OPENGRC_S3_ENDPOINT=http://localhost:8333 OPENGRC_S3_BUCKET=opengrc \
 #   AWS_ACCESS_KEY_ID=opengrc AWS_SECRET_ACCESS_KEY=opengrc-secret uv run opengrc
 
 name: opengrc
@@ -26,32 +27,30 @@ services:
       retries: 30
 
   s3:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: opengrc
-      MINIO_ROOT_PASSWORD: opengrc-secret
+    image: chrislusf/seaweedfs:4.53
+    command: >
+      server -dir=/data -ip.bind=0.0.0.0 -s3 -s3.port=8333
+      -s3.config=/etc/seaweedfs/s3.json
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "8333:8333"
     volumes:
       - s3:/data
-    healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 2s
-      timeout: 3s
-      retries: 30
+      - ./deploy/local/s3.json:/etc/seaweedfs/s3.json:ro
 
   # Creates the private bucket, the way the CloudFormation stack does in prod.
   s3-bucket:
-    image: minio/mc:RELEASE.2025-04-16T18-13-26Z
-    depends_on:
-      s3:
-        condition: service_healthy
+    image: amazon/aws-cli:2.27.0
+    depends_on: [s3]
+    environment:
+      AWS_ACCESS_KEY_ID: opengrc
+      AWS_SECRET_ACCESS_KEY: opengrc-secret
+      AWS_DEFAULT_REGION: us-east-1
     entrypoint: >
-      sh -c "mc alias set local http://s3:9000 opengrc opengrc-secret &&
-             mc mb --ignore-existing local/opengrc &&
-             mc anonymous set none local/opengrc"
+      sh -c "for i in $$(seq 1 30); do
+               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket opengrc 2>/dev/null && exit 0;
+               aws --endpoint-url http://s3:8333 s3api create-bucket --bucket opengrc && exit 0;
+               sleep 1;
+             done; exit 1"
 
 volumes:
   postgres:
