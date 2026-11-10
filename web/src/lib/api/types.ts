@@ -1,0 +1,30 @@
+import type { components } from "./schema";
+
+type S = components["schemas"];
+
+export type Problem = S["Problem"];
+export type Party = S["Party"];
+export type Component = S["Component"];
+export type System = S["System"];
+export type Framework = S["Framework"];
+export type Requirement = S["Requirement"];
+export type Control = S["Control"];
+export type Mapping = S["Mapping"];
+export type Baseline = S["Baseline"];
+export type Program = S["Program"];
+export type Implementation = S["Implementation"];
+export type Test = S["Test"];
+export type Result = S["Result"];
+export type Evidence = S["Evidence"];
+export type Exception = S["Exception"];
+export type Finding = S["Finding"];
+export type Risk = S["Risk"];
+export type Job = S["Job"];
+
+export type ProgramSummary = S["ProgramSummary"];
+export type ProgramStatus = S["ProgramStatus"];
+export type ControlStatus = S["ControlStatus"];
+export type ControlState = S["ControlState"];
+export type RequirementCoverage = S["RequirementCoverage"];
+export type RequirementState = S["RequirementState"];
+export type Gap = S["Gap"];
