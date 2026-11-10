@@ -53,6 +53,9 @@ export async function settle(page: Page) {
   await expect(async () => {
     await expect(page.locator("html[data-hydrated]")).toBeAttached({ timeout: 2_000 });
     await page.evaluate(() => document.fonts.ready);
+    // Streamed Suspense content arrives as hidden `S:` divs before React
+    // swaps it in. Until then, text can match twice.
+    await expect(page.locator('div[hidden][id^="S:"]')).toHaveCount(0, { timeout: 2_000 });
   }).toPass({ timeout: 15_000 });
 }
 

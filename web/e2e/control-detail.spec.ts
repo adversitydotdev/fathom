@@ -11,7 +11,7 @@ test("gap from an unset parameter", async ({ page, shot }) => {
 
 test("agent-drafted implementation with a failing test that can be run", async ({ page, shot }) => {
   await page.goto(url(CONTROL.mfaPrivileged));
-  await expect(page.getByText("Drafted by")).toContainText("Compliance agent");
+  await expect(page.getByRole("main").getByText("Drafted by")).toContainText("Compliance agent");
   await expect(page.getByText("2 of 14 privileged users")).toBeVisible();
   await shot("control-agent-draft");
   await page.getByRole("button", { name: "Run" }).first().click();
