@@ -14,7 +14,7 @@ Read `README.md` for what this is and `docs/rfcs/` for how it must behave. RFCs 
 
 Work is not done until you have proof it works. "It should work" is not proof.
 
-1. `mise run verify` passes. It runs ruff, pytest, go vet/test, eslint, tsc, and the Playwright suite.
+1. `mise run verify` passes. It runs ruff, pytest, go vet/test, eslint, tsc, and the Playwright suite. CI (`.github/workflows/verify.yml`) runs the same checks and uploads the screenshots as an artifact.
 2. UI changes: load the `verify-opengrc` skill (`.claude/skills/verify-opengrc/`). Find the feature file for what you changed, drive it, and look at the screenshots. No screenshot means not verified.
 3. New page or route: add it to `web/e2e/sweep.spec.ts`, add or update its feature file, and add a spec for its interactions.
 4. Report what you verified and what you could not, with the reason.
