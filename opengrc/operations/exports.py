@@ -60,10 +60,13 @@ async def organization_snapshot(
                 bodies[obj.id] = content
     pin = await store.library_pin()
     pins = await store.provider_pins()
+    # The manifest's time is the newest object's, not the clock's, so an export
+    # of an unchanged program writes an unchanged tree and commits nothing.
+    newest = max((o.modified for o in organization), default=at)
     body = manifest(
         settings.organization_id,
         settings.organization_name,
-        at,
+        newest,
         pin.model_dump(exclude_none=True) if pin else None,
         [p.model_dump(exclude_none=True, exclude={"name", "kind"}) for p in pins],
     )
