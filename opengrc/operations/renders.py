@@ -52,7 +52,9 @@ class RenderService:
                 raise Invalid(errors=[FieldError("required when view is oscal", "/framework_id")])
             framework = await self._store.get(request.framework_id)
             if framework is None or not isinstance(framework.obj, Framework):
-                raise Invalid(errors=[FieldError("not a framework in the library", "/framework_id")])
+                raise Invalid(
+                    errors=[FieldError("not a framework in the library", "/framework_id")]
+                )
         renderer = self._plugins.renderers.get(request.view)
         if renderer is None:
             raise Invalid(errors=[FieldError(f"no renderer for {request.view}", "/view")])
@@ -67,5 +69,8 @@ class RenderService:
             return JobOutcome(files=[JobFile(f.name, f.media_type, f.content) for f in files])
 
         return await self._jobs.submit(
-            principal, "render", {"program_id": program_id, **request.model_dump(exclude_none=True)}, work
+            principal,
+            "render",
+            {"program_id": program_id, **request.model_dump(exclude_none=True)},
+            work,
         )

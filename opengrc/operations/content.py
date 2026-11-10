@@ -85,7 +85,11 @@ class ContentService:
             "digest": {"algorithm": "sha-256", "value": sha},
         }
         updated = spec.model.model_validate(
-            {**old.body(), "resource": resource, "modified": later_than(old.modified, self._clock())}
+            {
+                **old.body(),
+                "resource": resource,
+                "modified": later_than(old.modified, self._clock()),
+            }
         )
         return await self._objects.replace_as(updated, old, principal.actor_id)
 

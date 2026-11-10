@@ -305,9 +305,9 @@ class PartyQuery(Listing):
 
 
 class ComponentQuery(Listing):
-    kind: (
-        Literal["infrastructure", "software", "people", "data", "procedure", "service"] | None
-    ) = None
+    kind: Literal["infrastructure", "software", "people", "data", "procedure", "service"] | None = (
+        None
+    )
     provider_id: str | None = None
 
 
@@ -557,7 +557,9 @@ async def _prepare_review(body: dict[str, Any], ctx: WriteContext) -> dict[str, 
         raise Invalid(errors=[FieldError("mapping_ref cannot change", "/mapping_ref")])
     row = await ctx.store.get(body["mapping_ref"]) if body.get("mapping_ref") else None
     if row is None or row.obj.type != "mapping":
-        raise Invalid(errors=[FieldError("mapping_ref does not resolve to a mapping", "/mapping_ref")])
+        raise Invalid(
+            errors=[FieldError("mapping_ref does not resolve to a mapping", "/mapping_ref")]
+        )
     if row.source != LIBRARY:
         raise Invalid(
             errors=[
@@ -594,7 +596,9 @@ def _mapping_reviewed(m: Envelope) -> bool:
 
 def _mapping_gate(new: Envelope, old: Envelope | None) -> str | None:
     if _mapping_reviewed(new):
-        return "an agent drafts mappings; review_status reviewed and combined_with_refs are a person's"
+        return (
+            "an agent drafts mappings; review_status reviewed and combined_with_refs are a person's"
+        )
     return None
 
 
@@ -636,74 +640,245 @@ def _refuse(reason: str):
 
 # --- the specs --------------------------------------------------------------------------------
 
-FRAMEWORK = TypeSpec("framework", Framework, FrameworkQuery, read_permission=P.LIBRARY_READ,
-                     revoke_permission=None)
-REQUIREMENT = TypeSpec("requirement", Requirement, RequirementQuery, read_permission=P.LIBRARY_READ,
-                       revoke_permission=None, matches=_requirement)
-CONTROL = TypeSpec("control", Control, ControlQuery, ControlWrite, P.CONTROLS_READ, P.CONTROLS_WRITE,
-                   P.CONTROLS_REVOKE, _control, _prepare_control)
-MAPPING = TypeSpec("mapping", Mapping, MappingQuery, MappingWrite, P.CONTROLS_READ, P.MAPPINGS_WRITE,
-                   P.OBJECTS_REVOKE, _mapping,
-                   extra_permissions=lambda n, o: [P.MAPPINGS_REVIEW] if _mapping_reviewed(n) else [],
-                   agent_gate=_mapping_gate)
-BASELINE = TypeSpec("baseline", Baseline, BaselineQuery, BaselineWrite, P.CONTROLS_READ,
-                    P.PROGRAMS_WRITE, P.OBJECTS_REVOKE,
-                    lambda row, q: _eq(q.extends_id, row.obj.extends_ref))
-TEST = TypeSpec("test", Test, TestQuery, TestWrite, P.CONTROLS_READ, P.TESTS_WRITE, P.OBJECTS_REVOKE,
-                _test, extra_permissions=_test_extra, agent_gate=_test_gate)
-PARTY = TypeSpec("party", Party, PartyQuery, PartyWrite, P.PROGRAMS_READ, P.SYSTEMS_WRITE,
-                 P.OBJECTS_REVOKE,
-                 lambda row, q: _eq(q.kind, row.obj.kind) and _contains(q.q, row.obj.name))
-COMPONENT = TypeSpec("component", Component, ComponentQuery, ComponentWrite, P.PROGRAMS_READ,
-                     P.SYSTEMS_WRITE, P.OBJECTS_REVOKE, _component)
-SYSTEM = TypeSpec("system", System, SystemQuery, SystemWrite, P.PROGRAMS_READ, P.SYSTEMS_WRITE,
-                  P.OBJECTS_REVOKE,
-                  lambda row, q: _contains(q.q, row.obj.name, row.obj.function, row.obj.boundary))
-PROGRAM = TypeSpec("program", Program, ProgramQuery, ProgramWrite, P.PROGRAMS_READ, P.PROGRAMS_WRITE,
-                   P.OBJECTS_REVOKE, lambda row, q: _eq(q.system_id, row.obj.system_ref))
-IMPLEMENTATION = TypeSpec("implementation", Implementation, ImplementationQuery, ImplementationWrite,
-                          P.PROGRAMS_READ, P.IMPLEMENTATIONS_WRITE, P.OBJECTS_REVOKE,
-                          _implementation, _prepare_implementation, _impl_extra, _impl_gate)
-RESULT = TypeSpec("result", Result, ResultQuery, ResultWrite, P.PROGRAMS_READ, P.EVIDENCE_WRITE,
-                  None, _result, _prepare_result)
-EVIDENCE = TypeSpec("evidence", Evidence, EvidenceQuery, EvidenceWrite, P.PROGRAMS_READ,
-                    P.EVIDENCE_WRITE, P.OBJECTS_REVOKE, _evidence, _prepare_evidence, noun="evidence")
-FINDING = TypeSpec("finding", Finding, FindingQuery, FindingWrite, P.PROGRAMS_READ, P.FINDINGS_WRITE,
-                   P.FINDINGS_WRITE,
-                   lambda row, q: _eq(q.system_id, row.obj.system_ref)
-                   and _eq(q.determination, row.obj.determination)
-                   and _eq(q.objective, row.obj.objective_ref),
-                   agent_gate=_refuse("a finding is an assessor's determination; an agent does not record one"),
-                   agent_may_create=False)
-POLICY = TypeSpec("policy", Policy, PolicyQuery, PolicyWrite, P.PROGRAMS_READ, P.POLICIES_WRITE,
-                  P.OBJECTS_REVOKE,
-                  lambda row, q: _eq(q.status, row.obj.status) and _has(q.control_id, row.obj.control_refs),
-                  _prepare_document, _doc_extra, _doc_gate)
-PROCEDURE = TypeSpec("procedure", Procedure, ProcedureQuery, ProcedureWrite, P.PROGRAMS_READ,
-                     P.POLICIES_WRITE, P.OBJECTS_REVOKE,
-                     lambda row, q: _eq(q.policy_id, row.obj.policy_ref) and _eq(q.status, row.obj.status),
-                     _prepare_document, _doc_extra, _doc_gate)
-RISK = TypeSpec("risk", Risk, RiskQuery, RiskWrite, P.PROGRAMS_READ, P.RISKS_WRITE, P.OBJECTS_REVOKE,
-                _risk, extra_permissions=_risk_extra, agent_gate=_risk_gate)
-EXCEPTION = TypeSpec("exception", Exception_, ExceptionQuery, ExceptionWrite, P.PROGRAMS_READ,
-                     P.EXCEPTIONS_APPROVE, P.EXCEPTIONS_APPROVE,
-                     lambda row, q: _eq(q.implementation_id, row.obj.implementation_ref)
-                     and (q.expires_before is None or row.obj.expires < q.expires_before),
-                     agent_gate=_refuse("a waiver is a person's judgment; an agent does not write one"),
-                     agent_may_create=False)
-MAPPING_REVIEW = TypeSpec("mapping_review", MappingReview, MappingReviewQuery, MappingReviewWrite,
-                          P.CONTROLS_READ, P.MAPPINGS_REVIEW, P.MAPPINGS_REVIEW,
-                          lambda row, q: _eq(q.mapping_id, row.obj.mapping_ref)
-                          and _eq(q.review_status, row.obj.review_status),
-                          _prepare_review,
-                          agent_gate=_refuse("an agent does not review mappings"),
-                          agent_may_create=False, noun="mapping review")
+FRAMEWORK = TypeSpec(
+    "framework", Framework, FrameworkQuery, read_permission=P.LIBRARY_READ, revoke_permission=None
+)
+REQUIREMENT = TypeSpec(
+    "requirement",
+    Requirement,
+    RequirementQuery,
+    read_permission=P.LIBRARY_READ,
+    revoke_permission=None,
+    matches=_requirement,
+)
+CONTROL = TypeSpec(
+    "control",
+    Control,
+    ControlQuery,
+    ControlWrite,
+    P.CONTROLS_READ,
+    P.CONTROLS_WRITE,
+    P.CONTROLS_REVOKE,
+    _control,
+    _prepare_control,
+)
+MAPPING = TypeSpec(
+    "mapping",
+    Mapping,
+    MappingQuery,
+    MappingWrite,
+    P.CONTROLS_READ,
+    P.MAPPINGS_WRITE,
+    P.OBJECTS_REVOKE,
+    _mapping,
+    extra_permissions=lambda n, o: [P.MAPPINGS_REVIEW] if _mapping_reviewed(n) else [],
+    agent_gate=_mapping_gate,
+)
+BASELINE = TypeSpec(
+    "baseline",
+    Baseline,
+    BaselineQuery,
+    BaselineWrite,
+    P.CONTROLS_READ,
+    P.PROGRAMS_WRITE,
+    P.OBJECTS_REVOKE,
+    lambda row, q: _eq(q.extends_id, row.obj.extends_ref),
+)
+TEST = TypeSpec(
+    "test",
+    Test,
+    TestQuery,
+    TestWrite,
+    P.CONTROLS_READ,
+    P.TESTS_WRITE,
+    P.OBJECTS_REVOKE,
+    _test,
+    extra_permissions=_test_extra,
+    agent_gate=_test_gate,
+)
+PARTY = TypeSpec(
+    "party",
+    Party,
+    PartyQuery,
+    PartyWrite,
+    P.PROGRAMS_READ,
+    P.SYSTEMS_WRITE,
+    P.OBJECTS_REVOKE,
+    lambda row, q: _eq(q.kind, row.obj.kind) and _contains(q.q, row.obj.name),
+)
+COMPONENT = TypeSpec(
+    "component",
+    Component,
+    ComponentQuery,
+    ComponentWrite,
+    P.PROGRAMS_READ,
+    P.SYSTEMS_WRITE,
+    P.OBJECTS_REVOKE,
+    _component,
+)
+SYSTEM = TypeSpec(
+    "system",
+    System,
+    SystemQuery,
+    SystemWrite,
+    P.PROGRAMS_READ,
+    P.SYSTEMS_WRITE,
+    P.OBJECTS_REVOKE,
+    lambda row, q: _contains(q.q, row.obj.name, row.obj.function, row.obj.boundary),
+)
+PROGRAM = TypeSpec(
+    "program",
+    Program,
+    ProgramQuery,
+    ProgramWrite,
+    P.PROGRAMS_READ,
+    P.PROGRAMS_WRITE,
+    P.OBJECTS_REVOKE,
+    lambda row, q: _eq(q.system_id, row.obj.system_ref),
+)
+IMPLEMENTATION = TypeSpec(
+    "implementation",
+    Implementation,
+    ImplementationQuery,
+    ImplementationWrite,
+    P.PROGRAMS_READ,
+    P.IMPLEMENTATIONS_WRITE,
+    P.OBJECTS_REVOKE,
+    _implementation,
+    _prepare_implementation,
+    _impl_extra,
+    _impl_gate,
+)
+RESULT = TypeSpec(
+    "result",
+    Result,
+    ResultQuery,
+    ResultWrite,
+    P.PROGRAMS_READ,
+    P.EVIDENCE_WRITE,
+    None,
+    _result,
+    _prepare_result,
+)
+EVIDENCE = TypeSpec(
+    "evidence",
+    Evidence,
+    EvidenceQuery,
+    EvidenceWrite,
+    P.PROGRAMS_READ,
+    P.EVIDENCE_WRITE,
+    P.OBJECTS_REVOKE,
+    _evidence,
+    _prepare_evidence,
+    noun="evidence",
+)
+FINDING = TypeSpec(
+    "finding",
+    Finding,
+    FindingQuery,
+    FindingWrite,
+    P.PROGRAMS_READ,
+    P.FINDINGS_WRITE,
+    P.FINDINGS_WRITE,
+    lambda row, q: (
+        _eq(q.system_id, row.obj.system_ref)
+        and _eq(q.determination, row.obj.determination)
+        and _eq(q.objective, row.obj.objective_ref)
+    ),
+    agent_gate=_refuse("a finding is an assessor's determination; an agent does not record one"),
+    agent_may_create=False,
+)
+POLICY = TypeSpec(
+    "policy",
+    Policy,
+    PolicyQuery,
+    PolicyWrite,
+    P.PROGRAMS_READ,
+    P.POLICIES_WRITE,
+    P.OBJECTS_REVOKE,
+    lambda row, q: _eq(q.status, row.obj.status) and _has(q.control_id, row.obj.control_refs),
+    _prepare_document,
+    _doc_extra,
+    _doc_gate,
+)
+PROCEDURE = TypeSpec(
+    "procedure",
+    Procedure,
+    ProcedureQuery,
+    ProcedureWrite,
+    P.PROGRAMS_READ,
+    P.POLICIES_WRITE,
+    P.OBJECTS_REVOKE,
+    lambda row, q: _eq(q.policy_id, row.obj.policy_ref) and _eq(q.status, row.obj.status),
+    _prepare_document,
+    _doc_extra,
+    _doc_gate,
+)
+RISK = TypeSpec(
+    "risk",
+    Risk,
+    RiskQuery,
+    RiskWrite,
+    P.PROGRAMS_READ,
+    P.RISKS_WRITE,
+    P.OBJECTS_REVOKE,
+    _risk,
+    extra_permissions=_risk_extra,
+    agent_gate=_risk_gate,
+)
+EXCEPTION = TypeSpec(
+    "exception",
+    Exception_,
+    ExceptionQuery,
+    ExceptionWrite,
+    P.PROGRAMS_READ,
+    P.EXCEPTIONS_APPROVE,
+    P.EXCEPTIONS_APPROVE,
+    lambda row, q: (
+        _eq(q.implementation_id, row.obj.implementation_ref)
+        and (q.expires_before is None or row.obj.expires < q.expires_before)
+    ),
+    agent_gate=_refuse("a waiver is a person's judgment; an agent does not write one"),
+    agent_may_create=False,
+)
+MAPPING_REVIEW = TypeSpec(
+    "mapping_review",
+    MappingReview,
+    MappingReviewQuery,
+    MappingReviewWrite,
+    P.CONTROLS_READ,
+    P.MAPPINGS_REVIEW,
+    P.MAPPINGS_REVIEW,
+    lambda row, q: (
+        _eq(q.mapping_id, row.obj.mapping_ref) and _eq(q.review_status, row.obj.review_status)
+    ),
+    _prepare_review,
+    agent_gate=_refuse("an agent does not review mappings"),
+    agent_may_create=False,
+    noun="mapping review",
+)
 
 SPECS: dict[str, TypeSpec] = {
     spec.type: spec
     for spec in (
-        FRAMEWORK, REQUIREMENT, CONTROL, MAPPING, BASELINE, TEST, PARTY, COMPONENT, SYSTEM,
-        PROGRAM, IMPLEMENTATION, RESULT, EVIDENCE, FINDING, POLICY, PROCEDURE, RISK, EXCEPTION,
+        FRAMEWORK,
+        REQUIREMENT,
+        CONTROL,
+        MAPPING,
+        BASELINE,
+        TEST,
+        PARTY,
+        COMPONENT,
+        SYSTEM,
+        PROGRAM,
+        IMPLEMENTATION,
+        RESULT,
+        EVIDENCE,
+        FINDING,
+        POLICY,
+        PROCEDURE,
+        RISK,
+        EXCEPTION,
         MAPPING_REVIEW,
     )
 }

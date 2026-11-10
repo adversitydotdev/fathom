@@ -52,11 +52,18 @@ class ConnectorService:
         out = []
         for name in self._plugins.connectors.names():
             connector = self._plugins.connectors.get(name)
-            out.append(ConnectorView(id=name, name=getattr(connector, "name", name),
-                                     description=getattr(connector, "description", None)))
+            out.append(
+                ConnectorView(
+                    id=name,
+                    name=getattr(connector, "name", name),
+                    description=getattr(connector, "description", None),
+                )
+            )
         return out
 
-    async def run(self, principal: Principal, connector_id: str, request: ConnectorRunRequest) -> Job:
+    async def run(
+        self, principal: Principal, connector_id: str, request: ConnectorRunRequest
+    ) -> Job:
         require(self._authorizer, principal, Permission.CONNECTORS_RUN)
         connector = self._plugins.connectors.get(connector_id)
         if connector is None:
@@ -78,18 +85,32 @@ class ConnectorService:
                 stamp = utc(self._clock())
                 evidence_id = ids.mint("evidence")
                 sha = digest(file.content)
-                uri = await self._blobs.put(f"evidence/{evidence_id}/{sha}", file.content, file.media_type)
+                uri = await self._blobs.put(
+                    f"evidence/{evidence_id}/{sha}", file.content, file.media_type
+                )
                 evidence = Evidence(
-                    id=evidence_id, created=stamp, modified=stamp, created_by_ref=principal.actor_id,
-                    name=file.name, method="automated", collected=stamp, valid_from=stamp.date(),
+                    id=evidence_id,
+                    created=stamp,
+                    modified=stamp,
+                    created_by_ref=principal.actor_id,
+                    name=file.name,
+                    method="automated",
+                    collected=stamp,
+                    valid_from=stamp.date(),
                     implementation_ref=impl.id,
-                    resource={"uri": uri, "media_type": file.media_type,
-                              "digest": {"algorithm": "sha-256", "value": sha}},
+                    resource={
+                        "uri": uri,
+                        "media_type": file.media_type,
+                        "digest": {"algorithm": "sha-256", "value": sha},
+                    },
                 )
                 await self._objects.store_as(evidence, principal.actor_id)
                 created.append(evidence_id)
             return JobOutcome(report={"evidence": created})
 
         return await self._jobs.submit(
-            principal, "connector", {"connector_id": connector_id, **request.model_dump(exclude_none=True)}, work
+            principal,
+            "connector",
+            {"connector_id": connector_id, **request.model_dump(exclude_none=True)},
+            work,
         )

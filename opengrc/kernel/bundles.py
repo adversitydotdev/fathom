@@ -148,9 +148,7 @@ _Dumper.add_representer(str, _str)
 
 
 def dump_yaml(body: dict[str, Any]) -> str:
-    return yaml.dump(
-        _ordered(body), Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=78
-    )
+    return yaml.dump(_ordered(body), Dumper=_Dumper, sort_keys=False, allow_unicode=True, width=78)
 
 
 def object_path(object_id: str) -> str:

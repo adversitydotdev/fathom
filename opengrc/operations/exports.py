@@ -151,4 +151,3 @@ class ExportService:
             return JobOutcome(report={"changed": True, "commit": commit, "files": len(files)})
         finally:
             shutil.rmtree(workdir, ignore_errors=True)
-

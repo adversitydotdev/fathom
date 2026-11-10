@@ -37,6 +37,20 @@ def summary_of(stdout: bytes) -> str:
     return text.encode()[:SUMMARY_LIMIT].decode(errors="ignore")
 
 
+def collect(scratch: Path, declared: list) -> tuple[list[CollectedFile], list[str]]:
+    """Step 7: the declared files that exist inside the scratch directory."""
+    root = scratch.resolve()
+    files: list[CollectedFile] = []
+    absent: list[str] = []
+    for item in declared:
+        path = (scratch / item.path).resolve()
+        if root not in path.parents or not path.is_file():
+            absent.append(item.path)
+            continue
+        files.append(CollectedFile(item.name, item.media_type, path.read_bytes()))
+    return files, absent
+
+
 class ShellRunner:
     name = "shell"
 
@@ -106,14 +120,7 @@ class ShellRunner:
             code = process.returncode
             outcome = "pass" if code == 0 else "fail" if code == 1 else "error"
             summary = summary_of(stdout) or f"exit status {code}"
-            files: list[CollectedFile] = []
-            absent: list[str] = []
-            for item in run.evidence or []:
-                path = (scratch / item.path).resolve()
-                if scratch.resolve() not in path.parents or not path.is_file():
-                    absent.append(item.path)
-                    continue
-                files.append(CollectedFile(item.name, item.media_type, path.read_bytes()))
+            files, absent = await asyncio.to_thread(collect, scratch, run.evidence or [])
             if outcome == "pass" and absent:
                 outcome = "error"
                 summary = f"declared evidence is missing: {', '.join(absent)}"

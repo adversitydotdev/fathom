@@ -154,7 +154,11 @@ class JobService:
                 log.exception("job %s failed", job.id)
             await self._store.save_job(
                 job.model_copy(
-                    update={"status": "failed", "finished": utc(self._clock()), "error": problem_of(exc)}
+                    update={
+                        "status": "failed",
+                        "finished": utc(self._clock()),
+                        "error": problem_of(exc),
+                    }
                 )
             )
             return
@@ -197,7 +201,9 @@ class JobService:
         more = len(jobs) > query.limit
         return Page[Job](
             data=page,
-            page=PageInfo(next_cursor=encode_cursor(page[-1].id) if more else None, limit=query.limit),
+            page=PageInfo(
+                next_cursor=encode_cursor(page[-1].id) if more else None, limit=query.limit
+            ),
         )
 
     async def file(self, principal: Principal, job_id: str, name: str) -> tuple[bytes, str]:

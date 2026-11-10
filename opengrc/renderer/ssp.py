@@ -15,12 +15,25 @@ class SspRenderer:
     def render(self, request: RenderRequest) -> list[RenderedFile]:
         w = walk(request)
         system = w.system
-        lines = [f"# System security plan: {system.name if system else request.program.system_ref}", ""]
+        lines = [
+            f"# System security plan: {system.name if system else request.program.system_ref}",
+            "",
+        ]
         lines += [f"Program: {request.program.name} ({request.program.id})"]
-        lines += [f"Baseline: {request.program.baseline_ref}", f"Evaluated at: {w.evaluator.at.isoformat()}", ""]
+        lines += [
+            f"Baseline: {request.program.baseline_ref}",
+            f"Evaluated at: {w.evaluator.at.isoformat()}",
+            "",
+        ]
         if system is not None:
-            lines += ["## System", "", f"**Function.** {system.function or '—'}", "",
-                      f"**Boundary.** {system.boundary or '—'}", ""]
+            lines += [
+                "## System",
+                "",
+                f"**Function.** {system.function or '—'}",
+                "",
+                f"**Boundary.** {system.boundary or '—'}",
+                "",
+            ]
             for info in system.information_types or []:
                 lines.append(
                     f"- {info.name}: confidentiality {info.confidentiality}, "
@@ -38,16 +51,29 @@ class SspRenderer:
         lines += ["## Controls", ""]
         for entry in w.controls:
             c = entry.control
-            lines += [f"### {c.display_id or c.id} {c.name}", "",
-                      f"**Status:** {entry.status.state}", "", entry.statement.strip(), ""]
+            lines += [
+                f"### {c.display_id or c.id} {c.name}",
+                "",
+                f"**Status:** {entry.status.state}",
+                "",
+                entry.statement.strip(),
+                "",
+            ]
             for impl in entry.implementations:
                 where = impl.component_ref or impl.system_ref
-                lines += [f"- **{impl.status}**, {impl.responsibility}, on {where}: "
-                          f"{(impl.narrative or '').strip()}"]
+                lines += [
+                    f"- **{impl.status}**, {impl.responsibility}, on {where}: "
+                    f"{(impl.narrative or '').strip()}"
+                ]
             for result in entry.latest_results:
-                lines.append(f"- Latest result of {result.test_ref}: {result.outcome} at {result.observed.isoformat()}")
+                lines.append(
+                    f"- Latest result of {result.test_ref}: {result.outcome} "
+                    f"at {result.observed.isoformat()}"
+                )
             for evidence in entry.evidence:
-                lines.append(f"- Evidence {evidence.name}, valid until {evidence.valid_until or 'open'}")
+                lines.append(
+                    f"- Evidence {evidence.name}, valid until {evidence.valid_until or 'open'}"
+                )
             for exc in entry.exceptions:
                 lines.append(f"- Exception until {exc.expires}: {exc.justification.strip()}")
             for failure in entry.status.failed:
@@ -65,9 +91,14 @@ class SspRenderer:
         if w.risks:
             lines += ["## Open risks", ""]
             for risk in w.risks:
-                lines.append(f"- {risk.name}: likelihood {risk.likelihood}, impact {risk.impact}, {risk.treatment}")
+                lines.append(
+                    f"- {risk.name}: likelihood {risk.likelihood}, impact {risk.impact}, "
+                    f"{risk.treatment}"
+                )
                 for m in risk.milestones or []:
-                    lines.append(f"  - {m.name}, due {m.due}{', done ' + str(m.done) if m.done else ''}")
+                    lines.append(
+                        f"  - {m.name}, due {m.due}{', done ' + str(m.done) if m.done else ''}"
+                    )
         data = {
             "program_id": request.program.id,
             "at": w.evaluator.at.isoformat(),

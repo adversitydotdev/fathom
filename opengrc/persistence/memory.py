@@ -61,9 +61,7 @@ class MemoryStore:
     # --- objects ---------------------------------------------------------------------
 
     def _append(self, row: Row, writer: str, stored_at: datetime | None = None) -> None:
-        self._revisions.setdefault(row.obj.id, []).append(
-            Revision(stored_at or now(), row, writer)
-        )
+        self._revisions.setdefault(row.obj.id, []).append(Revision(stored_at or now(), row, writer))
         self._graph = None
 
     def _current(self) -> Iterable[Row]:

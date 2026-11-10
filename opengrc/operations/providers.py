@@ -152,4 +152,6 @@ class ProviderService:
                 }
             )
 
-        return await self._jobs.submit(principal, "provider_import", request.model_dump(exclude_none=True), work)
+        return await self._jobs.submit(
+            principal, "provider_import", request.model_dump(exclude_none=True), work
+        )

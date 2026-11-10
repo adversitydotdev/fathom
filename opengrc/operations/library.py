@@ -18,7 +18,15 @@ from opengrc.access import Authorizer, Permission, Principal, require
 from opengrc.errors import Invalid
 from opengrc.kernel import bundles, constraints, status
 from opengrc.kernel.graph import Graph
-from opengrc.kernel.models import LIBRARY_TYPES, Baseline, Control, Envelope, Mapping, Origin, Program
+from opengrc.kernel.models import (
+    LIBRARY_TYPES,
+    Baseline,
+    Control,
+    Envelope,
+    Mapping,
+    Origin,
+    Program,
+)
 from opengrc.kernel.timeutil import now, utc
 from opengrc.operations.jobs import JobOutcome, JobService
 from opengrc.operations.records import LIBRARY, Job, LibraryPin
@@ -87,14 +95,18 @@ def compare(before: Graph, after: Graph, at: datetime) -> dict:
             if old_reqs.get(r) != new_reqs.get(r)
         ]
         if controls or requirements:
-            moved.append({"program_id": program.id, "controls": controls, "requirements": requirements})
+            moved.append(
+                {"program_id": program.id, "controls": controls, "requirements": requirements}
+            )
 
     stale: list[str] = []
     for mapping_id, reviews in before.reviews_by_mapping.items():
         old_mapping = before.typed(mapping_id, Mapping)
         new_mapping = after.typed(mapping_id, Mapping)
         for review in reviews:
-            was_current = old_mapping is not None and review.mapping_modified == old_mapping.modified
+            was_current = (
+                old_mapping is not None and review.mapping_modified == old_mapping.modified
+            )
             still = (
                 new_mapping is not None
                 and not new_mapping.is_revoked
@@ -110,8 +122,12 @@ def compare(before: Graph, after: Graph, at: datetime) -> dict:
             if new_req and new_req.is_withdrawn and not (old_req and old_req.is_withdrawn):
                 withdrawn.append({"baseline_id": baseline.id, "requirement_id": ref})
 
-    return {"at": at.isoformat(), "programs": moved, "stale_reviews": sorted(stale),
-            "withdrawn": withdrawn}
+    return {
+        "at": at.isoformat(),
+        "programs": moved,
+        "stale_reviews": sorted(stale),
+        "withdrawn": withdrawn,
+    }
 
 
 class LibraryService:
@@ -160,4 +176,6 @@ class LibraryService:
             )
             return JobOutcome(report=report)
 
-        return await self._jobs.submit(principal, "library_pull", request.model_dump(exclude_none=True), work)
+        return await self._jobs.submit(
+            principal, "library_pull", request.model_dump(exclude_none=True), work
+        )

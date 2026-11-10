@@ -192,11 +192,12 @@ class Evaluator:
         if test.interval == "event-driven":
             if current.valid_until is None or self.at > current.valid_until:
                 return [f"test {test.id}: result {current.id} is no longer valid"]
-        elif test.interval in FRESHNESS_DAYS:
-            if self.at > current.observed + timedelta(days=FRESHNESS_DAYS[test.interval]):
-                return [f"test {test.id}: result {current.id} is older than its {test.interval} window"]
+        elif test.interval in FRESHNESS_DAYS and self.at > current.observed + timedelta(
+            days=FRESHNESS_DAYS[test.interval]
+        ):
+            return [f"test {test.id}: result {current.id} is older than its {test.interval} window"]
         return [
-            f"evidence {evidence_id} cited by result {current.id} is expired, revoked, or incomplete"
+            f"evidence {evidence_id} cited by {current.id} is expired, revoked, or incomplete"
             for evidence_id in current.evidence_refs or []
             if not self.evidence_valid(self.graph.evidence(evidence_id))
         ]
@@ -229,7 +230,8 @@ class Evaluator:
             ):
                 if not self.has_unexpired_evidence(implementation):
                     failures.append(
-                        f"test {test.id}: provider row {implementation.id} has no unexpired evidence"
+                        f"test {test.id}: provider row {implementation.id} "
+                        "has no unexpired evidence"
                     )
             elif test.method == "automated" and test.run is None:
                 failures.append(f"test {test.id}: no methodology has been defined")
@@ -249,7 +251,9 @@ class Evaluator:
                 "the organization's implementation is missing"
             )
         if not impl.is_provider and impl.responsibility in ("customer", "subservice"):
-            failures.append(f"{impl.id}: responsibility {impl.responsibility} is not the organization's")
+            failures.append(
+                f"{impl.id}: responsibility {impl.responsibility} is not the organization's"
+            )
         for name in unresolved(control, impl, self.baseline.parameter_bindings):
             failures.append(f"{impl.id}: parameter {name} has no value")
         failures += self.test_failures(control, impl)
@@ -420,7 +424,9 @@ def summarize(graph: Graph, program: Program, at: datetime) -> ProgramSummary:
                 continue
             for impl_id in implementations:
                 results = [
-                    r for r in graph.results_by_pair.get((test.id, impl_id), []) if r.observed <= evaluator.at
+                    r
+                    for r in graph.results_by_pair.get((test.id, impl_id), [])
+                    if r.observed <= evaluator.at
                 ]
                 if results and max(results, key=lambda r: r.observed).outcome in ("fail", "error"):
                     failing += 1
@@ -429,7 +435,10 @@ def summarize(graph: Graph, program: Program, at: datetime) -> ProgramSummary:
         1
         for r in graph.risks()
         if r.status in ("open", "treating")
-        and (r.system_ref == program.system_ref or (not r.system_ref and controls & set(r.control_refs or [])))
+        and (
+            r.system_ref == program.system_ref
+            or (not r.system_ref and controls & set(r.control_refs or []))
+        )
     )
     expiring_evidence = sum(
         1

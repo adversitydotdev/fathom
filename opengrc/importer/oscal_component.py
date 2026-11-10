@@ -131,7 +131,9 @@ class OscalComponentImporter:
                 for item in block.get("implemented-requirements", []) or []:
                     ref = requirement_id(item.get("control-id", ""), framework)
                     if graph.typed(ref, Requirement) is None:
-                        warnings.append(f"{item.get('control-id')}: {ref} is not in the pinned library")
+                        warnings.append(
+                            f"{item.get('control-id')}: {ref} is not in the pinned library"
+                        )
                         continue
                     objects.append(
                         Implementation(

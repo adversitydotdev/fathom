@@ -80,7 +80,9 @@ class HarnessService:
         if impl.control_ref != test.control_ref:
             raise Invalid(
                 errors=[
-                    FieldError("the implementation is not of this test's control", "/implementation_id")
+                    FieldError(
+                        "the implementation is not of this test's control", "/implementation_id"
+                    )
                 ]
             )
 
@@ -118,7 +120,9 @@ class HarnessService:
         for file in report.files:
             evidence_id = ids.mint("evidence")
             sha = digest(file.content)
-            uri = await self._blobs.put(f"evidence/{evidence_id}/{sha}", file.content, file.media_type)
+            uri = await self._blobs.put(
+                f"evidence/{evidence_id}/{sha}", file.content, file.media_type
+            )
             evidence = Evidence(
                 id=evidence_id,
                 created=stamp,

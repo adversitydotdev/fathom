@@ -44,11 +44,18 @@ def test_pull_pins_and_a_later_revision_revokes_missing_ids(make_app, tmp_path: 
     assert admin.get("/library") == {}
     job = admin.post("/library/pull", {"version": "0.1.0"}, expect=202)
     assert job["status"] == "succeeded" and job["report"]["added"] == 10
-    assert admin.get("/library") == {"id": "bundle--ogrc-library", "version": "0.1.0",
-                                     "commit": "one"}
-    review = admin.post("/mapping-reviews", {
-        "mapping_ref": "mapping--ogrc-ac-01_to_nist-sp-800-53-r5-ac-2_part_a",
-        "review_status": "reviewed"})
+    assert admin.get("/library") == {
+        "id": "bundle--ogrc-library",
+        "version": "0.1.0",
+        "commit": "one",
+    }
+    review = admin.post(
+        "/mapping-reviews",
+        {
+            "mapping_ref": "mapping--ogrc-ac-01_to_nist-sp-800-53-r5-ac-2_part_a",
+            "review_status": "reviewed",
+        },
+    )
     wrong = admin.post("/library/pull", {"version": "9.9.9"}, expect=202)
     assert wrong["status"] == "failed" and admin.get("/library")["version"] == "0.1.0"
 
@@ -63,9 +70,16 @@ def test_pull_pins_and_a_later_revision_revokes_missing_ids(make_app, tmp_path: 
 
 
 def test_pull_leaves_organization_objects_alone(pulled: Api, program):
-    impl = pulled.post("/implementations", {"system_ref": program["system"], "control_ref": C1,
-                                            "status": "planned", "responsibility": "provider",
-                                            "parameter_values": {"shared_account_review": "weekly"}})
+    impl = pulled.post(
+        "/implementations",
+        {
+            "system_ref": program["system"],
+            "control_ref": C1,
+            "status": "planned",
+            "responsibility": "provider",
+            "parameter_values": {"shared_account_review": "weekly"},
+        },
+    )
     pulled.post("/library/pull", {"version": "0.1.0"}, expect=202)
     assert pulled.get(f"/implementations/{impl['id']}") == impl
 
@@ -75,22 +89,49 @@ def test_pull_leaves_organization_objects_alone(pulled: Api, program):
 
 def provider_bundle(path: Path, *, with_row: bool = True) -> Path:
     objects = [
-        {"type": "party", "id": "party--com.example", **ENV, "name": "Example", "kind": "organization"},
-        {"type": "component", "id": "component--com.example.cloud-idp", **ENV, "name": "Cloud IdP",
-         "kind": "service", "party_ref": "party--com.example"},
+        {
+            "type": "party",
+            "id": "party--com.example",
+            **ENV,
+            "name": "Example",
+            "kind": "organization",
+        },
+        {
+            "type": "component",
+            "id": "component--com.example.cloud-idp",
+            **ENV,
+            "name": "Cloud IdP",
+            "kind": "service",
+            "party_ref": "party--com.example",
+        },
     ]
     if with_row:
-        objects.append({
-            "type": "implementation", "id": "implementation--com.example.cloud-idp-ogrc-ac-01", **ENV,
-            "component_ref": "component--com.example.cloud-idp", "control_ref": C1,
-            "status": "implemented", "responsibility": "shared",
-            "narrative": "One identity per person.", "customer_responsibility": "Review guests.",
-        })
-    path.write_text(yaml.safe_dump({
-        "type": "bundle", "id": "bundle--com.example.cloud-idp", **ENV, "name": "Example Cloud IdP",
-        "version": "2026.11", "library": {"id": "bundle--ogrc-library", "version": "0.1.0"},
-        "objects": objects,
-    }))
+        objects.append(
+            {
+                "type": "implementation",
+                "id": "implementation--com.example.cloud-idp-ogrc-ac-01",
+                **ENV,
+                "component_ref": "component--com.example.cloud-idp",
+                "control_ref": C1,
+                "status": "implemented",
+                "responsibility": "shared",
+                "narrative": "One identity per person.",
+                "customer_responsibility": "Review guests.",
+            }
+        )
+    path.write_text(
+        yaml.safe_dump(
+            {
+                "type": "bundle",
+                "id": "bundle--com.example.cloud-idp",
+                **ENV,
+                "name": "Example Cloud IdP",
+                "version": "2026.11",
+                "library": {"id": "bundle--ogrc-library", "version": "0.1.0"},
+                "objects": objects,
+            }
+        )
+    )
     return path
 
 
@@ -102,8 +143,9 @@ def test_provider_import_is_a_read_only_projection(pulled: Api, program, tmp_pat
     assert pin["version"] == "2026.11" and pin["digest"].startswith("sha-256:")
     row = pulled.get("/implementations/implementation--com.example.cloud-idp-ogrc-ac-01")
     assert row["origin"] == "provider"
-    problem = pulled.patch(f"/implementations/{row['id']}", {"narrative": "x"}, row["modified"],
-                           expect=409)
+    problem = pulled.patch(
+        f"/implementations/{row['id']}", {"narrative": "x"}, row["modified"], expect=409
+    )
     assert problem["type"].endswith("provider-object")
     listed = pulled.get("/components?provider_id=bundle--com.example.cloud-idp")["data"]
     assert [c["id"] for c in listed] == ["component--com.example.cloud-idp"]
@@ -111,8 +153,11 @@ def test_provider_import_is_a_read_only_projection(pulled: Api, program, tmp_pat
     # Attaching the component is the organization's own edit. The shared row is the
     # provider's half; the control stays a gap until the organization writes its half.
     system = pulled.get(f"/systems/{program['system']}")
-    pulled.patch(f"/systems/{system['id']}", {"component_refs": ["component--com.example.cloud-idp"]},
-                 system["modified"])
+    pulled.patch(
+        f"/systems/{system['id']}",
+        {"component_refs": ["component--com.example.cloud-idp"]},
+        system["modified"],
+    )
     status = pulled.get(f"/programs/{program['program']}/status")
     c1 = next(c for c in status["controls"] if c["control_id"] == C1)
     assert c1["state"] == "gap" and "organization's implementation is missing" in c1["failed"][0]
@@ -126,8 +171,9 @@ def test_provider_import_is_a_read_only_projection(pulled: Api, program, tmp_pat
 
 def test_provider_import_refusals(pulled: Api, tmp_path: Path):
     bundle = provider_bundle(tmp_path / "idp.yaml")
-    job = pulled.post("/providers", {"kind": "opengrc", "url": str(bundle), "digest": "sha-256:00"},
-                      expect=202)
+    job = pulled.post(
+        "/providers", {"kind": "opengrc", "url": str(bundle), "digest": "sha-256:00"}, expect=202
+    )
     assert job["status"] == "failed" and "sha-256" in job["error"]["detail"]
     data = yaml.safe_load(bundle.read_text())
     data["objects"][0]["id"] = "party--example"  # the library's slug space
@@ -137,29 +183,57 @@ def test_provider_import_refusals(pulled: Api, tmp_path: Path):
 
 
 def test_oscal_component_definition_import(pulled: Api, tmp_path: Path):
-    document = {"component-definition": {
-        "uuid": "8a7f0d5c-0000-4000-8000-000000000001",
-        "metadata": {"title": "Django", "version": "1.0", "last-modified": STAMP,
-                     "parties": [{"uuid": "8a7f0d5c-0000-4000-8000-000000000002",
-                                  "type": "organization", "name": "Django Software Foundation"}]},
-        "components": [{
-            "uuid": "8a7f0d5c-0000-4000-8000-000000000003", "type": "software", "title": "Django",
-            "description": "Web framework.",
-            "control-implementations": [{
-                "uuid": "8a7f0d5c-0000-4000-8000-000000000004",
-                "source": "https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json",
-                "description": "800-53",
-                "implemented-requirements": [
-                    {"uuid": "8a7f0d5c-0000-4000-8000-000000000005", "control-id": "ac-2",
-                     "description": "Accounts.", "props": [{"name": "security_control_type", "value": "Hybrid"}]},
-                    {"uuid": "8a7f0d5c-0000-4000-8000-000000000006", "control-id": "ac-3",
-                     "description": "Enforcement.", "props": [{"name": "provider", "value": "No"}]},
-                    {"uuid": "8a7f0d5c-0000-4000-8000-000000000007", "control-id": "zz-9",
-                     "description": "Unknown."},
+    document = {
+        "component-definition": {
+            "uuid": "8a7f0d5c-0000-4000-8000-000000000001",
+            "metadata": {
+                "title": "Django",
+                "version": "1.0",
+                "last-modified": STAMP,
+                "parties": [
+                    {
+                        "uuid": "8a7f0d5c-0000-4000-8000-000000000002",
+                        "type": "organization",
+                        "name": "Django Software Foundation",
+                    }
                 ],
-            }],
-        }],
-    }}
+            },
+            "components": [
+                {
+                    "uuid": "8a7f0d5c-0000-4000-8000-000000000003",
+                    "type": "software",
+                    "title": "Django",
+                    "description": "Web framework.",
+                    "control-implementations": [
+                        {
+                            "uuid": "8a7f0d5c-0000-4000-8000-000000000004",
+                            "source": "https://raw.githubusercontent.com/usnistgov/oscal-content/main/nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json",
+                            "description": "800-53",
+                            "implemented-requirements": [
+                                {
+                                    "uuid": "8a7f0d5c-0000-4000-8000-000000000005",
+                                    "control-id": "ac-2",
+                                    "description": "Accounts.",
+                                    "props": [{"name": "security_control_type", "value": "Hybrid"}],
+                                },
+                                {
+                                    "uuid": "8a7f0d5c-0000-4000-8000-000000000006",
+                                    "control-id": "ac-3",
+                                    "description": "Enforcement.",
+                                    "props": [{"name": "provider", "value": "No"}],
+                                },
+                                {
+                                    "uuid": "8a7f0d5c-0000-4000-8000-000000000007",
+                                    "control-id": "zz-9",
+                                    "description": "Unknown.",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ],
+        }
+    }
     path = tmp_path / "django.json"
     path.write_text(json.dumps(document))
     job = pulled.post("/providers", {"kind": "oscal-component", "url": path.as_uri()}, expect=202)
@@ -167,7 +241,9 @@ def test_oscal_component_definition_import(pulled: Api, tmp_path: Path):
     assert any("zz-9" in w for w in job["report"]["warnings"])
     rows = pulled.get("/implementations?origin=provider")["data"]
     assert {(r["requirement_ref"], r["responsibility"]) for r in rows} == {
-        (AC2, "shared"), ("requirement--nist-sp-800-53-r5-ac-3", "customer")}
+        (AC2, "shared"),
+        ("requirement--nist-sp-800-53-r5-ac-3", "customer"),
+    }
 
 
 # --- harness -------------------------------------------------------------------------------
@@ -175,42 +251,83 @@ def test_oscal_component_definition_import(pulled: Api, tmp_path: Path):
 
 def run_test(api: Api, program, command: str, **run) -> dict:
     impl = api.get(f"/implementations?control_id={C1}")["data"]
-    impl = impl[0] if impl else api.post("/implementations", {
-        "system_ref": program["system"], "control_ref": C1, "status": "implemented",
-        "responsibility": "provider"})
-    test = api.post("/tests", {"name": "t", "control_ref": C1, "method": "automated",
-                               "fulfills_ref": LIB_TEST,
-                               "run": {"runner": "shell", "command": command, **run}})
+    impl = (
+        impl[0]
+        if impl
+        else api.post(
+            "/implementations",
+            {
+                "system_ref": program["system"],
+                "control_ref": C1,
+                "status": "implemented",
+                "responsibility": "provider",
+            },
+        )
+    )
+    test = api.post(
+        "/tests",
+        {
+            "name": "t",
+            "control_ref": C1,
+            "method": "automated",
+            "fulfills_ref": LIB_TEST,
+            "run": {"runner": "shell", "command": command, **run},
+        },
+    )
     job = api.post(f"/tests/{test['id']}/runs", {"implementation_id": impl["id"]}, expect=202)
     assert job["status"] == "succeeded", job
     return api.get(f"/results/{job['result_id']}")
 
 
 def test_harness_maps_exit_codes_and_environment(pulled: Api, program):
-    result = run_test(pulled, program, 'echo "$IDP_TENANT $OGRC_CONTROL_ID $OGRC_PARAM_SHARED_ACCOUNT_REVIEW"',
-                      env=["IDP_TENANT"])
+    result = run_test(
+        pulled,
+        program,
+        'echo "$IDP_TENANT $OGRC_CONTROL_ID $OGRC_PARAM_SHARED_ACCOUNT_REVIEW"',
+        env=["IDP_TENANT"],
+    )
     assert result["outcome"] == "pass"
     assert result["summary"] == f"acme {C1} quarterly"
     assert run_test(pulled, program, "echo nope; exit 1")["outcome"] == "fail"
     assert run_test(pulled, program, "exit 3")["outcome"] == "error"
     missing = run_test(pulled, program, "true", env=["NOT_CONFIGURED"])
     assert missing["outcome"] == "error" and "NOT_CONFIGURED" in missing["summary"]
-    evidence = run_test(pulled, program, "true",
-                        evidence=[{"path": "out.txt", "name": "o", "media_type": "text/plain"}])
+    evidence = run_test(
+        pulled,
+        program,
+        "true",
+        evidence=[{"path": "out.txt", "name": "o", "media_type": "text/plain"}],
+    )
     assert evidence["outcome"] == "error" and "missing" in evidence["summary"]
     timeout = run_test(pulled, program, "sleep 5", timeout="1s")
     assert timeout["outcome"] == "error" and "timed out" in timeout["summary"]
-    leaked = run_test(pulled, program, 'echo "${HOME_DIRECTORY_SECRET:-clean} ${VIRTUAL_ENV:-clean}"')
+    leaked = run_test(
+        pulled, program, 'echo "${HOME_DIRECTORY_SECRET:-clean} ${VIRTUAL_ENV:-clean}"'
+    )
     assert leaked["summary"] == "clean clean"
 
 
 def test_run_refusals(pulled: Api, program):
     pulled.post(f"/tests/{LIB_TEST}/runs", {"implementation_id": "implementation--x"}, expect=400)
     pulled.post("/tests/test--com.acme.nope/runs", {"implementation_id": "x"}, expect=404)
-    custom = pulled.post("/tests", {"name": "t", "control_ref": C1, "method": "automated",
-                                    "run": {"runner": "lambda", "command": "x"}})
-    impl = pulled.post("/implementations", {"system_ref": program["system"], "control_ref": C1,
-                                            "status": "planned", "responsibility": "provider"})
+    custom = pulled.post(
+        "/tests",
+        {
+            "name": "t",
+            "control_ref": C1,
+            "method": "automated",
+            "run": {"runner": "lambda", "command": "x"},
+        },
+    )
+    impl = pulled.post(
+        "/implementations",
+        {
+            "system_ref": program["system"],
+            "control_ref": C1,
+            "status": "planned",
+            "responsibility": "provider",
+        },
+    )
     bad = pulled.post(f"/tests/{custom['id']}/runs", {"implementation_id": impl["id"]}, expect=400)
     assert bad["errors"][0]["pointer"] == "/run/runner"
 
@@ -219,24 +336,44 @@ def test_run_refusals(pulled: Api, program):
 
 
 def test_renders_produce_downloadable_files(pulled: Api, program):
-    pulled.post("/implementations", {"system_ref": program["system"], "control_ref": C1,
-                                     "status": "implemented", "responsibility": "provider",
-                                     "narrative": "Every person has one IdP account."})
+    pulled.post(
+        "/implementations",
+        {
+            "system_ref": program["system"],
+            "control_ref": C1,
+            "status": "implemented",
+            "responsibility": "provider",
+            "narrative": "Every person has one IdP account.",
+        },
+    )
     pulled.post(f"/programs/{program['program']}/renders", {"view": "oscal"}, expect=400)
-    job = pulled.post(f"/programs/{program['program']}/renders",
-                      {"view": "oscal", "framework_id": "framework--nist-sp-800-53-r5"}, expect=202)
+    job = pulled.post(
+        f"/programs/{program['program']}/renders",
+        {"view": "oscal", "framework_id": "framework--nist-sp-800-53-r5"},
+        expect=202,
+    )
     assert job["status"] == "succeeded", job
-    assert set(job["files"]) == {"profile.json", "ssp.json", "mapping-collection.json",
-                                 "component-definition.json", "assessment-results.json", "poam.json"}
+    assert set(job["files"]) == {
+        "profile.json",
+        "ssp.json",
+        "mapping-collection.json",
+        "component-definition.json",
+        "assessment-results.json",
+        "poam.json",
+    }
     ssp = pulled.get(f"/jobs/{job['id']}/files/ssp.json")
     plan = ssp["system-security-plan"]
     [req] = plan["control-implementation"]["implemented-requirements"]
     assert req["control-id"] == "ac-2"
-    assert req["props"][0]["value"] == "implemented"  # equal-to, and the implementation is implemented
+    assert (
+        req["props"][0]["value"] == "implemented"
+    )  # equal-to, and the implementation is implemented
     assert "Every person has one IdP account." in req["remarks"]
     profile = pulled.get(f"/jobs/{job['id']}/files/profile.json")["profile"]
     assert profile["imports"][0]["include-controls"][0]["with-ids"] == ["ac-2"]
-    assert profile["modify"]["set-parameters"] == [{"param-id": "ac_02_odp_10", "values": ["monthly"]}]
+    assert profile["modify"]["set-parameters"] == [
+        {"param-id": "ac_02_odp_10", "values": ["monthly"]}
+    ]
     pulled.get(f"/jobs/{job['id']}/files/nope.json", expect=404)
 
     ssp_job = pulled.post(f"/programs/{program['program']}/renders", {"view": "ssp"}, expect=202)
@@ -249,7 +386,9 @@ def test_renders_produce_downloadable_files(pulled: Api, program):
 
 
 def git(*args: str, cwd: Path | None = None) -> str:
-    return subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True).stdout
+    return subprocess.run(
+        ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
+    ).stdout
 
 
 def test_export_then_restore_round_trips(make_app, tmp_path: Path, library_dir: Path):
@@ -261,11 +400,15 @@ def test_export_then_restore_round_trips(make_app, tmp_path: Path, library_dir: 
     owner = admin.post("/parties", {"name": "Lead", "kind": "role"})
     system = admin.post("/systems", {"name": "Prod"})
     admin.post("/programs", {"name": "P", "system_ref": system["id"], "baseline_ref": LIB_BASELINE})
-    policy = admin.post("/policies", {"name": "Access", "status": "draft", "owner_ref": owner["id"],
-                                      "adopted": "2026-11-01"})
-    uploaded = client.post(f"/v1/policies/{policy['id']}/content",
-                           headers={**admin.headers, "If-Match": policy["modified"]},
-                           files={"file": ("p.md", io.BytesIO(b"# Access policy"), "text/markdown")})
+    policy = admin.post(
+        "/policies",
+        {"name": "Access", "status": "draft", "owner_ref": owner["id"], "adopted": "2026-11-01"},
+    )
+    uploaded = client.post(
+        f"/v1/policies/{policy['id']}/content",
+        headers={**admin.headers, "If-Match": policy["modified"]},
+        files={"file": ("p.md", io.BytesIO(b"# Access policy"), "text/markdown")},
+    )
     admin.patch(f"/policies/{policy['id']}", {"status": "adopted"}, uploaded.json()["modified"])
 
     job = admin.post("/exports/git", expect=202)
@@ -315,10 +458,22 @@ def test_export_is_a_disabled_feature_without_a_remote(admin: Api):
 
 def test_restore_refuses_a_broken_graph(make_app, tmp_path: Path):
     snapshot = {
-        "type": "bundle", "id": "bundle--com.acme.org", **ENV, "name": "Acme", "version": STAMP,
+        "type": "bundle",
+        "id": "bundle--com.acme.org",
+        **ENV,
+        "name": "Acme",
+        "version": STAMP,
         "library": {"id": "bundle--ogrc-library", "version": "0.1.0", "commit": "c0ffee"},
-        "objects": [{"type": "program", "id": "program--com.acme.p", **ENV, "name": "P",
-                     "system_ref": "system--com.acme.missing", "baseline_ref": LIB_BASELINE}],
+        "objects": [
+            {
+                "type": "program",
+                "id": "program--com.acme.p",
+                **ENV,
+                "name": "P",
+                "system_ref": "system--com.acme.missing",
+                "baseline_ref": LIB_BASELINE,
+            }
+        ],
     }
     path = tmp_path / "snapshot.json"
     path.write_text(json.dumps(snapshot))

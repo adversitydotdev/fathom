@@ -32,7 +32,11 @@ class UrlFetcher:
             if not self._allow_files:
                 raise ValueError("local files are not readable by this deployment")
             path = Path(unquote(parsed.path) if parsed.scheme == "file" else url)
-            if not path.is_file():
-                raise ValueError(f"{path} is not a file")
-            return await asyncio.to_thread(path.read_bytes)
+
+            def read() -> bytes:
+                if not path.is_file():
+                    raise ValueError(f"{path} is not a file")
+                return path.read_bytes()
+
+            return await asyncio.to_thread(read)
         raise ValueError(f"{parsed.scheme}:// URLs are not supported")

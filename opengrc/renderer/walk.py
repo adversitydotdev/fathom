@@ -63,18 +63,31 @@ def walk(request: RenderRequest) -> Walk:
             if not (test.required and evaluator.applies(test)):
                 continue
             for impl in impls:
-                results = [r for r in graph.results_by_pair.get((test.id, impl.id), []) if r.observed <= evaluator.at]
+                results = [
+                    r
+                    for r in graph.results_by_pair.get((test.id, impl.id), [])
+                    if r.observed <= evaluator.at
+                ]
                 if results:
                     latest.append(max(results, key=lambda r: r.observed))
         evidence = [
-            e for impl in impls for e in graph.evidence_by_implementation.get(impl.id, [])
+            e
+            for impl in impls
+            for e in graph.evidence_by_implementation.get(impl.id, [])
             if evaluator.evidence_valid(e)
         ]
-        exceptions = [e for impl in impls for e in graph.exceptions_by_implementation.get(impl.id, [])]
+        exceptions = [
+            e for impl in impls for e in graph.exceptions_by_implementation.get(impl.id, [])
+        ]
         entries.append(
             ControlEntry(
-                control, by_control[control_id], render(control.statement, values), impls,
-                latest, evidence, exceptions,
+                control,
+                by_control[control_id],
+                render(control.statement, values),
+                impls,
+                latest,
+                evidence,
+                exceptions,
             )
         )
     controls = set(evaluator.baseline.control_ids)
@@ -84,12 +97,19 @@ def walk(request: RenderRequest) -> Walk:
         system=graph.system(program.system_ref),
         controls=entries,
         findings=[f for f in status.findings_in_force(graph, program.system_ref, request.at)],
-        policies=[p for p in graph.all(Policy) if p.status == "adopted" and controls & set(p.control_refs or [])],
+        policies=[
+            p
+            for p in graph.all(Policy)
+            if p.status == "adopted" and controls & set(p.control_refs or [])
+        ],
         procedures=[
-            p for p in graph.all(Procedure) if p.status == "adopted" and controls & set(p.control_refs or [])
+            p
+            for p in graph.all(Procedure)
+            if p.status == "adopted" and controls & set(p.control_refs or [])
         ],
         risks=[
-            r for r in graph.risks()
+            r
+            for r in graph.risks()
             if r.status in ("open", "treating") and controls & set(r.control_refs or [])
         ],
         requirements=evaluated.requirements,

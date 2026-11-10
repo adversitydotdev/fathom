@@ -55,8 +55,13 @@ def is_git(url: str) -> bool:
 
 
 class Snapshot:
-    def __init__(self, manifest: dict, organization: list[Envelope], root: Path | None,
-                 providers: dict[str, list[Envelope]]) -> None:
+    def __init__(
+        self,
+        manifest: dict,
+        organization: list[Envelope],
+        root: Path | None,
+        providers: dict[str, list[Envelope]],
+    ) -> None:
         self.manifest = manifest
         self.organization = organization
         self.root = root
@@ -74,9 +79,13 @@ def read_tree(root: Path) -> Snapshot:
         if path.parts[-2] == "provider" or path.name.startswith("."):
             continue
         try:
-            organization.append(bundles.parse_object(bundles.load_text(path.read_bytes()), str(path)))
+            organization.append(
+                bundles.parse_object(bundles.load_text(path.read_bytes()), str(path))
+            )
         except bundles.BundleError as exc:
-            raise Invalid(f"the snapshot is refused at {exc.object_id or path.name}: {exc}") from exc
+            raise Invalid(
+                f"the snapshot is refused at {exc.object_id or path.name}: {exc}"
+            ) from exc
     providers: dict[str, list[Envelope]] = {}
     for pin in manifest.get("providers", []) or []:
         bundle_id = pin.get("id", "")
@@ -85,7 +94,9 @@ def read_tree(root: Path) -> Snapshot:
         objects = []
         for path in sorted(tree.rglob("*.yaml")):
             try:
-                objects.append(bundles.parse_object(bundles.load_text(path.read_bytes()), str(path)))
+                objects.append(
+                    bundles.parse_object(bundles.load_text(path.read_bytes()), str(path))
+                )
             except bundles.BundleError as exc:
                 raise Invalid(f"provider copy {bundle_id} is refused: {exc}") from exc
         providers[bundle_id] = objects
@@ -138,7 +149,9 @@ class RestoreService:
             finally:
                 shutil.rmtree(workdir, ignore_errors=True)
 
-        return await self._jobs.submit(principal, "restore", request.model_dump(exclude_none=True), work)
+        return await self._jobs.submit(
+            principal, "restore", request.model_dump(exclude_none=True), work
+        )
 
     async def _read(self, request: RestoreRequest, workdir: Path) -> Snapshot:
         if is_git(request.url):
@@ -153,7 +166,9 @@ class RestoreService:
             raise Invalid(f"could not read {request.url}: {exc}") from exc
         return read_exchange(content)
 
-    async def _restore(self, principal: Principal, request: RestoreRequest, workdir: Path) -> JobOutcome:
+    async def _restore(
+        self, principal: Principal, request: RestoreRequest, workdir: Path
+    ) -> JobOutcome:
         snapshot = await self._read(request, workdir)
 
         # Step 2: the library revision the manifest pins.
@@ -175,11 +190,17 @@ class RestoreService:
         for pin_body in snapshot.manifest.get("providers", []) or []:
             pin = ProviderPin.model_validate({k: v for k, v in pin_body.items() if k != "objects"})
             objects = snapshot.providers.get(pin.id, [])
-            if pin.projection_digest and bundles.projection_digest(objects) != pin.projection_digest:
+            if (
+                pin.projection_digest
+                and bundles.projection_digest(objects) != pin.projection_digest
+            ):
                 raise Invalid(f"the copy of provider {pin.id} does not match its pinned digest")
             check_projection(provider_source(pin.id), objects, base)
-            base = Graph([*base.objects.values(), *objects], base.library_ids,
-                         {*base.provider_ids, *(o.id for o in objects)})
+            base = Graph(
+                [*base.objects.values(), *objects],
+                base.library_ids,
+                {*base.provider_ids, *(o.id for o in objects)},
+            )
             provider_pins.append((pin, objects))
 
         # Step 4: the whole graph, as a self-contained bundle.
@@ -196,23 +217,27 @@ class RestoreService:
         # Steps 5 and 6: store, then record the pins.
         at = utc(self._clock())
         if library_pin is not None:
-            await self._store.replace_projection(LIBRARY, library, at, principal.actor_id,
-                                                 library_pin=library_pin)
+            await self._store.replace_projection(
+                LIBRARY, library, at, principal.actor_id, library_pin=library_pin
+            )
         for pin, objects in provider_pins:
-            await self._store.replace_projection(provider_source(pin.id), objects, at,
-                                                 principal.actor_id, provider_pin=pin)
+            await self._store.replace_projection(
+                provider_source(pin.id), objects, at, principal.actor_id, provider_pin=pin
+            )
         await self._store.restore(organization, principal.actor_id, at)
 
         missing = await self._bytes(snapshot, organization)
-        return JobOutcome(report={
-            "objects": len(organization),
-            "library": library_pin.model_dump(exclude_none=True) if library_pin else None,
-            "providers": [p.id for p, _ in provider_pins],
-            "missing_bytes": missing,
-        })
+        return JobOutcome(
+            report={
+                "objects": len(organization),
+                "library": library_pin.model_dump(exclude_none=True) if library_pin else None,
+                "providers": [p.id for p, _ in provider_pins],
+                "missing_bytes": missing,
+            }
+        )
 
     async def _bytes(self, snapshot: Snapshot, organization: list[Envelope]) -> list[str]:
-        """Copy evidence bytes and document bodies; report what could not be found or did not match."""
+        """Copy evidence bytes and document bodies; report what is missing or does not match."""
         missing: list[str] = []
         for obj in organization:
             resource = getattr(obj, "resource", None)
@@ -223,7 +248,8 @@ class RestoreService:
                 missing.append(obj.id)
                 continue
             local = await self._blobs.put(
-                f"{obj.type}/{obj.id}/{resource.digest.value}", content,
+                f"{obj.type}/{obj.id}/{resource.digest.value}",
+                content,
                 resource.media_type or "application/octet-stream",
             )
             if local != resource.uri:

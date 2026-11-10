@@ -142,7 +142,10 @@ def _mapping(c: _Checker, m: Mapping) -> None:
                 continue
             if member.target_ref != m.target_ref:
                 c.fail(pointer, f"{ref} has a different target_ref")
-            if ids.type_of(member.source_ref) != "control" or member.relationship not in CONTRIBUTION:
+            if (
+                ids.type_of(member.source_ref) != "control"
+                or member.relationship not in CONTRIBUTION
+            ):
                 c.fail(pointer, f"{ref} is not a control mapping with subset-of or intersects-with")
         for other in c.others(Mapping):
             if other.combined_with_refs and members & {other.id, *other.combined_with_refs}:
@@ -233,7 +236,10 @@ def _system(c: _Checker, s: System) -> None:
     for i, info in enumerate(s.information_types or []):
         for j, ref in enumerate(info.component_refs or []):
             if ref not in own:
-                c.fail(f"/information_types/{i}/component_refs/{j}", "not one of the system's components")
+                c.fail(
+                    f"/information_types/{i}/component_refs/{j}",
+                    "not one of the system's components",
+                )
     for i, party in enumerate(s.parties or []):
         c.ref(f"/parties/{i}/party_ref", party.party_ref, "party")
         if party.authorization is not None and party.role != "subservice":
@@ -279,7 +285,9 @@ def _result(c: _Checker, r: Result) -> None:
         test = c.graph.test(r.test_ref)
         impl = c.graph.implementation(r.implementation_ref)
         if test and impl and test.control_ref != impl.control_ref:
-            c.fail("/implementation_ref", "the test's control and the implementation's control differ")
+            c.fail(
+                "/implementation_ref", "the test's control and the implementation's control differ"
+            )
     for index, ref in enumerate(r.objective_refs or []):
         c.objective(f"/objective_refs/{index}", ref)
     c.refs("/evidence_refs", r.evidence_refs, "evidence")
@@ -307,7 +315,9 @@ def _document(c: _Checker, d: Policy | Procedure) -> None:
     c.refs("/control_refs", d.control_refs, "control")
     if d.status == "adopted":
         if d.resource is None or d.resource.digest is None:
-            c.fail("/status", "an adopted document requires resource.digest; upload its content first")
+            c.fail(
+                "/status", "an adopted document requires resource.digest; upload its content first"
+            )
         if not d.owner_ref:
             c.fail("/owner_ref", "an adopted document requires owner_ref")
         if isinstance(d, Policy) and d.adopted is None:

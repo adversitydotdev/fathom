@@ -163,7 +163,9 @@ class ObjectService:
         more = len(rows) > query.limit
         return Page(
             data=[row.obj for row in page],
-            page=PageInfo(next_cursor=encode_cursor(page[-1].obj.id) if more else None, limit=query.limit),
+            page=PageInfo(
+                next_cursor=encode_cursor(page[-1].obj.id) if more else None, limit=query.limit
+            ),
         )
 
     # --- writes ------------------------------------------------------------------------
@@ -249,7 +251,9 @@ class ObjectService:
         if not row.editable:
             raise read_only_error(row, spec.label)
         if row.obj.modified != utc(if_match):
-            raise PreconditionFailed(f"If-Match does not equal modified ({row.obj.modified.isoformat()})")
+            raise PreconditionFailed(
+                f"If-Match does not equal modified ({row.obj.modified.isoformat()})"
+            )
         return row
 
     async def update(

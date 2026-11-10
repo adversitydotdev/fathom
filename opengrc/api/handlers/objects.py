@@ -28,7 +28,8 @@ def register_collection(registrar: Registrar, service: ObjectService, c: Collect
         query_model = spec.query
 
         async def list_objects(
-            principal: CurrentPrincipal, query: Annotated[query_model, Query()]  # type: ignore[valid-type]
+            principal: CurrentPrincipal,
+            query: Annotated[query_model, Query()],  # type: ignore[valid-type]
         ):
             return await service.list(principal, spec, query)
 
@@ -75,7 +76,9 @@ def register_sub(registrar: Registrar, service: ObjectService, sub: SubList) -> 
     query_model: type[PageRequest] = sub.query
 
     async def list_children(
-        id: str, principal: CurrentPrincipal, query: Annotated[query_model, Query()]  # type: ignore[valid-type]
+        id: str,
+        principal: CurrentPrincipal,
+        query: Annotated[query_model, Query()],  # type: ignore[valid-type]
     ):
         await service.get(principal, sub.parent, id)  # 404 when the parent is unknown
 

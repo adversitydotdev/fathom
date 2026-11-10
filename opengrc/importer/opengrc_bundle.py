@@ -22,7 +22,9 @@ class OpenGRCBundleImporter:
         for obj in objects:
             if isinstance(obj, Implementation):
                 if obj.origin not in (None, "provider"):
-                    raise ValueError(f"{obj.id}: a provider bundle's implementations are provider rows")
+                    raise ValueError(
+                        f"{obj.id}: a provider bundle's implementations are provider rows"
+                    )
                 obj = obj.model_copy(update={"origin": "provider"})
                 if obj.responsibility in ("shared", "customer") and not obj.customer_responsibility:
                     raise ValueError(

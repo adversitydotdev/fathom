@@ -29,7 +29,12 @@ class FileBlobs:
         parsed = urlparse(uri)
         if parsed.scheme != "file":
             return None
-        path = Path(unquote(parsed.path)).resolve()
-        if self._root not in path.parents or not path.is_file():
-            return None
-        return await asyncio.to_thread(path.read_bytes)
+        path = Path(unquote(parsed.path))
+
+        def read() -> bytes | None:
+            resolved = path.resolve()
+            if self._root not in resolved.parents or not resolved.is_file():
+                return None
+            return resolved.read_bytes()
+
+        return await asyncio.to_thread(read)

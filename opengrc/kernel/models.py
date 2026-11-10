@@ -210,7 +210,9 @@ class Baseline(Envelope):
     parameter_bindings: dict[str, dict[str, str]] | None = None
 
 
-Interval = Literal["continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event-driven"]
+Interval = Literal[
+    "continuous", "daily", "weekly", "monthly", "quarterly", "annual", "event-driven"
+]
 
 
 class RunEvidence(Part):
