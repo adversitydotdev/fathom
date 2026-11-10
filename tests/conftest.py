@@ -1,6 +1,10 @@
 """Shared fixtures: a small library on disk, principals per role, and an API client."""
 
-from collections.abc import Callable
+import asyncio
+import os
+import uuid
+from collections.abc import Callable, Iterator
+from functools import cache
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +19,98 @@ from opengrc.adapters.secrets import StaticSecrets
 from opengrc.api.app import create_app
 from opengrc.auth import Credentials
 from opengrc.operations.exports import ExportSettings
-from opengrc.persistence.memory import MemoryStore
+from opengrc.persistence.memory import MemoryBlobs, MemoryStore
+
+# The compose stack (compose.yaml). Override to point the suite somewhere else.
+DATABASE_URL = os.environ.get(
+    "OPENGRC_TEST_DATABASE_URL", "postgresql://opengrc:opengrc@localhost:5432/opengrc"
+)
+S3_ENDPOINT = os.environ.get("OPENGRC_TEST_S3_ENDPOINT", "http://localhost:8333")
+S3_BUCKET = os.environ.get("OPENGRC_TEST_S3_BUCKET", "opengrc")
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "opengrc")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "opengrc-secret")
+os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+SCHEMAS: list[str] = []
+
+
+@cache
+def services_available() -> bool:
+    import asyncpg
+
+    async def ping() -> None:
+        from opengrc.persistence.postgres import async_url
+
+        url = async_url(DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
+        conn = await asyncpg.connect(url, timeout=2)
+        await conn.close()
+
+    try:
+        asyncio.run(ping())
+        return True
+    except Exception:
+        return False
+
+
+def postgres_store():
+    """A store in a fresh schema, so each test (and each app in one test) is its own database."""
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from opengrc.persistence.postgres import PostgresStore, async_url
+    from opengrc.persistence.tables import metadata
+
+    schema = f"test_{uuid.uuid4().hex[:12]}"
+    SCHEMAS.append(schema)
+    # NullPool: TestClient may run requests on more than one event loop.
+    engine = create_async_engine(
+        async_url(DATABASE_URL),
+        poolclass=NullPool,
+        connect_args={"server_settings": {"search_path": schema}},
+    )
+
+    async def create() -> None:
+        async with engine.begin() as conn:
+            await conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+            await conn.run_sync(metadata.create_all)
+            await conn.execute(text("INSERT INTO store_state (id, version) VALUES (1, 0)"))
+
+    asyncio.run(create())
+    return PostgresStore(engine=engine)
+
+
+def s3_blobs():
+    from opengrc.adapters.s3 import S3Blobs
+
+    return S3Blobs(S3_BUCKET, prefix=f"test-{uuid.uuid4().hex[:12]}", endpoint_url=S3_ENDPOINT)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def drop_test_schemas() -> Iterator[None]:
+    yield
+    if not SCHEMAS:
+        return
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    from opengrc.persistence.postgres import async_url
+
+    async def drop() -> None:
+        engine = create_async_engine(async_url(DATABASE_URL))
+        async with engine.begin() as conn:
+            for schema in SCHEMAS:
+                await conn.execute(text(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE'))
+        await engine.dispose()
+
+    asyncio.run(drop())
+
+
+@pytest.fixture(params=["memory", "postgres"])
+def backend(request: pytest.FixtureRequest) -> str:
+    if request.param == "postgres" and not services_available():
+        pytest.skip("the compose stack is not running (docker compose up -d)")
+    return request.param
+
 
 STAMP = "2026-10-22T11:30:00Z"
 FW = "framework--nist-sp-800-53-r5"
@@ -230,11 +325,14 @@ def secrets() -> StaticSecrets:
 
 
 @pytest.fixture
-def make_app(library_dir: Path, secrets: StaticSecrets, tmp_path: Path) -> Callable[..., Any]:
+def make_app(
+    library_dir: Path, secrets: StaticSecrets, tmp_path: Path, backend: str
+) -> Callable[..., Any]:
     def make(**overrides: Any) -> tuple[TestClient, container.Container]:
         kwargs: dict[str, Any] = {
             "authenticator": Tokens(PRINCIPALS),
-            "store": MemoryStore(),
+            "store": MemoryStore() if backend == "memory" else postgres_store(),
+            "blobs": MemoryBlobs() if backend == "memory" else s3_blobs(),
             "library_source": DirectoryLibrary(library_dir, commit="c0ffee"),
             "secrets": secrets,
             "export": ExportSettings(remote=None),

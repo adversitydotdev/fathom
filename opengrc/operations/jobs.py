@@ -9,6 +9,8 @@ A job's failure is a problem+json body on the job, never a 500 on the route.
 
 import asyncio
 import logging
+import os
+import socket
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -121,6 +123,7 @@ class JobService:
         self._authorizer = authorizer
         self._executor = executor or InlineExecutor()
         self._clock = clock
+        self._worker = f"{socket.gethostname()}:{os.getpid()}"
 
     async def submit(
         self,
@@ -146,6 +149,8 @@ class JobService:
         return await self._store.get_job(job.id) or job
 
     async def _run(self, job: Job, work: Work) -> None:
+        if not await self._store.claim_job(job.id, self._worker):
+            return  # another process took the row first (RFC 0003 section 2)
         await self._store.save_job(job := job.model_copy(update={"status": "running"}))
         try:
             outcome = await work(job)

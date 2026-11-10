@@ -47,6 +47,7 @@ class MemoryStore:
         self._library_pin = library_pin
         self._provider_pins: dict[str, ProviderPin] = {}
         self._jobs: dict[str, Job] = {}
+        self._claims: dict[str, str] = {}
         self._meta: dict[str, str] = {}
         self._history_start: datetime | None = None
         self._graph: Graph | None = None
@@ -171,6 +172,12 @@ class MemoryStore:
 
     async def save_job(self, job: Job) -> None:
         self._jobs[job.id] = job
+
+    async def claim_job(self, job_id: str, worker: str) -> bool:
+        if job_id in self._claims:
+            return False
+        self._claims[job_id] = worker
+        return True
 
     async def get_job(self, job_id: str) -> Job | None:
         return self._jobs.get(job_id)
