@@ -17,6 +17,7 @@ STATUS: dict[type[errors.OpenGRCError], HTTPStatus] = {
     errors.FeatureDisabled: HTTPStatus.NOT_FOUND,
     errors.Conflict: HTTPStatus.CONFLICT,
     errors.PreconditionFailed: HTTPStatus.PRECONDITION_FAILED,
+    errors.UnsupportedMediaType: HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
 }
 
 

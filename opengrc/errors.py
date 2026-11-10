@@ -60,3 +60,8 @@ class Conflict(OpenGRCError):
 @dataclass
 class PreconditionFailed(OpenGRCError):
     slug: str = "stale-write"
+
+
+@dataclass
+class UnsupportedMediaType(OpenGRCError):
+    slug: str = "unsupported-media-type"
