@@ -1,0 +1,28 @@
+# Drops a closed PR's screenshot diffs from the ci-screenshots branch.
+name: screenshots-cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ci-screenshots
+      - env:
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          [ -d "pr-$PR" ] || exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -rq "pr-$PR"
+          git commit -qm "drop pr-$PR"
+          for _ in 1 2 3; do git push -q && exit 0; git pull -q --rebase; done
+          exit 1

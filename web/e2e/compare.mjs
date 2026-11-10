@@ -71,6 +71,10 @@ if (out) {
   for (const f of added) copyFileSync(path.join(headDir, f), path.join(out, "after", f));
 }
 
+/** Expand the first few; a change to shared chrome touches every page. */
+const OPEN_LIMIT = 4;
+let shown = 0;
+const open = () => (shown++ < OPEN_LIMIT ? " open" : "");
 const name = (f) => f.replace(/^sweep-/, "").replace(/\.png$/, "");
 const lines = [];
 lines.push(
@@ -81,7 +85,7 @@ for (const c of changed) {
   const what = c.size ? `size ${c.size}` : `${c.pixels.toLocaleString("en-US")} px`;
   lines.push(
     "",
-    `<details open><summary><code>${name(c.f)}</code> (${what})</summary>`,
+    `<details${open()}><summary><code>${name(c.f)}</code> (${what})</summary>`,
     "",
     "| before | after |" + (c.diff ? " diff |" : ""),
     "|---|---|" + (c.diff ? "---|" : ""),
@@ -92,7 +96,7 @@ for (const c of changed) {
   );
 }
 for (const f of added) {
-  lines.push("", `<details open><summary><code>${name(f)}</code> (new)</summary>`, "", `<img src="${img(`after/${f}`)}" width="480">`, "", "</details>");
+  lines.push("", `<details${open()}><summary><code>${name(f)}</code> (new)</summary>`, "", `<img src="${img(`after/${f}`)}" width="480">`, "", "</details>");
 }
 if (removed.length) lines.push("", `Removed: ${removed.map((f) => `\`${name(f)}\``).join(", ")}`);
 
