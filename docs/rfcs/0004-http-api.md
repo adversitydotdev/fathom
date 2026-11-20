@@ -1,118 +1,117 @@
 # RFC 0004: HTTP API
 
-| | |
+| Field | Value |
 |---|---|
 | Status | Draft |
 | Spec version | 0.1.0 |
 | Date | 2026-11-08 |
-| Depends on | [RFC 0001](0001-object-model.md), [RFC 0002](0002-tooling.md), [RFC 0003](0003-application.md) |
+| Depends on | RFC 0001, RFC 0002 (`ogrl-rfcs`), [RFC 0003](0003-application.md) |
 
-This document is the proposal for the HTTP API the `opengrc` process serves. The contract is [api/openapi.yaml](../../api/openapi.yaml). This RFC records why the resources have the shape they do. It is written so it can be edited in place.
+This RFC documents the design rationale, resource conventions, and operational workflows of the HTTP API served by `ogrl`. The formal route and schema contract lives in [api/openapi.yaml](../../api/openapi.yaml). Open design questions are collected in [Section 7](#7-open-questions).
 
 ## 1. Summary
 
-The API exchanges the objects from RFC 0001. A response body is that object, or a page of them, or a computed view the kernel already knows how to derive. Vanta, Drata, Secureframe, and Paramify expose the same operational work under product names. Those names are mapped onto our objects below. Where a product has a workflow the language does not have, this API does not invent a resource for it.
+The HTTP API speaks the exact object model defined in RFC 0001: every endpoint accepts and returns RFC 0001 objects, paginated lists of them, or computed views produced directly by the kernel. Commercial GRC platforms—Vanta, Drata, Secureframe, and Paramify—all manage the same core operational concepts under proprietary names. [Section 2](#2-how-existing-grc-apis-map-to-ogrl) maps those APIs onto OGRL resources, and [Section 5](#5-workflows-intentionally-left-out-of-the-api) explains why workflows outside the RFC 0001 language do not get ad-hoc routes.
 
-The API is the only writer of an organization's database, as in RFC 0003. The library commands of `ogrc` do not call it. Organization commands on the CLI, once they exist, do, as in RFC 0003. The web application does not recompute status.
+As established in [RFC 0003](0003-application.md), this API is the sole writer to an organization's database. Library-building CLI commands operate locally without it, future organization CLI commands call it, and the Next.js frontend renders its responses without recomputing status.
 
-## 2. What the other products actually expose
+## 2. How existing GRC APIs map to OGRL
 
-The public APIs, read in November 2026, group the same way.
+A survey of public commercial GRC APIs (as of November 2026) shows strong structural convergence across the same underlying operational work:
 
-| Work | Vanta | Drata | Secureframe | Paramify | OpenGRC resource |
+| Operational concept | Vanta | Drata | Secureframe | Paramify | OGRL resource(s) |
 |---|---|---|---|---|---|
-| Practice the org implements | Control, with owner and implementation notes | Control, with owners, requirements, tests, evidence | Control (read) | Requirement on an element | `control` plus `implementation` |
-| Publication the practice is judged against | Framework and its controls | Requirements and reports | Framework | Target framework on a project | `framework`, `requirement`, `baseline`, `program` |
-| Crosswalk | Control-to-document and control-to-test links | Control linked to requirement ids | Implicit in the product | Control mappings on an issue | `mapping`, `mapping_review` |
-| Check | Test, with status, owner, failing items | Monitor and test | Test, create and update | Validator, pass fail or partial | `test`, `result` |
-| Proof | Document upload, then submit | Evidence library, file on a control or a person | Evidence on a test | Evidence set, then artifact upload | `evidence` and its content |
-| Mandate | Policy document | Policy linked from a control | Knowledge base, separate from policy | Policies as a generated deliverable | `policy`, `procedure` |
-| What might go wrong | Risk scenario and its controls | Risk | Vendor risk, separate from issues | Issue, with risk and milestones | `risk` |
-| Waiver | Deactivated test | Archived or disabled control | Archived vendor or connection | Deviation | `exception`, or `revoked` on the object |
-| Assessor's call | Not a public resource | Not a public resource | Not a public resource | Assessment and assessment cycle | `finding`, and `GET` status at a date |
-| Inherited service | Vendor and its documents | Vendor, review, sub-processor | Vendor and integration connection | Element | `party`, `component`, provider bundle |
-| Who owns it | User | Personnel and user | User | Person on an issue | `party` |
-| Package out | Not the public control API | Report | Test export | `GET /issues/oscal`, SSP, POA&M | Render job |
+| Practice the org runs | Control (with owner & notes) | Control (with owners, reqs, tests, evidence) | Control (read-only) | Requirement on an element | `control` + `implementation` |
+| Standard judged against | Framework & controls | Requirements & reports | Framework | Target framework on project | `framework`, `requirement`, `baseline`, `program` |
+| Crosswalk | Control-to-document / test links | Control linked to requirement IDs | Implicit | Control mappings on an issue | `mapping`, `mapping_review` |
+| Recurring check | Test (status, owner, failing items) | Monitor & test | Test (create & update) | Validator (pass / fail / partial) | `test`, `result` |
+| Audit proof | Document upload + submit | Evidence library on control/person | Evidence on a test | Evidence set + artifact upload | `evidence` + content route |
+| Written mandate | Policy document | Policy linked to control | Knowledge base (separate) | Generated policy deliverable | `policy`, `procedure` |
+| Risk tracking | Risk scenario & controls | Risk | Vendor risk (separate from issues) | Issue with risk & milestones | `risk` |
+| Formal waiver | Deactivated test | Archived/disabled control | Archived vendor/connection | Deviation | `exception`, or `revoked` |
+| Assessor judgment | Not exposed publicly | Not exposed publicly | Not exposed publicly | Assessment & cycle | `finding` + point-in-time status |
+| Inherited service | Vendor & documents | Vendor, review, sub-processor | Vendor & integration | Element | `party`, `component`, provider bundle |
+| Owner / actor | User | Personnel & user | User | Person on an issue | `party` |
+| Export package | Not in public control API | Report | Test export | `GET /issues/oscal`, SSP, POA&M | Render job |
 
-Paramify is the closest on the federal side. An issue is their POA&M line, a deviation is a waiver, an element is a component, and an evidence set is the container an artifact is uploaded to. Vanta and Drata are the closest on the commercial side. A control there is what we split into a library `control` and an `implementation`, because the practice is shared and the narrative belongs to one system.
+On the federal side, Paramify aligns closely: its *issues* map to risks/POA&M lines, *deviations* to exceptions, *elements* to components, and *evidence sets* to evidence records. On the commercial side, Vanta and Drata bundle what OGRL deliberately separates into a reusable `control` and a system-specific `implementation`, keeping shared practices cleanly decoupled from per-system narratives.
 
-## 3. Rules
+## 3. API rules
 
-**The body is the object.** Field names are the language. The API does not rename `control_ref` to `controlId`. Clients that want a joined view use the computed routes.
+**Request and response bodies are native OGRL objects.** Field names match RFC 0001 verbatim—the API never renames `control_ref` to `controlId`. Callers that want pre-joined dashboards use dedicated computed-view endpoints rather than mutated object schemas.
 
-**Pages are cursors.** A list takes `limit` (default 50, maximum 200) and `cursor`. The response is `{ "data": [], "page": { "next_cursor": } }`. `next_cursor` is omitted on the last page. Filters are query parameters and match the way those products slice a program: by system, control, framework, status, owner, and a date.
+**Cursor pagination.** List endpoints accept `limit` (default `50`, maximum `200`) and `cursor`, returning `{ "data": [...], "page": { "next_cursor": "..." } }` with `next_cursor` omitted on the final page. Query filters mirror real operational slices: by system, control, framework, status, owner, and date.
 
-**Writes send `If-Match`.** The value is the object's current `modified` timestamp. A stale writer receives 412. Create does not send it. The server sets `created`, `modified`, and `spec_version`. The client may supply `id` when it is a UUID or a domain slug it controls. The server mints a UUID when `id` is omitted. An id in the standard-library slug space is rejected.
+**Optimistic concurrency with exact `If-Match`.** Every update requires an `If-Match` header matching the object's current `modified` timestamp; stale writes fail with `412 Precondition Failed`. `modified` advances strictly on every write with fractional-second precision so even back-to-back writes within the same second produce distinct values. Creates omit `If-Match`: the server sets `created`, `modified`, and `spec_version`, accepts a client-supplied UUID or domain-prefixed slug for `id` (minting a UUID if omitted), and rejects any `id` in the reserved standard-library namespace.
 
-**A write body takes the whole envelope.** Besides the fields of its type, every create and update accepts `tags`, `external_references`, `extensions`, and `lang`. A field the server does not know is stored and returned, which is the round-trip rule in RFC 0001. The server models keep unknown fields. They do not drop them.
+**Full-envelope writes with round-trip preservation.** Every create and update accepts the common envelope fields (`tags`, `external_references`, `extensions`, `lang`) alongside type-specific fields. Unrecognized fields are persisted and returned verbatim in accordance with RFC 0001's round-trip guarantee.
 
-**`If-Match` is exact.** `modified` changes on every write, carries fractional seconds, and is strictly later than the value before it. Two writes in the same second have different values.
+**Immutability of results and complete evidence.** `result` objects have no `PATCH` route. On `evidence`, `PATCH` may always update `name` and `tags`, and may update remaining fields only before content bytes are uploaded; once complete, attempting to mutate fields frozen by RFC 0001 returns `409 Conflict`. Corrections require revoking the record and creating a new one.
 
-**Results and complete evidence do not change.** There is no `PATCH` on a result. `PATCH` on evidence changes `name` and `tags`, and, until the content is uploaded, the rest. After that the fields RFC 0001 freezes return 409. A correction is a revoke and a new object.
+**True point-in-time evaluation.** Passing `at` in the past evaluates status against the historical object revisions and pins that were in force at `at` (RFC 0002 section 4), never against today's edited objects.
 
-**Past status uses past objects.** `at` in the past is computed from the revisions in force at `at`, as in RFC 0002 section 4. It is not today's objects against an old date.
+**Revoke instead of delete.** Because RFC 0001 forbids reusing IDs, there are no `DELETE` endpoints on graph objects. `POST /{collection}/{id}/revoke` marks `revoked: true` and returns the updated object (fulfilling what Drata calls archiving and Vanta calls deactivating). List queries hide revoked items by default unless `revoked=true` is passed.
 
-**Revoke, do not delete.** RFC 0001 says a revoked id is never reused. `POST /{collection}/{id}/revoke` sets `revoked: true` and returns the object. Lists hide revoked objects unless `revoked=true`. There is no `DELETE`. Drata's archive and Vanta's deactivate are this operation when the thing being archived is one of our objects.
+**Read-only projections.** Library rows and imported provider rows cannot be mutated (`PATCH` returns `409 Conflict`). Organizations accept or reject library mappings via `mapping_review` and supply their half of shared controls by creating an organization `implementation` with `system_ref`.
 
-**Library rows and provider rows are read-only.** `PATCH` on one returns 409. A judgment about a library mapping is a `mapping_review`. A customer's half of a shared control is a new `implementation` with `system_ref`, which RFC 0001 already prefers over the inherited row.
+**Asynchronous jobs for long-running work.** Library pulls, provider imports, test runs, renders, Git exports, and restores return `202 Accepted` with a `job` resource that callers poll via `GET /jobs/{id}`. Completed jobs point to the resulting object ID or rendered artifact.
 
-**Long work is a job.** A test run, a library pull, a provider import, a render, a git export, and a restore return 202 and a `job`. The client polls `GET /jobs/{id}`. The job's product is an object id or a file, not a second copy of the rules.
+**Nested lists stay on their parent.** Milestones live on `risk`, parameters on `control`, and parts/objectives on `requirement`—callers patch the parent object rather than hitting sub-routes for individual list items. Entities with independent identities and lifecycles (`exception`, `finding`, `result`, `evidence`) are top-level collections.
 
-**Nested lists stay on the parent.** Milestones live on the risk. Parameters live on the control. Parts and objectives live on the requirement. Paramify exposes milestones as their own routes. We patch the risk. A new exception, finding, result, or evidence is its own object because it has its own id and lifecycle.
+**Computed status is a view.** `GET /programs/{id}/status` executes the kernel's RFC 0001 section 8 evaluation at `at` and returns both control statuses (`met`, `gap`, `waived`, `out_of_scope`) and requirement coverage. Clients render this payload directly and never reimplement status logic.
 
-**Status is a view.** `GET /programs/{id}/status` is the kernel's section 8 computation for that program at `at`. The words `met`, `gap`, `waived`, and `out_of_scope` are not stored. Requirement coverage uses the same call. The screen and any other client render this payload. They do not recompute it.
+**Binary content uses dedicated side routes.** `POST /evidence/{id}/content` (and the equivalent routes for `policy` and `procedure`) uploads artifact bytes to object storage, populates `resource.uri` and `resource.digest`, and returns the updated object; `GET .../content` streams the bytes back. OGRL objects never inline binary payloads. Recurring collection schedules live on tests, policies, and procedures rather than on a separate "evidence set" type, and `GET /evidence?implementation_id=...` provides the full artifact history.
 
-**Bytes are a side route.** `POST /evidence/{id}/content`, and the same for a policy or a procedure, stores the file, sets `resource.uri` and `resource.digest`, and returns the object. `GET` of that content returns the bytes. The object never contains them. This is Paramify's artifact upload and Vanta's document upload, without a separate evidence-set type. The recurring request is the test, the policy, or the procedure. Each collection is a new `evidence` object, and `GET /evidence?implementation_id=` is the history.
+## 4. Operating a program through the API
 
-## 4. How a program is operated
+A complete end-to-end compliance workflow maps cleanly onto these endpoints (`PUT` is not used):
 
-These are the calls behind the screens those products have, in our resources.
+1. **Pull the library:** `POST /library/pull` loads a pinned revision of the OGRL standard library.
+2. **Import providers:** `POST /providers` ingests a vendor's provider bundle or OSCAL component definition; `PATCH /systems/{id}` attaches the component via `component_refs`.
+3. **Bind a program:** `POST /programs` pairs a `system` with a library baseline or a custom baseline created via `POST /baselines` (`GET /baselines/{id}/effective` returns the resolved baseline after `extends_ref`).
+4. **Document implementations:** `POST /implementations` records how a system carries out a control; `PATCH` updates narratives, statuses, and parameter values.
+5. **Author and run tests:** `POST /tests` registers an executable check methodology; `POST /tests/{id}/runs` schedules execution on the harness.
+6. **Attach evidence:** Automated test runs emit evidence automatically; manual uploads use `POST /evidence` followed by `POST /evidence/{id}/content`.
+7. **Record exceptions and findings:** `POST /exceptions` waives an implementation; `POST /findings` records an assessor's objective determination.
+8. **Track remediation:** `PATCH /risks/{id}` updates risk treatment and remediation milestones.
+9. **Monitor readiness:** `GET /programs/{id}/summary` and `GET /programs/{id}/status` power dashboards and readiness checks.
+10. **Export packages:** `POST /programs/{id}/renders` with `view: oscal` generates the RFC 0002 OSCAL package (profile, SSP, mapping collection, component definition, assessment results, and POA&M), and `POST /exports/git` triggers a Git snapshot.
 
-1. `POST /library/pull` loads a revision of this repository.
-2. `POST /providers` imports a provider bundle or an OSCAL component definition. `PATCH /systems/{id}` adds the component to `component_refs`.
-3. `POST /programs` binds a system to a baseline. That is a library baseline, or one the organization wrote with `POST /baselines` to add custom controls or to choose its own requirements. `GET /baselines/{id}/effective` is the baseline after `extends_ref` is applied, which is what status is computed against.
-4. `PUT` is not used. `POST /implementations` records how the system carries out a control. `PATCH` updates the narrative, the status, and parameter values.
-5. `POST /tests` is an organization's methodology. `POST /tests/{id}/runs` asks the harness to execute it.
-6. `POST /evidence` and `POST /evidence/{id}/content` attach a file a person uploaded. A run creates evidence itself.
-7. `POST /exceptions` waives an implementation. `POST /findings` records an assessor's determination.
-8. `PATCH /risks/{id}` keeps the treatment and the milestones.
-9. `GET /programs/{id}/summary` and `GET /programs/{id}/status` are the readiness view.
-10. `POST /programs/{id}/renders` with `view: oscal` produces the profile, SSP, mapping collection, component definition, assessment results, and POA&M from RFC 0002. `POST /exports/git` writes the snapshot.
+Two specialized workflows round out the surface:
 
-`POST /restore` is the other direction, once: it loads a snapshot into a database that has no organization objects, as in RFC 0002 section 8.1. It returns 409 on a database that has any. It is not a way to edit a program from git.
+- **One-time restore:** `POST /restore` bootstraps an empty organization database from a snapshot (RFC 0002 section 8.1) and returns `409 Conflict` if any organization objects already exist.
+- **Custom crosswalks and reviews:** `POST /mappings` creates an organization-authored crosswalk (superseding any library mapping for the same pair during status evaluation without mutating the library), while `POST /mapping-reviews` accepts or rejects library mappings.
 
-`POST /mappings` is for a crosswalk the organization authors. It does not edit the library. When it names a source and target the library also maps, the organization's mapping replaces the library's in this organization's status, which is how a different relationship is recorded. `POST /mapping-reviews` accepts or rejects a library mapping for this organization.
+## 5. Workflows intentionally left out of the API
 
-## 5. Workflows this API does not grow a resource for
+Commercial GRC suites expose several adjacent domains that RFC 0001 deliberately excludes. Adding API endpoints without backing language objects would fork the data model, so these remain out of scope:
 
-RFC 0001 leaves these out of the language. The products have them. Adding a route without an object would create a second model.
-
-| Their feature | Why it waits |
+| Commercial feature | Why OGRL omits it |
 |---|---|
-| Personnel, HRIS match, background checks, training completion per person | A `party` can own an implementation. A training record is evidence on the control that requires training. A personnel directory with compliance checks is a different product. |
-| Devices, cloud resources, repositories, asset scope per framework | Inventory is a CMDB. A result may name a subject. The subject is not an asset record. |
-| Vendor questionnaires, security reviews, renewal calendars, sub-processor registers | A subservice party, a component, and a provider bundle are the inherited-control case. A vendor register is the non-goal RFC 0001 already names. |
-| Trust center and security questionnaires | A public marketing site and a questionnaire workflow. The program data they would publish is already `GET /programs/{id}/status`. |
-| Tickets in Jira or ServiceNow | A connector can create evidence or read a ticket later. The ticket is not an object. |
-| Per-product integration catalogs | Connectors are the port in RFC 0003. `GET /connectors` lists what this deployment installed. There is no `/integrations/aws`. |
+| HRIS sync, employee rosters, background checks, per-person training | A `party` represents ownership, and training completion is simply `evidence` on the relevant control; a full HR compliance directory is a separate product. |
+| Device, cloud resource, and repository asset inventories | Asset inventory belongs in a CMDB. Results may cite inline `subjects` without promoting them to managed asset records. |
+| Vendor questionnaires, renewal calendars, sub-processor portals | Inherited controls are modeled via `subservice` parties, `component`s, and provider bundles; full TPRM is an explicit non-goal of RFC 0001. |
+| Public trust centers and security questionnaires | External marketing/sales workflows; any live program metrics they need already come from `GET /programs/{id}/status`. |
+| Jira / ServiceNow ticketing | Future connectors may read tickets or attach evidence from them, but tickets are not OGRL objects. |
+| Vendor-specific integration routes (`/integrations/aws`) | Connectors plug into the RFC 0003 connector port; `GET /connectors` lists installed connectors generically. |
 
 ## 6. Errors
 
-Errors are `application/problem+json`. `type` is a URN.
+All error responses use RFC 9457 Problem Details (`application/problem+json`) with a URN `type`:
 
-| Status | When |
+| HTTP status | Meaning |
 |---|---|
-| 400 | The body or a query parameter violates the schema or a graph constraint. |
-| 401 | No bearer token. |
-| 403 | The token is not allowed this action. The permission model is not in this revision. See open questions. |
-| 404 | The id is unknown. |
-| 409 | The object is a library or provider row, or the id is already in use. |
-| 412 | `If-Match` does not equal `modified`. |
-| 415 | A content upload is not the media type the route accepts. |
+| `400 Bad Request` | Request body or query parameter fails schema validation or violates an RFC 0001 graph constraint. |
+| `401 Unauthorized` | Missing or invalid bearer token. |
+| `403 Forbidden` | Authenticated token lacks permission for this action (role model deferred; see [Section 7](#7-open-questions)). |
+| `404 Not Found` | Referenced object ID does not exist. |
+| `409 Conflict` | Attempted write against a read-only library/provider row, frozen evidence field, duplicate ID, or non-empty database during restore. |
+| `412 Precondition Failed` | `If-Match` does not match the object's current `modified` timestamp. |
+| `415 Unsupported Media Type` | Uploaded content uses a media type the endpoint does not accept. |
 
 ## 7. Open questions
 
-1. **Authentication.** The spec requires a bearer token and does not say how it is issued. Accounts were deferred in RFC 0001. The next revision of this API names the token exchange and the organization it selects.
-2. **Authorization.** Vanta and Drata scope tokens to actions such as "list controls." We have not named roles. Until we do, a token may call every route on this server, and the server is one organization.
-3. **Webhooks.** Those products notify a failing test to Slack or a ticket. A subscription resource is easy to add and hard to deliver reliably. It waits until a caller asks for it.
-4. **Partial update shape.** `PATCH` is a merge of the fields sent. Arrays replace. Sending `milestones` replaces the whole list. JSON Merge Patch (RFC 7386) is the default. JSON Patch is more precise and worse to author.
+1. **Authentication:** The API requires a bearer token without yet specifying token issuance or multi-tenant organization selection (deferred with user accounts in RFC 0001 and slated for the next API revision).
+2. **Authorization:** Commercial APIs scope tokens to fine-grained capabilities (such as read-only control listing). Until OGRL defines formal roles—including the dedicated permission for writing executable `test.run` blocks ([RFC 0003 section 5](0003-application.md#5-ports))—a valid token can invoke any route on a single-organization server.
+3. **Webhooks:** Event notifications (such as alerting Slack or opening a ticket on test failure) are straightforward to model as subscriptions but non-trivial to deliver reliably; they wait until concrete callers need them.
+4. **Partial update semantics:** `PATCH` currently defaults to JSON Merge Patch (RFC 7386), where sent fields merge and arrays replace wholesale (sending `milestones` replaces the entire list). JSON Patch (RFC 6902) offers finer-grained array edits at the cost of a much noisier authoring experience.

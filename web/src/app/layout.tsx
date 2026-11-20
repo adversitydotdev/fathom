@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 const spectral = Spectral({ variable: "--font-spectral", subsets: ["latin"], weight: ["400", "500"] });
 
 export const metadata: Metadata = {
-  title: { default: "OpenGRC", template: "%s · OpenGRC" },
+  title: { default: "OGRL", template: "%s · OGRL" },
   description: "Run a security program on an open object model.",
 };
 

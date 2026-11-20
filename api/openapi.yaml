@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: OpenGRC API
+  title: OGRL API
   version: 0.1.0
-  summary: HTTP API for one organization's OpenGRC program.
+  summary: HTTP API for one organization's OGRL program.
   description: |
     Resources are the objects in RFC 0001. Computed routes return views the
     kernel derives and does not store. The design notes, including how Vanta,
@@ -3012,8 +3012,8 @@ components:
       properties:
         type:
           type: string
-          description: A URN such as `urn:opengrc:problem:library-object`.
-          examples: ["urn:opengrc:problem:bad-request"]
+          description: A URN such as `urn:ogrl:problem:library-object`.
+          examples: ["urn:ogrl:problem:bad-request"]
         title:
           type: string
         status:
@@ -3051,7 +3051,7 @@ components:
       properties:
         id:
           type: string
-          examples: ["bundle--ogrc-library"]
+          examples: ["bundle--ogrl-library"]
         version:
           type: string
         commit:
@@ -3078,14 +3078,14 @@ components:
           type: string
         kind:
           type: string
-          enum: [opengrc, oscal-component]
+          enum: [ogrl, oscal-component]
     ProviderImportRequest:
       type: object
       required: [kind, url]
       properties:
         kind:
           type: string
-          enum: [opengrc, oscal-component]
+          enum: [ogrl, oscal-component]
         url:
           type: string
           format: uri

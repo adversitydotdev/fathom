@@ -1,7 +1,7 @@
 import pytest
 
-from opengrc.access import ActorKind, Permission, Principal, Role, StaticPolicy
-from opengrc.access.roles import RoleDefinition
+from ogrl.access import ActorKind, Permission, Principal, Role, StaticPolicy
+from ogrl.access.roles import RoleDefinition
 
 policy = StaticPolicy()
 

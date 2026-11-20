@@ -1,16 +1,18 @@
-# OpenGRC
+# OGRL
 
-OpenGRC is an open language for a security program, and later a self-hosted application for running one.
+OGRL (Open GRC Language) is an open language for a security program, and later a self-hosted application for running one.
 
-A company runs one program. SOC 2, ISO 27001, HIPAA, NIST, and CMMC ask overlapping questions under different identifiers. That overlap usually lives in a vendor's private control library, so the program cannot leave the tool, and two tools cannot agree about the same evidence. OpenGRC publishes the library and the mapping rules. A control, a mapping, or a piece of evidence can move on its own. A tool can implement part of the model and still interoperate.
+A company runs one program. SOC 2, ISO 27001, HIPAA, NIST, and CMMC ask overlapping questions under different identifiers. That overlap usually lives in a vendor's private control library, so the program cannot leave the tool, and two tools cannot agree about the same evidence. OGRL publishes the library and the mapping rules. A control, a mapping, or a piece of evidence can move on its own. A tool can implement part of the model and still interoperate.
 
 People author YAML they can review. Status is computed from implementations, parameters, fresh results, and unexpired evidence, so two dashboards reading the same bundle reach the same answer. A mapping that covers only part of a requirement says so.
 
-This repository is the source of truth for the shared library. Once an organization loads a revision, their database is the source of truth for their program. A scheduled export writes a git snapshot, and the running tool does not read it back. A provider can publish what a service inherits, and a customer does not retype it. The same program renders to OSCAL when a government customer needs that package.
+The shared standard library lives in [`adversitydotdev/ogrl-library`](https://github.com/adversitydotdev/ogrl-library) (browsable at [ogrl.adversity.dev/library](https://ogrl.adversity.dev/library/)). Once an organization pulls a pinned library revision, their database is the source of truth for their program. A scheduled export writes a git snapshot, and the running tool does not read it back. A provider can publish what a service inherits, and a customer does not retype it. The same program renders to OSCAL when a government customer needs that package.
 
-- [RFC 0001: Object model](docs/rfcs/0001-object-model.md) (draft)
-- [RFC 0002: Tooling and sources of truth](docs/rfcs/0002-tooling.md) (draft)
-- [RFC 0003: Application architecture](docs/rfcs/0003-application.md) (draft)
+Language specifications live in the sibling `ogrl-rfcs` repository; application design docs live in this repo:
+
+- RFC 0001: OGRL Object Model (`ogrl-rfcs/rfcs/0001-object-model.md`)
+- RFC 0002: Tooling and Sources of Truth (`ogrl-rfcs/rfcs/0002-tooling.md`)
+- [RFC 0003: Application Architecture](docs/rfcs/0003-application.md) (draft)
 - [RFC 0004: HTTP API](docs/rfcs/0004-http-api.md) (draft), contract in [api/openapi.yaml](api/openapi.yaml)
 
 ## Estimated monthly cost
@@ -48,33 +50,28 @@ That account is [deploy/aws/template.yaml](deploy/aws/template.yaml). The first 
 
 ```
 aws ssm put-parameter \
-  --name /opengrc/opengrc/database/password \
+  --name /ogrl/ogrl/database/password \
   --type SecureString \
   --value 'replace-with-at-least-16-characters'
 
 aws cloudformation deploy \
   --template-file deploy/aws/template.yaml \
-  --stack-name opengrc \
+  --stack-name ogrl \
   --capabilities CAPABILITY_IAM
 ```
 
-The password cannot contain a slash, an at-sign, a quote, or a space. The stack name `opengrc` is the path on the log groups and the SSM prefix. After rotating the password, deploy again with `DatabasePasswordVersion` set to the new SSM version so the database picks it up.
+The password cannot contain a slash, an at-sign, a quote, or a space. The stack name `ogrl` is the path on the log groups and the SSM prefix. After rotating the password, deploy again with `DatabasePasswordVersion` set to the new SSM version so the database picks it up.
 
-## Import NIST catalogs
+## Standard Library & CLI Toolchain
 
-`ogrc import nist` reads the pinned OSCAL catalogs for SP 800-53 Rev 5 and SP 800-171 Rev 3 and writes `framework`, `requirement`, and draft `mapping` files under `library/`.
+Catalog import, strict YAML 1.2 linting/formatting, bundle packing, and OSCAL 1.2.3 rendering are provided by [`adversitydotdev/ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) (consumed in-process via the `ogrl-rs` Python wheel and available as the standalone `ogrl` CLI).
 
-```
-go run ./cmd/ogrc import nist --out library
-```
+```bash
+# Regenerate pinned NIST SP 800-53 Rev 5 and SP 800-171 Rev 3 catalogs (with assessment objectives)
+ogrl import nist --out ../ogrl-library/library
 
-Import a single catalog from a file:
-
-```
-go run ./cmd/ogrc import oscal \
-  --catalog path/to/catalog.json \
-  --framework-id nist-sp-800-53-r5 \
-  --out library
+# Validate strict YAML 1.2 authoring rules and RFC 0001 §7.20 constraints
+ogrl lint ../ogrl-library/library --profile library
 ```
 
-Pass `--resolve-catalog` and `--resolve-framework` when that catalog cites another one by control label, the way SP 800-171 cites SP 800-53.
+By default, `OGRL_LIBRARY_REPO` pulls from `https://github.com/adversitydotdev/ogrl-library` (or uses a local `../ogrl-library/library` checkout during development).

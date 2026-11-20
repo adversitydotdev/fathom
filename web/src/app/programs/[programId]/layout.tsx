@@ -19,7 +19,7 @@ export default function ProgramLayout({ children, params }: LayoutProps<"/progra
           {apiMocking && (
             <span
               className="rounded-full border border-waived/40 bg-waived-soft px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-waived-ink uppercase"
-              title="OPENGRC_API_MOCKING=enabled: /v1 is served from src/mocks"
+              title="OGRL_API_MOCKING=enabled: /v1 is served from src/mocks"
             >
               Fixtures · no auth
             </span>

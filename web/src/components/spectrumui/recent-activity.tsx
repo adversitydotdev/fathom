@@ -2,7 +2,7 @@
 
 /**
  * From Spectrum UI's `recent-activity` (Apache-2.0,
- * https://ui.spectrumhq.in/docs/recent-activity). OpenGRC changes: unique row
+ * https://ui.spectrumhq.in/docs/recent-activity). OGRL changes: unique row
  * keys, no `font-inter`, no entrance animation, mono uppercase header to
  * match the app's section labels.
  */
@@ -190,7 +190,7 @@ export function RecentActivity({
           {items.map((item, index) => (
             <motion.div
               key={`${item.title}-${index}`}
-              // OpenGRC: no entrance animation. Upstream starts rows at opacity 0
+              // OGRL: no entrance animation. Upstream starts rows at opacity 0
               // and reveals them in view, which leaves the list blank in a
               // background tab or before hydration.
               initial={false}

@@ -3,25 +3,25 @@
 # S3-compatible store for the evidence bucket.
 #
 #   docker compose up -d
-#   OPENGRC_DATABASE_URL=postgresql://opengrc:opengrc@localhost:5432/opengrc \
-#   OPENGRC_S3_ENDPOINT=http://localhost:8333 OPENGRC_S3_BUCKET=opengrc \
-#   AWS_ACCESS_KEY_ID=opengrc AWS_SECRET_ACCESS_KEY=opengrc-secret uv run opengrc
+#   OGRL_DATABASE_URL=postgresql://ogrl:ogrl@localhost:5432/ogrl \
+#   OGRL_S3_ENDPOINT=http://localhost:8333 OGRL_S3_BUCKET=ogrl \
+#   AWS_ACCESS_KEY_ID=ogrl AWS_SECRET_ACCESS_KEY=ogrl-secret uv run ogrl
 
-name: opengrc
+name: ogrl
 
 services:
   postgres:
     image: postgres:18
     environment:
-      POSTGRES_USER: opengrc
-      POSTGRES_PASSWORD: opengrc
-      POSTGRES_DB: opengrc
+      POSTGRES_USER: ogrl
+      POSTGRES_PASSWORD: ogrl
+      POSTGRES_DB: ogrl
     ports:
       - "5432:5432"
     volumes:
       - postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U opengrc -d opengrc"]
+      test: ["CMD-SHELL", "pg_isready -U ogrl -d ogrl"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -42,13 +42,13 @@ services:
     image: amazon/aws-cli:2.27.0
     depends_on: [s3]
     environment:
-      AWS_ACCESS_KEY_ID: opengrc
-      AWS_SECRET_ACCESS_KEY: opengrc-secret
+      AWS_ACCESS_KEY_ID: ogrl
+      AWS_SECRET_ACCESS_KEY: ogrl-secret
       AWS_DEFAULT_REGION: us-east-1
     entrypoint: >
       sh -c "for i in $$(seq 1 30); do
-               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket opengrc 2>/dev/null && exit 0;
-               aws --endpoint-url http://s3:8333 s3api create-bucket --bucket opengrc && exit 0;
+               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket ogrl 2>/dev/null && exit 0;
+               aws --endpoint-url http://s3:8333 s3api create-bucket --bucket ogrl && exit 0;
                sleep 1;
              done; exit 1"
 

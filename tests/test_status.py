@@ -2,13 +2,13 @@
 
 from datetime import UTC, datetime, timedelta
 
-from opengrc.kernel import status
-from opengrc.kernel.graph import Graph
-from opengrc.kernel.models import parse
+from ogrl.kernel import status
+from ogrl.kernel.graph import Graph
+from ogrl.kernel.models import parse
 from tests.conftest import AC2, AC3, C1, C2, LIB_BASELINE, LIB_TEST, STAMP, Api, library_objects
 
-AC2_A = "mapping--ogrc-ac-01_to_nist-sp-800-53-r5-ac-2_part_a"
-AC2_J = "mapping--ogrc-ac-02_to_nist-sp-800-53-r5-ac-2_part_j"
+AC2_A = "mapping--ogrl-ac-01_to_nist-sp-800-53-r5-ac-2_part_a"
+AC2_J = "mapping--ogrl-ac-02_to_nist-sp-800-53-r5-ac-2_part_j"
 
 
 def states(api: Api, program_id: str, at: datetime | None = None):
@@ -396,7 +396,7 @@ def test_evidence_without_valid_until_does_not_meet():
 
 
 def test_requirement_override_without_parameter_map():
-    from opengrc.kernel.parameters import requirement_value
+    from ogrl.kernel.parameters import requirement_value
 
     impl = parse(
         {

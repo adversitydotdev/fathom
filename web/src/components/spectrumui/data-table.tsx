@@ -2,7 +2,7 @@
 
 /**
  * From Spectrum UI's `data-table` (Apache-2.0,
- * https://ui.spectrumhq.in/docs/data-table). OpenGRC change: `hideBelow`
+ * https://ui.spectrumhq.in/docs/data-table). OGRL change: `hideBelow`
  * uses container queries on the table instead of viewport breakpoints.
  */
 
@@ -400,7 +400,7 @@ const DETAIL_COL = 40;
 const SELECT_COL = 48;
 const MIN_COL = 72;
 
-// OpenGRC: container queries instead of viewport breakpoints, so a table
+// OGRL: container queries instead of viewport breakpoints, so a table
 // beside the app sidebar hides columns by its own width. Thresholds match
 // Tailwind's sm/md/lg (40/48/64rem).
 const HIDE_BELOW = {

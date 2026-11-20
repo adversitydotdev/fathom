@@ -1558,8 +1558,8 @@ export interface components {
     schemas: {
         Problem: {
             /**
-             * @description A URN such as `urn:opengrc:problem:library-object`.
-             * @example urn:opengrc:problem:bad-request
+             * @description A URN such as `urn:ogrl:problem:library-object`.
+             * @example urn:ogrl:problem:bad-request
              */
             type: string;
             title: string;
@@ -1580,7 +1580,7 @@ export interface components {
             status: "ok";
         };
         LibraryPin: {
-            /** @example bundle--ogrc-library */
+            /** @example bundle--ogrl-library */
             id: string;
             version: string;
             commit?: string;
@@ -1596,11 +1596,11 @@ export interface components {
             version: string;
             digest?: string;
             /** @enum {string} */
-            kind?: "opengrc" | "oscal-component";
+            kind?: "ogrl" | "oscal-component";
         };
         ProviderImportRequest: {
             /** @enum {string} */
-            kind: "opengrc" | "oscal-component";
+            kind: "ogrl" | "oscal-component";
             /** Format: uri */
             url: string;
             version?: string;

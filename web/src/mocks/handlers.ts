@@ -13,7 +13,7 @@ type Filters<T> = Record<string, (item: T, value: string) => boolean>;
 
 export function problem(status: number, slug: string, title: string, detail?: string) {
   return HttpResponse.json(
-    { type: `urn:opengrc:problem:${slug}`, title, status, detail },
+    { type: `urn:ogrl:problem:${slug}`, title, status, detail },
     { status, headers: { "Content-Type": "application/problem+json" } },
   );
 }

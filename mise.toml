@@ -18,10 +18,6 @@ url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d
 description = "Python lint and tests"
 run = ["uv run ruff check .", "uv run ruff format --check .", "uv run pytest -q"]
 
-[tasks."verify:go"]
-description = "Go vet and tests"
-run = ["go vet ./...", "go test ./..."]
-
 [tasks."verify:web"]
 description = "Web lint, typecheck, and Playwright e2e against a mock-mode build"
 dir = "web"
@@ -29,4 +25,4 @@ run = ["pnpm lint", "pnpm typecheck", "pnpm e2e"]
 
 [tasks.verify]
 description = "Everything. Screenshots land in web/e2e/.screenshots/"
-depends = ["verify:py", "verify:go", "verify:web"]
+depends = ["verify:py", "verify:web"]

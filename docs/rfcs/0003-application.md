@@ -1,221 +1,207 @@
-# RFC 0003: Application architecture
+# RFC 0003: Application Architecture
 
-| | |
+| Field | Value |
 |---|---|
 | Status | Draft |
 | Spec version | 0.1.0 |
 | Date | 2026-11-09 |
-| Depends on | [RFC 0001](0001-object-model.md), [RFC 0002](0002-tooling.md) |
+| Depends on | RFC 0001, RFC 0002 (`ogrl-rfcs`) |
 
-This document is the proposal for how the OpenGRC application is built. It is written so it can be edited in place. The open questions at the end are the spots most likely to move during review.
-
-RFC 0001 is the language. RFC 0002 is which copy of an object is authoritative. This RFC is the processes that read and write those copies, the agents that write them, and the web application in front of them.
+RFC 0001 defines the OGRL language and RFC 0002 establishes where each copy of an object is authoritative (both published in `ogrl-rfcs`). This RFC specifies the runtime architecture of the self-hosted OGRL application: its process boundaries, pure Python kernel, agent guardrails, plugin ports, persistence layer, web frontend, observability, and cost-conscious production AWS deployment. Open questions are collected in [Section 12](#12-open-questions).
 
 ## 1. Summary
 
-One Python kernel computes the graph. The objects are Pydantic models of the language. The CLI, the API, and the agents call that kernel. The web application is Next.js and speaks only HTTP. In production that process and the web application run as one small Fargate task in the organization's own AWS account. The repository provisions the account. The idle bill is the constraint, so the stack does not add a private network, a second service, or a database that cannot sleep.
+At the center of OGRL sits a single pure-Python **kernel** built on Pydantic models of the RFC 0001 schema. The CLI, the FastAPI server, and AI agents all invoke that same kernel so no two entry points can disagree on validation, parameter resolution, or computed status. The web frontend is a Next.js application that communicates strictly over HTTP and renders status computed by the API.
 
-An agent is another caller, not a layer beside the product. It uses the same functions the API uses, and it can only emit an object the kernel would accept. Status stays a function of the objects and a date. A model does not decide that a control is met.
+In production, the entire stack is designed to self-host inside the organization's own AWS account as a single small ARM Fargate task backed by a single `db.t4g.micro` Postgres instance—provisioned directly from the OGRL repository's CloudFormation template. Because a small team's compliance platform spends most of its life idle, minimizing the **idle monthly bill** is a first-order architectural constraint: the default topology deliberately avoids NAT gateways, load balancers, RDS Proxy, and databases with high minimum floors.
 
-Extensions are importers, renderers, runners, and connectors. They consume objects and produce objects. They do not replace the status rules. In-tree extensions are Python packages imported by the application. An organization-supplied runner or connector is a subprocess that speaks the JSON objects from RFC 0001.
+AI agents are ordinary callers rather than a privileged sidecar layer. They use the exact same use-case functions as the HTTP API, can write only objects the kernel validates, and are blocked in code from crossing human judgment boundaries—a language model never marks a control `met`.
+
+Extensibility works through four typed ports (importers, renderers, runners, and connectors) that consume and produce RFC 0001 objects without ever overriding status computation. Built-in extensions ship as Python packages; organization-supplied runners and connectors run out-of-process as language-agnostic JSON subprocesses.
 
 ## 2. Processes
 
-| Process | Language | Role |
+| Process | Stack | Responsibility |
 |---|---|---|
-| `ogrc` | Python | Writes the exchange library in this repository. Calls the kernel and writes files. No server, and no organization database. |
-| `opengrc` | Python | The API, the job runner, and the agents, in one process. The only writer of an organization's database. |
-| Web application | TypeScript, Next.js | The screen. Reads and writes through the API. |
+| `ogrl` (library CLI) | Python | Builds and validates the shared library in the OGRL repository via the kernel; requires no server or organization database. |
+| `ogrl` (server) | Python | Runs the FastAPI HTTP server, background job runner, scheduler, and agents in a single process—the sole writer to the organization's Postgres database. |
+| Web frontend | TypeScript, Next.js | User interface; reads and writes exclusively through the HTTP API. |
 
-A person self-hosts `opengrc` and the web application. The CLI imports the same kernel the API imports, so the two cannot disagree about a bundle.
+Self-hosting requires only the `ogrl` server process and the web frontend. Because the CLI and API import the exact same kernel package, they share identical bundle semantics. Future CLI commands that operate on an organization's live program will call the HTTP API rather than connecting to Postgres directly, keeping all RFC 0002 invariants enforced behind a single writer.
 
-Organization commands on the CLI, once they exist, call the API. They do not open Postgres themselves. Two writers of the database would split the rules RFC 0002 puts in one place.
+**Background jobs and scheduling.** Long-running operations defined in [RFC 0004](0004-http-api.md)—library pulls, provider imports, test runs, renders, Git exports, restores, and connector collections—are persisted as job rows and return `202 Accepted` immediately so HTTP requests never block on subprocess execution.
 
-A job is the unit of work from RFC 0004: a library pull, a provider import, a test run, a render, a git export, a restore, or a connector run. The API records the job and returns 202. A shell test is a subprocess, so a long run does not hold the request open. The schedules in RFC 0002 are a loop in the process whose environment has `OPENGRC_RUN_SCHEDULER=true`. In the default deployment that is the API process. When the job service is on, the API process sets it false and the job process sets it true. The job process claims a row before it runs the row, so a second process does not take the same job. `OPENGRC_QUEUE_URL` is empty unless the queue is enabled. When it is set, the API sends the job id after it writes the row, and the scheduler process receives that message. The message does not replace the claim. A second delivery finds the row already owned. A message the worker does not delete returns after two hours, and after five returns it sits on the dead-letter queue.
+- Periodic schedules from RFC 0002 run in whichever process sets `OGRL_RUN_SCHEDULER=true` (the combined API process in the default single-task deployment, or the dedicated job service when `EnableJobService` is enabled).
+- Workers atomically claim a job row before executing it, preventing duplicate execution across concurrent processes.
+- `OGRL_QUEUE_URL` is unset by default. When SQS wakeups are enabled, the API enqueues the job ID after writing the row and workers receive it as a hint; the database claim remains authoritative so redeliveries safely no-op. Unacknowledged messages become visible again after two hours and move to a dead-letter queue after five deliveries.
 
-`OPENGRC_PROCESS` is `api` or `jobs`. The web process reads `OPENGRC_API_ORIGIN`, which is `http://127.0.0.1:8080`, and forwards `/v1` and `/health` there. `OPENGRC_SSM_PREFIX` is the Parameter Store prefix. The database password is injected from `database/password`. A deployment that terminates TLS on the task reads `tls/certificate` and `tls/private-key`. A model key, when one is configured, is `model/api-key`. Harness values are under `harness/`.
+**Process environment.** `OGRL_PROCESS` selects `api` or `jobs`. The Next.js frontend reads `OGRL_API_ORIGIN` (default `http://127.0.0.1:8080`) and proxies `/v1` and `/health` to the API container inside the same task. `OGRL_SSM_PREFIX` locates Parameter Store secrets: `database/password`, optional task-terminated TLS material (`tls/certificate`, `tls/private-key`), optional LLM key (`model/api-key`), and test-harness credentials under `harness/`.
 
-The API is [FastAPI](https://fastapi.tiangolo.com/). It serves the Pydantic models and the routes in [RFC 0004](0004-http-api.md). The hand-written [api/openapi.yaml](../../api/openapi.yaml) is the contract the models implement.
+The HTTP server uses [FastAPI](https://fastapi.tiangolo.com/) implementing the hand-authored OpenAPI contract ([api/openapi.yaml](../../api/openapi.yaml)) and [RFC 0004](0004-http-api.md).
 
 ## 3. Kernel
 
-The kernel is a Python package. Its models are the objects in RFC 0001. It loads a bundle, checks the graph constraints, resolves parameters, and computes status for an evaluation date the caller passes in. Status is a function of the objects and that date.
+The kernel is a self-contained Python package containing the Pydantic object models, bundle loader, graph-constraint validator, parameter resolver, and RFC 0001 section 8 status evaluator. Status is a pure function of an object graph and an evaluation timestamp.
 
-The kernel does not open a network connection, a database, a shell, or a model client. HTTP, SQL, the `shell` runner, and the agents live outside it. A test of the kernel is a bundle plus a date, with no network.
+The kernel performs **zero I/O**: it never opens network sockets, database sessions, subprocesses, or model clients. HTTP routing, SQL persistence, the `shell` runner, and agent orchestration all live outside it, so kernel unit tests run deterministically in milliseconds on an in-memory bundle and date.
 
-`cmd/ogrc` and `internal/oscalimport` are the current NIST importer, in Go. That importer moves into the Python importer port. Until the port exists, `go run ./cmd/ogrc import` remains the way this repository is regenerated.
+Heavy parsing, parallel graph linting, library diffs, and OSCAL 1.2.3 import/render operations are backed by [`ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) (`ogrl_rs` PyO3 wheel), sharing the exact same Rust core as the standalone `ogrl` CLI that builds and validates [`ogrl-library`](https://github.com/adversitydotdev/ogrl-library).
 
 ## 4. Agents
 
-Agents are how the application drafts and proposes changes to a program. [Pydantic AI](https://ai.pydantic.dev/) is the agent runtime. A tool on an agent is a kernel function or an application use-case with a Pydantic input and a Pydantic output. Structured output that fails validation is not written.
+OGRL uses [Pydantic AI](https://ai.pydantic.dev/) for agent workflows that draft narratives, propose crosswalks, or gather operational context. Every tool exposed to an agent wraps a kernel function or application use case with typed Pydantic inputs and outputs; malformed structured outputs fail validation before reaching storage.
 
-The dependency runs one way. The agent package imports the kernel. The kernel does not import the agent package, and it does not know which model is configured.
+Dependencies flow strictly in one direction: the agent package imports the kernel, never the reverse, and the kernel has no awareness of whether any LLM is configured.
 
-An agent writes the same objects a person writes, through the same functions. There is no suggestion table. The language already has the gates:
+**No parallel suggestion tables.** Agents write ordinary RFC 0001 objects through the same write paths humans use, relying on the language's built-in review gates:
 
-| What the agent did | What the object records |
+| Agent action | Resulting object state |
 |---|---|
-| Drafted a mapping | `review_status: draft` until a person reviews it, or a `mapping_review` accepts a library mapping. |
-| Drafted an implementation narrative | The implementation stays `planned` until a person marks it `implemented`. |
-| Recorded a result or evidence | A normal `result` or `evidence`, with `created_by_ref` pointing at the agent's `party`. |
+| Proposing a crosswalk | `mapping` with `review_status: draft` until reviewed by a human (or accepted via `mapping_review`). |
+| Drafting an implementation narrative | `implementation` with `status: planned` until a human promotes it to `implemented`. |
+| Recording a test result or artifact | Standard `result` or `evidence` with `created_by_ref` set to the agent's `party` ID. |
 
-`created_by_ref` is that party. The party is the agent as a member of the organization, so the history of the object says who produced it. A person accepts the work by the ordinary edit, the same way they would accept another person's draft.
+Representing the agent as an organization `party` makes provenance transparent in `created_by_ref` and the revision log; accepting a draft is simply a normal human edit.
 
-Customer-facing coverage still uses reviewed mappings only. An agent cannot set a library mapping to `reviewed`. That field on a library row is read-only here, as in RFC 0004.
+**Hard-coded write gates.** Because agents ingest untrusted external text—provider bundles, uploaded evidence, and policy documents—that could carry prompt injections, restrictions are enforced unconditionally in application code rather than in prompts. Whenever the caller is an agent, the server refuses:
 
-The gates in that table are enforced, not left to the agent's prompt. The application knows when the caller is an agent, and refuses these writes from one:
+- Any `implementation.status` other than `planned`.
+- Setting `review_status: reviewed` on a `mapping`, creating a `mapping_review`, or setting `combined_with_refs` (and library rows remain read-only per RFC 0004).
+- Creating or modifying an `exception`, a `finding`, an `adopted` policy or procedure, or an `accepted` risk.
+- Creating or editing a `test.run` block (an agent may still trigger runs of human-authored tests).
+- Revoking any object.
 
-- An implementation `status` other than `planned`.
-- `review_status: reviewed` on a mapping, a `mapping_review`, or `combined_with_refs`.
-- An `exception`, a `finding`, a policy or procedure with `status: adopted`, or a risk with `status: accepted`.
-- A `run` block on a test, or a change to one. An agent may ask for a run of a test whose `run` block a person wrote.
-- A revoke.
+Each blocked operation represents either formal human accountability or arbitrary command execution. Agents read the graph exclusively through the standard API query functions—including `GET /programs/{id}/status`—and never recompute status independently.
 
-Each of those is a person's judgment or a command that will execute. An agent drafts the object up to that line, and a person crosses it. The agent reads provider bundles, evidence, and policy text, and any of them can carry instructions meant for it. The refusals hold whatever the agent was told.
-
-The agent reads the program through the same functions the API uses: an object, a page, and `GET /programs/{id}/status`. It does not recompute status, and it does not get a private copy of the graph.
-
-Which model provider is configured is an operational choice of the deployment. The kernel's results do not change when the provider changes. A deployment with no model configured runs the API, the harness, and the imports. The agents are absent. The objects are the same.
+Model provider selection is purely a deployment setting and cannot alter kernel outputs. A deployment with no model configured omits agents cleanly while running the full API, harness, and import/export workflows identically.
 
 ## 5. Ports
 
-The kernel calls four ports. It does not implement them. A port is a Python protocol. The packages we ship are imported by the application.
+External capabilities plug into the core through four Python `Protocol` interfaces. Built-in implementations ship in-tree and are imported directly by the application:
 
-| Port | In | Out | Shipped as |
+| Port | Input | Output | Packaging |
 |---|---|---|---|
-| Importer | Catalog or component-definition bytes | Objects | In-process. NIST catalogs first. OSCAL component definitions next. |
-| Renderer | A graph and a view name | Files | In-process. The git snapshot and the OSCAL package from RFC 0002. |
-| Runner | A test, an implementation, and a secret handle | A `result` and `evidence` | `shell` in-process. An organization-defined runner is a subprocess. |
-| Connector | A collection job | `evidence` | Subprocess, when a connector exists. |
+| **Importer** | Catalog or component-definition bytes | OGRL objects | In-process (NIST OSCAL catalogs first, OSCAL component definitions next). |
+| **Renderer** | Object graph + view name | Rendered files | In-process (Git snapshot and OSCAL 1.2.3 package from RFC 0002). |
+| **Runner** | `test`, `implementation`, and secret handle | `result` and `evidence` | `shell` runner in-process; custom organization runners as subprocesses. |
+| **Connector** | Collection job specification | `evidence` | Subprocess (when installed). |
 
-The secret handle names the variables from `run.env`. The runner asks the harness for values. Values are not fields on the test, which is the rule already in RFC 0001.
+The secret handle resolves only the variable names declared in `test.run.env`; secret values never appear inside test objects.
 
-A runner subprocess is a different principal from the application. The harness starts it as a separate operating-system user, with an environment that holds the `run.env` values and the `OGRC_` variables and nothing else. It does not receive the database credential, the application's cloud credentials, or another test's secrets, and it cannot read the application's process environment. It writes evidence by leaving files in its scratch directory. The harness, not the script, stores them. A script that needs to reach a cloud account is given credentials for that purpose under `harness/`, scoped by the organization.
+**Credential isolation for runners.** The harness spawns runner subprocesses under a dedicated OS user with a scrubbed environment containing *only* the requested `run.env` variables and `OGRL_*` metadata variables. Subprocesses never inherit database credentials, the API's AWS IAM credentials, or secrets belonging to other tests, and cannot inspect the API process environment. Scripts emit evidence by writing files to their scratch directory, which the harness hashes and uploads. Scripts requiring cloud access receive dedicated, narrowly scoped credentials stored under `harness/` in Parameter Store.
 
-This is separation of credentials. It is not a sandbox. The script still shares the task's network and kernel, and an organization that does not trust its test authors runs the job service so the scripts are at least off the API task. Who may write a `run` block is therefore a permission in its own right, and it is one of the first the authorization design in RFC 0004 has to name.
+Note that this provides **credential separation**, not a kernel or network sandbox: scripts still share the task's network namespace and kernel. Organizations that do not fully trust test authors should enable the dedicated job service (`EnableJobService`) to isolate script execution from the API task, and RFC 0004 treats permission to author `run` blocks as its own privileged capability.
 
-A plugin that computed status, resolved parameters, or changed what a mapping relationship means would make two installations disagree about the same bundle. Those functions stay in the kernel. There is no registration point for them. An agent is not a fifth port. It calls the ports and the kernel. It does not replace them.
+**Non-extensible core.** Status computation, parameter resolution, and mapping semantics are deliberately not pluggable—allowing plugins to override them would break cross-installation determinism. Agents are callers of the kernel and ports, not a fifth port.
 
 ## 6. Subprocess plugins
 
-An organization-defined runner or a connector is a separate program. `opengrc` starts it, writes a JSON request to stdin, and reads JSON objects from stdout. The request and the response use the objects from RFC 0001. The kernel validates the response with the same checks it uses on a file, and rejects a response that does not pass.
+Organization-supplied runners and connectors run as standalone executables rather than in-process Python plugins, keeping third-party code outside the API's address space.
 
-Secrets arrive as environment variables the harness sets for that process. The request names the variables. It does not carry the values.
+`ogrl` spawns the executable, writes a JSON request containing RFC 0001 objects to `stdin`, and reads RFC 0001 JSON objects from `stdout`. Required secrets are injected exclusively via environment variables (the request payload carries variable names, never values). Every returned object passes through the exact same kernel validator used for files and HTTP writes.
 
-The program can be written in any language that reads and writes JSON. A failed process, a timeout, or an object the kernel rejects becomes a `result` with `outcome: error`. The harness records that result and continues with the next test.
-
-In-process plugins from outside this repository are out of scope. A connector the organization chose still runs beside the API, not inside its address space.
+Plugins may be written in any language capable of speaking JSON over stdio. Any non-zero crash, timeout, or schema validation failure is captured as a `result` with `outcome: error` so the harness logs the failure and moves on cleanly to the next test.
 
 ## 7. Persistence
 
-Postgres holds the organization database from RFC 0002. Each object is stored as its canonical JSON. Columns beside that JSON are id, type, organization, and the references the API filters on. Those columns are derived from the object. A write updates the JSON and the columns together.
+Organization databases run on **PostgreSQL**. Each object is persisted as canonical JSON inside a `jsonb` column, flanked by derived indexed columns (`id`, `type`, organization scope, and common filter references) updated atomically in the same write.
 
-The tables are [SQLModel](https://sqlmodel.tiangolo.com/) models over SQLAlchemy's async engine, with the asyncpg driver. Each stored object is a row whose JSON goes in a `jsonb` column. A row model is not a kernel model. The kernel's Pydantic objects do not import SQLModel, and the row models live only in the persistence package. That package converts an object to a row and back.
+Table definitions use [SQLModel](https://sqlmodel.tiangolo.com/) over SQLAlchemy's async engine (`asyncpg`), isolated strictly inside the `persistence/` package. Kernel Pydantic models never import SQLModel; the persistence layer handles all row-to-object translation. Application operations declare repository protocols rather than accepting raw sessions or row models, allowing unit tests to run against an in-memory repository implementation.
 
-An operation does not see a session or a row. It depends on a repository protocol it declares, and the Postgres repository is one implementation of that protocol. An in-memory implementation of the same protocol serves the tests.
+**Optimistic concurrency (`If-Match`).** Updates enforce concurrency atomically inside SQL (`UPDATE ... WHERE id = :id AND modified = :expected`), returning HTTP `412 Precondition Failed` when zero rows match so racing writers can never overwrite each other silently.
 
-`If-Match` is enforced in the update itself: `UPDATE ... WHERE id = :id AND modified = :expected`. An update that matches no row is 412. The check and the write are one statement, so two writers cannot both pass it.
+**Migrations and blobs.** Schema changes ship exclusively as reviewed [Alembic](https://alembic.sqlalchemy.org/) migration scripts; the server never mutates tables automatically on startup. Binary artifacts (evidence blobs, policy/procedure bodies, and rendered archives) live in object storage (S3 on AWS), while Postgres stores only their `resource.uri` and `resource.digest`.
 
-The schema changes through [Alembic](https://alembic.sqlalchemy.org/) migrations. A migration is a file in the repository that a person reviews. The application does not create or alter tables when it starts.
-
-Evidence bytes, policy and procedure bodies, and render files live in object storage. The API stores the object, including `resource.uri` and `resource.digest`. On AWS that storage is the S3 bucket the stack provisions.
-
-The web application never opens Postgres. `ogrc` never opens it either. An agent reaches the database only through the application functions that write objects.
+Neither the Next.js web app nor the `ogrl` CLI ever connects directly to Postgres, and agents access storage only through the application's validated write functions.
 
 ## 8. Web application
 
-The web application is Next.js and TypeScript. It renders what the API returns. Status on the screen is the status the API computed. The browser does not recompute it. The routes are [RFC 0004](0004-http-api.md) and [api/openapi.yaml](../../api/openapi.yaml).
+The frontend is a Next.js and TypeScript application that acts purely as a presentation layer over [RFC 0004](0004-http-api.md) ([api/openapi.yaml](../../api/openapi.yaml)). It renders computed statuses returned by the API without duplicating evaluation logic in the browser.
 
-Components come from [Spectrum UI](https://ui.spectrumhq.in/). Spectrum is an open-source set of React components built with Next.js, Tailwind CSS, Motion, TypeScript, and shadcn/ui. We copy a component's source into the repository and adapt it. The application does not take a runtime dependency on the Spectrum package. shadcn/ui and Tailwind stay because Spectrum's components are written against them.
+UI primitives are sourced from [Spectrum UI](https://ui.spectrumhq.in/) (built on Tailwind CSS, Motion, TypeScript, and shadcn/ui), vendored directly into the repository so components can be tailored without taking a runtime dependency on Spectrum.
 
-The first screens are the ones a program already has objects for: the system, the controls in the baseline and their computed status, an implementation, and the evidence on it. Landing pages, marketing blocks, and animated decoration wait until a screen needs them.
+Initial views focus strictly on operating a live program—system overview, baseline controls with computed status, implementations, tests, and evidence—leaving marketing pages and visual flourish out of the application. Views surface `created_by_ref` clearly so reviewers can distinguish agent-authored drafts from human edits and accept them via standard editing flows.
 
-The web process owns the task's public port. Without a load balancer it listens on 443 and terminates TLS, so that process has to be allowed to bind 443. With a load balancer it listens on 3000 and the load balancer terminates TLS. Either way it forwards `/v1` and `/health` to the API on the same task.
-
-A screen shows `created_by_ref` so a person can see which drafts an agent produced. Accepting a draft is the ordinary edit of that object.
+**Ingress.** The web container owns the task's public port: listening on `443` with direct TLS termination when deployed without a load balancer, or `3000` behind an ALB when `EnableLoadBalancer` is enabled. In both modes it proxies `/v1` and `/health` to the API container over loopback.
 
 ## 9. Production topology
 
-The production deployment runs in the organization's own cloud account. The repository ships the infrastructure description for that account. AWS is the first target. A second cloud is another description of the same bindings, not a fork of the application.
+OGRL ships an AWS CloudFormation template ([deploy/aws/template.yaml](../../deploy/aws/template.yaml)) so each organization deploys cleanly into its own cloud account. Additional cloud providers will ship as alternate infrastructure templates implementing the same bindings rather than forks of the application.
 
-This is one organization's program, used by a small team, with bursts of test runs and exports. The bill that matters is the idle bill. A design that splits the API, the workers, a private network, and a database that cannot sleep costs more while it sits still than it costs while it works.
+**Designing for the idle bill.** A small team's GRC tool sees modest interactive traffic punctuated by periodic test runs and exports. Typical "enterprise defaults" in `us-east-1` burn substantial idle spend before handling a single request—roughly $33/month for a NAT gateway, ~$45/month for Aurora Serverless v2's 0.5 ACU floor, ~$11/month for RDS Proxy, and ~$7/month per AZ for interface VPC endpoints—none of which improve reliability for a low-traffic compliance app.
 
-The idle pieces, at rough on-demand prices in us-east-1, are a NAT gateway at about $33 a month before any bytes, Aurora Serverless v2 at a 0.5 ACU floor of about $45 a month, RDS Proxy at about $11 a month, and each interface VPC endpoint at about $7 a month per availability zone. None of that scales the product. A compliance program does not have the traffic that pays those floors back. S3, SES, and a short Fargate task are cheap. The network and the database floor are not.
+The baseline topology therefore runs one compact task and one single-AZ database:
 
-The deployed shape is one small task and one small database.
-
-| Port | AWS binding | What it is for |
+| Capability | Default AWS binding | Role |
 |---|---|---|
-| Compute | One Fargate task, Linux/ARM, 0.25 vCPU and 1 GB to start | `opengrc` and the Next.js server, two containers in that task. The API, the scheduler, the harness, and the agents share it. ARM matches `db.t4g` and is the rate in the cost table. |
-| Database | RDS for PostgreSQL, `db.t4g.micro`, one availability zone | The organization database. Raise the class when the disk or the CPU says so. |
-| Object storage | One private S3 bucket | Evidence bytes, policy and procedure bodies, render files. |
-| Secrets | SSM Parameter Store | The database credential, the model provider key, and the harness environment values. |
-| Mail | SES | Operational mail. The domain identity is created by the stack and does not send until the organization verifies it. |
-| Logs | CloudWatch Logs | The task's output, as structured JSON. Traces are off unless an endpoint is configured (section 11). |
+| Compute | 1 Linux/ARM Fargate task (`0.25 vCPU`, `1 GB`) | Runs both `ogrl` (API, scheduler, harness, agents) and Next.js in one task so vCPU/RAM are billed once; ARM aligns with `db.t4g`. |
+| Database | RDS PostgreSQL `db.t4g.micro`, single-AZ, `20 GB` gp3 | Organization database; scales vertically via template parameters when needed. |
+| Object storage | Private S3 bucket | Evidence blobs, policy/procedure bodies, and rendered packages. |
+| Secrets | SSM Parameter Store | Database password, TLS material, optional LLM API key, and `harness/` credentials. |
+| Mail | SES | Operational alerts (failed jobs, diverged Git exports) and future auth mail. |
+| Logs | CloudWatch Logs | Structured JSON logs from stdout (traces disabled unless configured; [Section 11](#11-observability)). |
 
-At US East (N. Virginia) on-demand list rates on 9 November 2026, that stack is $26.26 a month while idle. The line items, the 730-hour month, and what the total leaves out are in the [README](../../README.md#estimated-monthly-cost). The same table is the number a later change to this topology has to beat.
+At US East (N. Virginia) on-demand list pricing as of 9 November 2026, this baseline idles at **$26.26/month** (full itemization and exclusions are maintained in the [README](../../README.md#estimated-monthly-cost)), which serves as the cost benchmark for future changes.
 
-The default has no load balancer, no NAT gateway, no RDS Proxy, no Aurora, no SQS, and no interface endpoint. The task sits in a public subnet with a public address so it can reach a git remote and a model provider. The database sits in a private subnet and accepts connections only from the task's security group. TLS terminates on the task. CloudFront and an application load balancer are upgrades, not the starting bill.
+By default there is no ALB, NAT gateway, RDS Proxy, Aurora, SQS, or interface VPC endpoint. The Fargate task runs in a public subnet so it can reach Git remotes and LLM APIs directly while terminating TLS itself; RDS sits in a private subnet reachable only from the task's security group.
 
-A shell test is a subprocess of that task, so the API keeps serving. Growth is a parameter on [deploy/aws/template.yaml](../../deploy/aws/template.yaml).
+**Opt-in scaling knobs.** Every upgrade is an explicit parameter in `deploy/aws/template.yaml`:
 
-| What is tight | Parameter | Default |
+| Bottleneck or need | Template parameter(s) | Default and upgrade path |
 |---|---|---|
-| The task | `TaskSize` | `small`, 0.25 vCPU and 1 GB. Then `medium` (0.5 vCPU, 2 GB), `large` (1 vCPU, 2 GB), `xlarge` (2 vCPU, 4 GB), `2xlarge` (4 vCPU, 8 GB). |
-| The database | `DatabaseInstanceClass`, `DatabaseAllocatedStorage` | `db.t4g.micro` and 20 GB. Storage may grow on its own up to `DatabaseMaxAllocatedStorage` (100). |
-| Jobs waiting on each other | `EnableJobService` | `false`. A second task of the same image, with its own public address and still no NAT. The schedule moves to that task. |
-| A public address that changes whenever the task is replaced | `EnableLoadBalancer`, `CertificateArn` | `false`. The load balancer terminates TLS and is the stable name. The task keeps a public address for git and the model provider. |
-| Outbound calls should not come from the task's own address | `EnableNatGateway` | `false`. One NAT gateway. Tasks move to the private subnet. A free S3 gateway endpoint keeps evidence off the NAT. Once services are started this requires the load balancer, because the tasks no longer have public addresses. |
-| Many tasks holding database connections | `EnableRdsProxy` | `false`. RDS Proxy pools connections. The proxy reads the database password from Secrets Manager, so the template copies it there. |
-| A worker should be woken instead of polling | `EnableQueue` | `false`. An SQS queue and a dead-letter queue. The job row is still the record of the work. |
+| CPU or memory headroom | `TaskSize` | `small` (0.25 vCPU / 1 GB) → `medium` (0.5 / 2 GB) → `large` (1 / 2 GB) → `xlarge` (2 / 4 GB) → `2xlarge` (4 / 8 GB). |
+| Database capacity | `DatabaseInstanceClass`, `DatabaseAllocatedStorage` | `db.t4g.micro`, `20 GB` (auto-scales storage up to `DatabaseMaxAllocatedStorage`, default `100 GB`). |
+| Long jobs contending with API | `EnableJobService` | `false`. Spins up a second task from the same image (public subnet, no NAT) and shifts scheduling there. |
+| Stable hostname across task replacements | `EnableLoadBalancer`, `CertificateArn` | `false`. Adds an ALB terminating TLS while tasks retain public egress. |
+| Private tasks / static egress | `EnableNatGateway` | `false`. Moves tasks into private subnets behind one NAT gateway with a free S3 gateway endpoint (requires `EnableLoadBalancer` when services are enabled). |
+| Connection pooling across many tasks | `EnableRdsProxy` | `false`. Adds RDS Proxy and mirrors the DB credential to Secrets Manager as required by the proxy. |
+| Event-driven worker wakeups | `EnableQueue` | `false`. Adds SQS + DLQ while keeping the Postgres job row authoritative. |
 
-Raise the task and the database before adding the job task. Add the load balancer when the service needs a name that survives a replacement. The default public address is the task's, and it changes when the task is replaced.
+Operators should size up `TaskSize` and the RDS instance before splitting out a job service, and enable the load balancer once a stable DNS name across task replacements is required.
 
-SES is for mail the application sends: a scheduled job that failed, and an export that stopped because the remote diverged. Authentication mail uses the same port once accounts exist. The stack does not invent a second notification product. A new SES account can send only to verified addresses until AWS grants production access. The template does not request that access.
+**Deployment lifecycle and mail.** Applying `deploy/aws/template.yaml` provisions networking, RDS, S3, ECR repositories, task definitions, IAM roles, and an SES domain identity (when a domain is provided; exiting the SES sandbox remains an account-level operator step). `EnableServices` defaults to `false` so the first deploy provisions ECR before images are pushed. Because CloudFormation cannot synthesize SecureStrings, operators write `database/password` (and `tls/certificate` / `tls/private-key` when terminating TLS on the task) under the stack's SSM prefix prior to the first apply.
 
-The infrastructure lives in the repository as a CloudFormation template, [deploy/aws/template.yaml](../../deploy/aws/template.yaml). Applying it provisions the network, the database, the bucket, the image repositories, the task definition, SES when a domain is set, and the IAM those need. `EnableServices` stays false until the images have been pushed, so the first apply does not start a task. It does not upload the organization's evidence, and it does not choose their model provider. Those are configuration after apply. The database password is a SecureString the operator writes at `database/password` under the stack's SSM prefix before the first apply. CloudFormation cannot create a SecureString, so it reads that parameter when it creates the database. The certificate and key for TLS on the task are `tls/certificate` and `tls/private-key` under the same prefix.
-
-A developer still runs `opengrc` as one process against a local Postgres. The kernel tests do not need any of the cloud.
+Local development requires none of AWS: `ogrl` runs as a single process against local Postgres, and kernel tests run completely in memory.
 
 ## 10. Repository layout
 
-This layout is the target. `cmd/ogrc` and `internal/oscalimport` are the Go importer that this layout replaces.
+Structure of the OGRL application repository (with the shared standard library in `adversitydotdev/ogrl-library` and the Rust core/CLI in `adversitydotdev/ogrl-rs`):
 
 ```text
-opengrc/
-  kernel/        # models, graph, parameters, status
-  importer/      # importer port and the NIST importer
-  renderer/      # git snapshot and OSCAL
-  runner/        # shell runner
-  agent/         # Pydantic AI agents and their tools
+ogrl/
+  kernel/        # Pydantic models, graph validation, parameter resolution, status
+  importer/      # Importer port and NIST / OSCAL component importers
+  renderer/      # Git snapshot and OSCAL 1.2.3 renderers
+  runner/        # Built-in shell runner
+  agent/         # Pydantic AI agents and typed tool wrappers
   persistence/   # SQLModel rows, Postgres repositories, Alembic migrations
-  telemetry.py   # the only module that imports logfire
-  api/           # FastAPI application, including the in-process job runner
-  cli/           # ogrc
-web/             # Next.js application
-deploy/aws/      # CloudFormation for the production topology
+  telemetry.py   # Sole module importing logfire
+  api/           # FastAPI application and in-process job runner
+  cli/           # ogrl CLI
+web/             # Next.js frontend
+deploy/aws/      # CloudFormation template for production AWS deployment
 ```
 
-Connectors are not a directory until one exists. A subprocess connector lives in its own project.
+Subprocess connectors live in their own independent repositories rather than inside this tree.
 
 ## 11. Observability
 
-Code that logs uses the standard library's `logging`. The kernel and the operations do not import a telemetry vendor.
+Application code emits logs through Python's standard `logging` module; neither the kernel nor operations import any observability vendor directly.
 
-Traces and logs go through the [Logfire](https://logfire.pydantic.dev/) SDK. The SDK is MIT-licensed and is built on OpenTelemetry. It instruments FastAPI, SQLAlchemy, asyncpg, httpx, and Pydantic AI, so a request, its queries, and an agent run share one trace. `opengrc/telemetry.py` is the only module that imports `logfire`. The process calls it once at startup. Removing Logfire is a change to that one module.
+Structured logging and distributed tracing are wired once at process startup inside `ogrl/telemetry.py` using the MIT-licensed OpenTelemetry-based [Logfire](https://logfire.pydantic.dev/) SDK, which auto-instruments FastAPI, SQLAlchemy, `asyncpg`, `httpx`, and Pydantic AI so an HTTP request, its SQL queries, and any agent invocation correlate under a single trace. Confining the import to one module makes swapping telemetry backends trivial.
 
-The Logfire SDK does not require the hosted Logfire service. Where telemetry goes is configuration:
+Telemetry destination is purely runtime configuration and never requires the hosted Logfire service:
 
-| Setting | Where telemetry goes |
+| Environment setting | Destination |
 |---|---|
-| Nothing set | Structured JSON on stdout, which CloudWatch Logs collects. No traces are exported. |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | Any OTLP backend the organization runs, such as Grafana, SigNoz, or Jaeger. |
-| `LOGFIRE_TOKEN` | Hosted Logfire, for an organization that chooses to pay for it. |
+| *(none — default)* | Structured JSON to stdout (collected by CloudWatch Logs); no trace export. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | Any self-hosted or third-party OTLP collector (Grafana, SigNoz, Jaeger, etc.). |
+| `LOGFIRE_TOKEN` | Hosted Logfire, for teams opting into it. |
 
-The default is the first row. A collector container in the task, or an exporter that bills while idle, is an upgrade the operator turns on, like `EnableLoadBalancer`. It is not in the starting bill in section 9.
+Running an extra collector sidecar or paid exporter stays opt-in so it never inflates the baseline idle bill in [Section 9](#9-production-topology).
 
 ## 12. Open questions
 
-1. **Authentication.** Accounts are still out of scope, as in RFC 0001. The API will have a boundary for the signed-in organization before any screen writes an implementation. The mechanism is a later RFC. SES is already in the stack for the day that mechanism sends mail. Until it exists, the API is not safe on a public address: creating a test and running it is command execution on the task, and nothing checks the caller. The topology in section 9 puts the task on a public address, so `EnableServices` stays false outside a private test until this is settled.
-2. **Model provider.** The agent runtime is Pydantic AI, which can talk to more than one provider. Which provider a deployment uses, and whether the model runs in the organization's network, is an operational choice. It is not a kernel choice.
-3. **A second cloud.** AWS is the first topology. The ports are the same on another cloud. A second CloudFormation template is worth writing when an organization asks for one, and not before.
+1. **Authentication and authorization:** User accounts remain out of scope for `0.1.0` (deferred to a dedicated RFC; SES is already wired into the stack for future auth mail). Because creating and running a `test` executes shell commands on the task, exposing the API publicly without authentication is unsafe—`EnableServices` must remain `false` outside private testing until authentication and `run`-block permissions are in place.
+2. **Model provider selection:** Pydantic AI supports multiple cloud and local model providers; choosing a vendor or self-hosted model remains an operational deployment decision outside the kernel.
+3. **Additional cloud providers:** AWS is the initial deployment target. Because the application binds strictly through portable ports (Postgres, S3-compatible storage, env/secrets, SMTP/SES), templates for GCP or Azure will be authored once real users ask for them.

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from opengrc.adapters.library import DirectoryLibrary
-from opengrc.operations.exports import ExportSettings
+from ogrl.adapters.library import DirectoryLibrary
+from ogrl.operations.exports import ExportSettings
 from tests.conftest import (
     AC2,
     C1,
@@ -33,7 +33,7 @@ def test_pull_pins_and_a_later_revision_revokes_missing_ids(make_app, tmp_path: 
     for o in objects:
         if o["id"] == LIB_BASELINE:
             o["control_refs"] = [C1]
-        if o["id"] == "mapping--ogrc-ac-01_to_nist-sp-800-53-r5-ac-2_part_a":
+        if o["id"] == "mapping--ogrl-ac-01_to_nist-sp-800-53-r5-ac-2_part_a":
             o["modified"] = "2026-11-01T00:00:00Z"
             o["relationship"] = "subset-of"
     objects = [o for o in objects if o.get("source_ref") != C2]
@@ -45,14 +45,14 @@ def test_pull_pins_and_a_later_revision_revokes_missing_ids(make_app, tmp_path: 
     job = admin.post("/library/pull", {"version": "0.1.0"}, expect=202)
     assert job["status"] == "succeeded" and job["report"]["added"] == 10
     assert admin.get("/library") == {
-        "id": "bundle--ogrc-library",
+        "id": "bundle--ogrl-library",
         "version": "0.1.0",
         "commit": "one",
     }
     review = admin.post(
         "/mapping-reviews",
         {
-            "mapping_ref": "mapping--ogrc-ac-01_to_nist-sp-800-53-r5-ac-2_part_a",
+            "mapping_ref": "mapping--ogrl-ac-01_to_nist-sp-800-53-r5-ac-2_part_a",
             "review_status": "reviewed",
         },
     )
@@ -109,7 +109,7 @@ def provider_bundle(path: Path, *, with_row: bool = True) -> Path:
         objects.append(
             {
                 "type": "implementation",
-                "id": "implementation--com.example.cloud-idp-ogrc-ac-01",
+                "id": "implementation--com.example.cloud-idp-ogrl-ac-01",
                 **ENV,
                 "component_ref": "component--com.example.cloud-idp",
                 "control_ref": C1,
@@ -127,7 +127,7 @@ def provider_bundle(path: Path, *, with_row: bool = True) -> Path:
                 **ENV,
                 "name": "Example Cloud IdP",
                 "version": "2026.11",
-                "library": {"id": "bundle--ogrc-library", "version": "0.1.0"},
+                "library": {"id": "bundle--ogrl-library", "version": "0.1.0"},
                 "objects": objects,
             }
         )
@@ -137,11 +137,11 @@ def provider_bundle(path: Path, *, with_row: bool = True) -> Path:
 
 def test_provider_import_is_a_read_only_projection(pulled: Api, program, tmp_path: Path):
     bundle = provider_bundle(tmp_path / "idp.yaml")
-    job = pulled.post("/providers", {"kind": "opengrc", "url": str(bundle)}, expect=202)
+    job = pulled.post("/providers", {"kind": "ogrl", "url": str(bundle)}, expect=202)
     assert job["status"] == "succeeded", job
     pin = pulled.get("/providers/bundle--com.example.cloud-idp")
     assert pin["version"] == "2026.11" and pin["digest"].startswith("sha-256:")
-    row = pulled.get("/implementations/implementation--com.example.cloud-idp-ogrc-ac-01")
+    row = pulled.get("/implementations/implementation--com.example.cloud-idp-ogrl-ac-01")
     assert row["origin"] == "provider"
     problem = pulled.patch(
         f"/implementations/{row['id']}", {"narrative": "x"}, row["modified"], expect=409
@@ -164,7 +164,7 @@ def test_provider_import_is_a_read_only_projection(pulled: Api, program, tmp_pat
 
     # A re-import without the row revokes it and keeps it resolvable.
     provider_bundle(bundle, with_row=False)
-    job = pulled.post("/providers", {"kind": "opengrc", "url": str(bundle)}, expect=202)
+    job = pulled.post("/providers", {"kind": "ogrl", "url": str(bundle)}, expect=202)
     assert job["report"]["revoked"] == [row["id"]]
     assert pulled.get(f"/implementations/{row['id']}")["revoked"] is True
 
@@ -172,13 +172,13 @@ def test_provider_import_is_a_read_only_projection(pulled: Api, program, tmp_pat
 def test_provider_import_refusals(pulled: Api, tmp_path: Path):
     bundle = provider_bundle(tmp_path / "idp.yaml")
     job = pulled.post(
-        "/providers", {"kind": "opengrc", "url": str(bundle), "digest": "sha-256:00"}, expect=202
+        "/providers", {"kind": "ogrl", "url": str(bundle), "digest": "sha-256:00"}, expect=202
     )
     assert job["status"] == "failed" and "sha-256" in job["error"]["detail"]
     data = yaml.safe_load(bundle.read_text())
     data["objects"][0]["id"] = "party--example"  # the library's slug space
     bundle.write_text(yaml.safe_dump(data))
-    job = pulled.post("/providers", {"kind": "opengrc", "url": str(bundle)}, expect=202)
+    job = pulled.post("/providers", {"kind": "ogrl", "url": str(bundle)}, expect=202)
     assert job["status"] == "failed" and "standard-library" in job["error"]["detail"]
 
 
@@ -283,7 +283,7 @@ def test_harness_maps_exit_codes_and_environment(pulled: Api, program):
     result = run_test(
         pulled,
         program,
-        'echo "$IDP_TENANT $OGRC_CONTROL_ID $OGRC_PARAM_SHARED_ACCOUNT_REVIEW"',
+        'echo "$IDP_TENANT $OGRL_CONTROL_ID $OGRL_PARAM_SHARED_ACCOUNT_REVIEW"',
         env=["IDP_TENANT"],
     )
     assert result["outcome"] == "pass"
@@ -378,7 +378,7 @@ def test_renders_produce_downloadable_files(pulled: Api, program):
 
     ssp_job = pulled.post(f"/programs/{program['program']}/renders", {"view": "ssp"}, expect=202)
     text = pulled.client.get(f"/v1/jobs/{ssp_job['id']}/files/ssp.md", headers=pulled.headers).text
-    assert "OGRC-AC-01" in text and "Every person has one IdP account." in text
+    assert "OGRL-AC-01" in text and "Every person has one IdP account." in text
     assert pulled.get("/jobs?type=render")["data"]
 
 
@@ -463,7 +463,7 @@ def test_restore_refuses_a_broken_graph(make_app, tmp_path: Path):
         **ENV,
         "name": "Acme",
         "version": STAMP,
-        "library": {"id": "bundle--ogrc-library", "version": "0.1.0", "commit": "c0ffee"},
+        "library": {"id": "bundle--ogrl-library", "version": "0.1.0", "commit": "c0ffee"},
         "objects": [
             {
                 "type": "program",

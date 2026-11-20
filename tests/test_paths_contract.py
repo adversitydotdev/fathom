@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from opengrc.api.paths import all_endpoints
+from ogrl.api.paths import all_endpoints
 
 SPEC = yaml.safe_load((Path(__file__).parents[1] / "api" / "openapi.yaml").read_text())
 

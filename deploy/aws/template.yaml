@@ -1,6 +1,6 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
-  OpenGRC account. One public Fargate task, a single-AZ PostgreSQL instance,
+  OGRL account. One public Fargate task, a single-AZ PostgreSQL instance,
   a private S3 bucket, and SSM Parameter Store. NAT, RDS Proxy, and SQS are
   off until their parameters are set. Leave EnableServices false until images
   are pushed. TaskSize, EnableJobService, and EnableLoadBalancer are how an
@@ -68,7 +68,7 @@ Parameters:
     Description: Images must be built for this architecture. ARM64 is the priced default.
   RepositoryPrefix:
     Type: String
-    Default: opengrc
+    Default: ogrl
     AllowedPattern: "^[a-z][a-z0-9-]{0,40}$"
     Description: Lowercase prefix for the two ECR repositories, as prefix/api and prefix/web. One pair per account.
   ApiImageTag:
@@ -121,12 +121,12 @@ Parameters:
     Description: Parameter group family. postgres18 for engine 18.x. Keep this on the same major version as DatabaseEngineVersion.
   DatabaseName:
     Type: String
-    Default: opengrc
+    Default: ogrl
     AllowedPattern: "^[a-z][a-z0-9]{0,62}$"
     Description: Initial database name.
   DatabaseUsername:
     Type: String
-    Default: opengrc
+    Default: ogrl
     AllowedPattern: "^[a-z][a-z0-9]{0,62}$"
     Description: Master username.
   DatabasePasswordVersion:
@@ -134,7 +134,7 @@ Parameters:
     Default: "1"
     AllowedPattern: "^[1-9][0-9]*$"
     Description: >
-      Version of the SecureString at /opengrc/STACK/database/password. Create that
+      Version of the SecureString at /ogrl/STACK/database/password. Create that
       parameter before the first deploy. Increment this after rotating it so the
       database password changes. RDS rejects a slash, at-sign, quote, or space.
   DeletionProtection:
@@ -186,7 +186,7 @@ Parameters:
     Default: "false"
     AllowedValues: ["true", "false"]
     Description: >
-      Create an SQS queue and a dead-letter queue. OPENGRC_QUEUE_URL is set to
+      Create an SQS queue and a dead-letter queue. OGRL_QUEUE_URL is set to
       the queue, and empty when this is false. The job row remains the record
       of the work. The message is the wake-up.
   AvailabilityZoneA:
@@ -454,7 +454,7 @@ Resources:
   ApiSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: OpenGRC API and web task
+      GroupDescription: OGRL API and web task
       VpcId: !Ref Vpc
       SecurityGroupEgress:
         - IpProtocol: "-1"
@@ -478,7 +478,7 @@ Resources:
     Condition: JobEnabled
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: OpenGRC job task
+      GroupDescription: OGRL job task
       VpcId: !Ref Vpc
       SecurityGroupEgress:
         - IpProtocol: "-1"
@@ -490,7 +490,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: OpenGRC PostgreSQL
+      GroupDescription: OGRL PostgreSQL
       VpcId: !Ref Vpc
       Tags:
         - Key: Name
@@ -522,7 +522,7 @@ Resources:
     Condition: AlbOn
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: OpenGRC load balancer
+      GroupDescription: OGRL load balancer
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -564,7 +564,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub opengrc-${AWS::AccountId}-${AWS::Region}
+      BucketName: !Sub ogrl-${AWS::AccountId}-${AWS::Region}
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -648,7 +648,7 @@ Resources:
   DatabaseHostParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /opengrc/${AWS::StackName}/database/host
+      Name: !Sub /ogrl/${AWS::StackName}/database/host
       Type: String
       Tier: Standard
       Value: !If [ProxyOn, !GetAtt DatabaseProxy.Endpoint, !GetAtt Database.Endpoint.Address]
@@ -656,7 +656,7 @@ Resources:
   DatabasePortParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /opengrc/${AWS::StackName}/database/port
+      Name: !Sub /ogrl/${AWS::StackName}/database/port
       Type: String
       Tier: Standard
       Value: !GetAtt Database.Endpoint.Port
@@ -664,7 +664,7 @@ Resources:
   DatabaseNameParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /opengrc/${AWS::StackName}/database/name
+      Name: !Sub /ogrl/${AWS::StackName}/database/name
       Type: String
       Tier: Standard
       Value: !Ref DatabaseName
@@ -672,7 +672,7 @@ Resources:
   DatabaseUserParameter:
     Type: AWS::SSM::Parameter
     Properties:
-      Name: !Sub /opengrc/${AWS::StackName}/database/user
+      Name: !Sub /ogrl/${AWS::StackName}/database/user
       Type: String
       Tier: Standard
       Value: !Ref DatabaseUsername
@@ -680,7 +680,7 @@ Resources:
   DatabaseSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: OpenGRC private subnets
+      DBSubnetGroupDescription: OGRL private subnets
       SubnetIds:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
@@ -689,7 +689,7 @@ Resources:
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Family: !Ref DatabaseFamily
-      Description: OpenGRC PostgreSQL
+      Description: OGRL PostgreSQL
       Parameters:
         rds.force_ssl: "1"
 
@@ -703,7 +703,7 @@ Resources:
       DBInstanceClass: !Ref DatabaseInstanceClass
       DBName: !Ref DatabaseName
       MasterUsername: !Ref DatabaseUsername
-      MasterUserPassword: !Sub "{{resolve:ssm-secure:/opengrc/${AWS::StackName}/database/password:${DatabasePasswordVersion}}}"
+      MasterUserPassword: !Sub "{{resolve:ssm-secure:/ogrl/${AWS::StackName}/database/password:${DatabasePasswordVersion}}}"
       DBParameterGroupName: !Ref DatabaseParameterGroup
       DBSubnetGroupName: !Ref DatabaseSubnetGroup
       VPCSecurityGroups:
@@ -728,9 +728,9 @@ Resources:
     Condition: ProxyOn
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub opengrc/${AWS::StackName}/database
+      Name: !Sub ogrl/${AWS::StackName}/database
       SecretString: !Sub
-        - '{"username":"${User}","password":"{{resolve:ssm-secure:/opengrc/${AWS::StackName}/database/password:${Version}}}"}'
+        - '{"username":"${User}","password":"{{resolve:ssm-secure:/ogrl/${AWS::StackName}/database/password:${Version}}}"}'
         - User: !Ref DatabaseUsername
           Version: !Ref DatabasePasswordVersion
 
@@ -764,7 +764,7 @@ Resources:
     Condition: ProxyOn
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: OpenGRC RDS proxy
+      GroupDescription: OGRL RDS proxy
       VpcId: !Ref Vpc
       SecurityGroupIngress:
         - IpProtocol: tcp
@@ -875,19 +875,19 @@ Resources:
   ApiLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /opengrc/${AWS::StackName}/api
+      LogGroupName: !Sub /ogrl/${AWS::StackName}/api
       RetentionInDays: 30
 
   WebLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /opengrc/${AWS::StackName}/web
+      LogGroupName: !Sub /ogrl/${AWS::StackName}/web
       RetentionInDays: 30
 
   JobLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /opengrc/${AWS::StackName}/jobs
+      LogGroupName: !Sub /ogrl/${AWS::StackName}/jobs
       RetentionInDays: 30
 
   ExecutionRole:
@@ -928,7 +928,7 @@ Resources:
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/database/password
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/database/password
               - Effect: Allow
                 Action: kms:Decrypt
                 Resource: "*"
@@ -967,7 +967,7 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                   - ssm:GetParametersByPath
-                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/*
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/*
               - Effect: Allow
                 Action: kms:Decrypt
                 Resource: "*"
@@ -1053,40 +1053,40 @@ Resources:
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
-        - Name: opengrc
+        - Name: ogrl
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApiRepository}:${ApiImageTag}
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
           Environment:
-            - Name: OPENGRC_PROCESS
+            - Name: OGRL_PROCESS
               Value: api
-            - Name: OPENGRC_RUN_SCHEDULER
+            - Name: OGRL_RUN_SCHEDULER
               Value: !If [JobEnabled, "false", "true"]
-            - Name: OPENGRC_BIND
+            - Name: OGRL_BIND
               Value: 0.0.0.0:8080
-            - Name: OPENGRC_TLS
+            - Name: OGRL_TLS
               Value: "false"
-            - Name: OPENGRC_DATABASE_HOST
+            - Name: OGRL_DATABASE_HOST
               Value: !If [ProxyOn, !GetAtt DatabaseProxy.Endpoint, !GetAtt Database.Endpoint.Address]
-            - Name: OPENGRC_DATABASE_PORT
+            - Name: OGRL_DATABASE_PORT
               Value: !GetAtt Database.Endpoint.Port
-            - Name: OPENGRC_DATABASE_NAME
+            - Name: OGRL_DATABASE_NAME
               Value: !Ref DatabaseName
-            - Name: OPENGRC_DATABASE_USER
+            - Name: OGRL_DATABASE_USER
               Value: !Ref DatabaseUsername
-            - Name: OPENGRC_DATABASE_SSLMODE
+            - Name: OGRL_DATABASE_SSLMODE
               Value: require
-            - Name: OPENGRC_S3_BUCKET
+            - Name: OGRL_S3_BUCKET
               Value: !Ref Bucket
-            - Name: OPENGRC_SSM_PREFIX
-              Value: !Sub /opengrc/${AWS::StackName}
-            - Name: OPENGRC_QUEUE_URL
+            - Name: OGRL_SSM_PREFIX
+              Value: !Sub /ogrl/${AWS::StackName}
+            - Name: OGRL_QUEUE_URL
               Value: !If [QueueOn, !Ref JobQueue, ""]
           Secrets:
-            - Name: OPENGRC_DATABASE_PASSWORD
-              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/database/password:${DatabasePasswordVersion}
+            - Name: OGRL_DATABASE_PASSWORD
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/database/password:${DatabasePasswordVersion}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1100,14 +1100,14 @@ Resources:
             - ContainerPort: !If [AlbOn, 3000, 443]
               Protocol: tcp
           Environment:
-            - Name: OPENGRC_API_ORIGIN
+            - Name: OGRL_API_ORIGIN
               Value: http://127.0.0.1:8080
-            - Name: OPENGRC_BIND
+            - Name: OGRL_BIND
               Value: !If [AlbOn, "0.0.0.0:3000", "0.0.0.0:443"]
-            - Name: OPENGRC_TLS
+            - Name: OGRL_TLS
               Value: !If [AlbOn, "false", "true"]
-            - Name: OPENGRC_SSM_PREFIX
-              Value: !Sub /opengrc/${AWS::StackName}
+            - Name: OGRL_SSM_PREFIX
+              Value: !Sub /ogrl/${AWS::StackName}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1129,37 +1129,37 @@ Resources:
       ExecutionRoleArn: !GetAtt ExecutionRole.Arn
       TaskRoleArn: !GetAtt TaskRole.Arn
       ContainerDefinitions:
-        - Name: opengrc
+        - Name: ogrl
           Essential: true
           Image: !Sub ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ApiRepository}:${ApiImageTag}
           Environment:
-            - Name: OPENGRC_PROCESS
+            - Name: OGRL_PROCESS
               Value: jobs
-            - Name: OPENGRC_RUN_SCHEDULER
+            - Name: OGRL_RUN_SCHEDULER
               Value: "true"
-            - Name: OPENGRC_BIND
+            - Name: OGRL_BIND
               Value: 127.0.0.1:8080
-            - Name: OPENGRC_TLS
+            - Name: OGRL_TLS
               Value: "false"
-            - Name: OPENGRC_DATABASE_HOST
+            - Name: OGRL_DATABASE_HOST
               Value: !If [ProxyOn, !GetAtt DatabaseProxy.Endpoint, !GetAtt Database.Endpoint.Address]
-            - Name: OPENGRC_DATABASE_PORT
+            - Name: OGRL_DATABASE_PORT
               Value: !GetAtt Database.Endpoint.Port
-            - Name: OPENGRC_DATABASE_NAME
+            - Name: OGRL_DATABASE_NAME
               Value: !Ref DatabaseName
-            - Name: OPENGRC_DATABASE_USER
+            - Name: OGRL_DATABASE_USER
               Value: !Ref DatabaseUsername
-            - Name: OPENGRC_DATABASE_SSLMODE
+            - Name: OGRL_DATABASE_SSLMODE
               Value: require
-            - Name: OPENGRC_S3_BUCKET
+            - Name: OGRL_S3_BUCKET
               Value: !Ref Bucket
-            - Name: OPENGRC_SSM_PREFIX
-              Value: !Sub /opengrc/${AWS::StackName}
-            - Name: OPENGRC_QUEUE_URL
+            - Name: OGRL_SSM_PREFIX
+              Value: !Sub /ogrl/${AWS::StackName}
+            - Name: OGRL_QUEUE_URL
               Value: !If [QueueOn, !Ref JobQueue, ""]
           Secrets:
-            - Name: OPENGRC_DATABASE_PASSWORD
-              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/opengrc/${AWS::StackName}/database/password:${DatabasePasswordVersion}
+            - Name: OGRL_DATABASE_PASSWORD
+              ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/database/password:${DatabasePasswordVersion}
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1398,7 +1398,7 @@ Outputs:
       task, put the PEM certificate at tls/certificate and the key at
       tls/private-key. A model key, when used, is model/api-key. Harness values
       are under harness/.
-    Value: !Sub /opengrc/${AWS::StackName}
+    Value: !Sub /ogrl/${AWS::StackName}
   DatabaseEndpoint:
     Description: PostgreSQL endpoint. The instance accepts connections only from the task security groups.
     Value: !GetAtt Database.Endpoint.Address

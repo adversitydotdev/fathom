@@ -69,7 +69,7 @@ export function Sidebar() {
         <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background">
           <Hexagon className="size-4" aria-hidden />
         </span>
-        <span className="font-mono text-sm tracking-[0.18em] uppercase">OpenGRC</span>
+        <span className="font-mono text-sm tracking-[0.18em] uppercase">OGRL</span>
       </Link>
       {sections.map((section, i) => (
         <div key={i} className="flex flex-col gap-0.5">

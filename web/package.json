@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "dev:mock": "OPENGRC_API_MOCKING=enabled next dev",
+    "dev:mock": "OGRL_API_MOCKING=enabled next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
@@ -13,7 +13,7 @@
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
     "drive": "node e2e/drive.mjs",
-    "e2e:serve": "NEXT_DIST_DIR=.next-e2e OPENGRC_API_MOCKING=enabled sh -c 'next build && next start --port ${E2E_PORT:-3200}'",
+    "e2e:serve": "NEXT_DIST_DIR=.next-e2e OGRL_API_MOCKING=enabled sh -c 'next build && next start --port ${E2E_PORT:-3200}'",
     "compare": "node e2e/compare.mjs"
   },
   "dependencies": {

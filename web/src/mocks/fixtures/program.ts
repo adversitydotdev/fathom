@@ -295,7 +295,7 @@ const specs: ControlSpec[] = [
     slug: "risk-assessment", display: "RSK-01", name: "Risk assessment", family: "Risk management",
     type: "detective", frequency: "annual", state: "met",
     statement: "Assess risk to the system annually and after significant change, and record it in the risk register.",
-    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "The 2026 assessment is recorded as risks in OpenGRC. Owners review treatments monthly." },
+    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "The 2026 assessment is recorded as risks in OGRL. Owners review treatments monthly." },
     maps: [[R171 + "03-11-01", "equivalent-to", true], [R53 + "ra-3", "equivalent-to", true]],
   },
   {
@@ -316,7 +316,7 @@ const specs: ControlSpec[] = [
     slug: "security-policies", display: "GOV-01", name: "Security policies", family: "Governance", origin: "custom",
     type: "preventive", frequency: "annual", state: "met",
     statement: "Maintain adopted security policies and procedures, and review them annually.",
-    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "Policies are adopted in OpenGRC and reviewed each January." },
+    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "Policies are adopted in OGRL and reviewed each January." },
     maps: [[R171 + "03-15-01", "subset-of", true]],
   },
 ];
@@ -458,7 +458,7 @@ function evidence(
     valid_until: day(validUntil),
     implementation_ref: implFor(control),
     resource: {
-      uri: `s3://acme-opengrc-evidence/${slug}`,
+      uri: `s3://acme-ogrl-evidence/${slug}`,
       media_type: media,
       digest: { algorithm: "sha-256", value: "9f2c4e1ab0d73f5e8c61a2b4d07e9f13c5a8b6d2e4f1a3c7b9d0e2f4a6c8b1d3" },
     },
@@ -563,6 +563,6 @@ export const controlStates = new Map(
 export const jobs: Job[] = [
   { id: "job--0193-test-run-mfa", type: "test_run", status: "succeeded", created: at(-1, "06:00:00Z"), finished: at(-1, "06:00:41Z"), result_id: "result--mfa-enforced-latest" },
   { id: "job--0193-git-export", type: "git_export", status: "succeeded", created: at(0, "02:00:00Z"), finished: at(0, "02:01:12Z") },
-  { id: "job--0193-ir-drill", type: "test_run", status: "failed", created: at(-4, "06:00:00Z"), finished: at(-4, "06:00:09Z"), error: { type: "urn:opengrc:problem:runner-error", title: "Runner exited with status 1", status: 500 } },
+  { id: "job--0193-ir-drill", type: "test_run", status: "failed", created: at(-4, "06:00:00Z"), finished: at(-4, "06:00:09Z"), error: { type: "urn:ogrl:problem:runner-error", title: "Runner exited with status 1", status: 500 } },
   { id: "job--0193-library-pull", type: "library_pull", status: "succeeded", created: at(-18, "10:12:00Z"), finished: at(-18, "10:14:51Z") },
 ];

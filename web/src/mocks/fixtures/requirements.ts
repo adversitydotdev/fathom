@@ -1,4 +1,4 @@
-// Generated from library/requirement/*.yaml by `ogrc import`. A subset, trimmed for fixtures.
+// Generated from library/requirement/*.yaml by `ogrl import`. A subset, trimmed for fixtures.
 import type { Requirement } from "@/lib/api/types";
 
 export const requirements: Requirement[] = [

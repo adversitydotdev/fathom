@@ -1,8 +1,8 @@
 {
   "identities": [
     {
-      "name": "opengrc",
-      "credentials": [{ "accessKey": "opengrc", "secretKey": "opengrc-secret" }],
+      "name": "ogrl",
+      "credentials": [{ "accessKey": "ogrl", "secretKey": "ogrl-secret" }],
       "actions": ["Admin", "Read", "Write", "List", "Tagging"]
     }
   ]

@@ -12,23 +12,23 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from opengrc import container
-from opengrc.access import ActorKind, Principal, Role
-from opengrc.adapters.library import DirectoryLibrary
-from opengrc.adapters.secrets import StaticSecrets
-from opengrc.api.app import create_app
-from opengrc.auth import Credentials
-from opengrc.operations.exports import ExportSettings
-from opengrc.persistence.memory import MemoryBlobs, MemoryStore
+from ogrl import container
+from ogrl.access import ActorKind, Principal, Role
+from ogrl.adapters.library import DirectoryLibrary
+from ogrl.adapters.secrets import StaticSecrets
+from ogrl.api.app import create_app
+from ogrl.auth import Credentials
+from ogrl.operations.exports import ExportSettings
+from ogrl.persistence.memory import MemoryBlobs, MemoryStore
 
 # The compose stack (compose.yaml). Override to point the suite somewhere else.
 DATABASE_URL = os.environ.get(
-    "OPENGRC_TEST_DATABASE_URL", "postgresql://opengrc:opengrc@localhost:5432/opengrc"
+    "OGRL_TEST_DATABASE_URL", "postgresql://ogrl:ogrl@localhost:5432/ogrl"
 )
-S3_ENDPOINT = os.environ.get("OPENGRC_TEST_S3_ENDPOINT", "http://localhost:8333")
-S3_BUCKET = os.environ.get("OPENGRC_TEST_S3_BUCKET", "opengrc")
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "opengrc")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "opengrc-secret")
+S3_ENDPOINT = os.environ.get("OGRL_TEST_S3_ENDPOINT", "http://localhost:8333")
+S3_BUCKET = os.environ.get("OGRL_TEST_S3_BUCKET", "ogrl")
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "ogrl")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "ogrl-secret")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 SCHEMAS: list[str] = []
 
@@ -38,7 +38,7 @@ def services_available() -> bool:
     import asyncpg
 
     async def ping() -> None:
-        from opengrc.persistence.postgres import async_url
+        from ogrl.persistence.postgres import async_url
 
         url = async_url(DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
         conn = await asyncpg.connect(url, timeout=2)
@@ -57,8 +57,8 @@ def postgres_store():
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
-    from opengrc.persistence.postgres import PostgresStore, async_url
-    from opengrc.persistence.tables import metadata
+    from ogrl.persistence.postgres import PostgresStore, async_url
+    from ogrl.persistence.tables import metadata
 
     schema = f"test_{uuid.uuid4().hex[:12]}"
     SCHEMAS.append(schema)
@@ -80,7 +80,7 @@ def postgres_store():
 
 
 def s3_blobs():
-    from opengrc.adapters.s3 import S3Blobs
+    from ogrl.adapters.s3 import S3Blobs
 
     return S3Blobs(S3_BUCKET, prefix=f"test-{uuid.uuid4().hex[:12]}", endpoint_url=S3_ENDPOINT)
 
@@ -93,7 +93,7 @@ def drop_test_schemas() -> Iterator[None]:
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    from opengrc.persistence.postgres import async_url
+    from ogrl.persistence.postgres import async_url
 
     async def drop() -> None:
         engine = create_async_engine(async_url(DATABASE_URL))
@@ -116,10 +116,10 @@ STAMP = "2026-10-22T11:30:00Z"
 FW = "framework--nist-sp-800-53-r5"
 AC2 = "requirement--nist-sp-800-53-r5-ac-2"
 AC3 = "requirement--nist-sp-800-53-r5-ac-3"
-C1 = "control--ogrc-ac-01"
-C2 = "control--ogrc-ac-02"
-LIB_TEST = "test--ogrc-ac-01-unique-idp-users"
-LIB_BASELINE = "baseline--ogrc-ac"
+C1 = "control--ogrl-ac-01"
+C2 = "control--ogrl-ac-02"
+LIB_TEST = "test--ogrl-ac-01-unique-idp-users"
+LIB_BASELINE = "baseline--ogrl-ac"
 
 
 def library_objects() -> list[dict[str, Any]]:
@@ -168,7 +168,7 @@ def library_objects() -> list[dict[str, Any]]:
             "type": "control",
             "id": C1,
             **env,
-            "display_id": "OGRC-AC-01",
+            "display_id": "OGRL-AC-01",
             "name": "Unique identities",
             "origin": "standard",
             "family": "ac",
@@ -180,7 +180,7 @@ def library_objects() -> list[dict[str, Any]]:
             "type": "control",
             "id": C2,
             **env,
-            "display_id": "OGRC-AC-02",
+            "display_id": "OGRL-AC-02",
             "name": "Access reviews",
             "origin": "standard",
             "family": "ac",
@@ -190,7 +190,7 @@ def library_objects() -> list[dict[str, Any]]:
         },
         {
             "type": "mapping",
-            "id": "mapping--ogrc-ac-01_to_nist-sp-800-53-r5-ac-2_part_a",
+            "id": "mapping--ogrl-ac-01_to_nist-sp-800-53-r5-ac-2_part_a",
             **env,
             "source_ref": C1,
             "target_ref": f"{AC2}#a",
@@ -200,7 +200,7 @@ def library_objects() -> list[dict[str, Any]]:
         },
         {
             "type": "mapping",
-            "id": "mapping--ogrc-ac-02_to_nist-sp-800-53-r5-ac-2_part_j",
+            "id": "mapping--ogrl-ac-02_to_nist-sp-800-53-r5-ac-2_part_j",
             **env,
             "source_ref": C2,
             "target_ref": f"{AC2}#j",
@@ -211,7 +211,7 @@ def library_objects() -> list[dict[str, Any]]:
         },
         {
             "type": "mapping",
-            "id": "mapping--ogrc-ac-02_to_nist-sp-800-53-r5-ac-3",
+            "id": "mapping--ogrl-ac-02_to_nist-sp-800-53-r5-ac-3",
             **env,
             "source_ref": C2,
             "target_ref": AC3,
@@ -246,7 +246,7 @@ def write_library(root: Path, objects: list[dict[str, Any]], version: str = "0.1
         yaml.safe_dump(
             {
                 "type": "bundle",
-                "id": "bundle--ogrc-library",
+                "id": "bundle--ogrl-library",
                 "spec_version": "0.1.0",
                 "created": STAMP,
                 "modified": STAMP,
