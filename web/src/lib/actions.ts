@@ -76,7 +76,10 @@ export async function triggerRender(
 }
 
 export async function triggerGitExport(): Promise<ActionState> {
-  const { data, error } = await api.POST("/exports/git");
+  const { data, error, response } = await api.POST("/exports/git");
+  if (response.status === 404) {
+    return { error: "Git export is disabled (set OGRL_EXPORT_REMOTE to enable)." };
+  }
   if (error || !data) return { error: formatError(error, "Couldn't queue Git export.") };
   refresh();
   return { jobId: data.id };

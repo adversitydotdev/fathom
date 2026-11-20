@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CircleCheck, CircleX, Clock, LoaderCircle } from "lucide-react";
+import { CircleCheck, CircleX, Clock, Download, LoaderCircle } from "lucide-react";
 
 import { StatusBadge } from "@/components/spectrumui/status-badge";
 import { Eyebrow, PageTitle } from "@/components/typography";
@@ -7,7 +7,7 @@ import type { Job } from "@/lib/api/types";
 import { getAllJobs, getBaseline, getProgram } from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
-import { JobActions } from "./job-actions";
+import { JobActions, JobsAutoRefresh } from "./job-actions";
 
 export const metadata: Metadata = { title: "Jobs" };
 
@@ -43,10 +43,11 @@ export default async function JobsPage({
   const { programId } = await params;
 
   const program = await getProgram(programId);
-  const [baseline, jobs] = await Promise.all([
+  const [baseline, rawJobs] = await Promise.all([
     getBaseline(program.baseline_ref),
     getAllJobs(),
   ]);
+  const jobs = [...rawJobs].sort((a, b) => b.created.localeCompare(a.created));
 
   const primaryFrameworkId = baseline.framework_refs?.[0];
 
@@ -56,6 +57,7 @@ export default async function JobsPage({
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
+      <JobsAutoRefresh active={active > 0} />
       <PageTitle
         eyebrow={program.name}
         title="Jobs"
@@ -112,6 +114,21 @@ export default async function JobsPage({
                     <td className="px-4 py-3 text-xs">
                       {j.error ? (
                         <span className="text-gap-ink">{j.error.title}</span>
+                      ) : j.files && j.files.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {j.files.map((file) => (
+                            <a
+                              key={file}
+                              href={`/api/jobs/${encodeURIComponent(j.id)}/files/${encodeURIComponent(file)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 rounded border bg-muted/40 px-2 py-0.5 font-mono text-[11px] hover:border-foreground/40 hover:text-foreground"
+                            >
+                              <Download className="size-3" aria-hidden />
+                              {file}
+                            </a>
+                          ))}
+                        </div>
                       ) : j.result_id ? (
                         <span className="font-mono text-muted-foreground">{j.result_id}</span>
                       ) : (
