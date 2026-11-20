@@ -4,6 +4,7 @@ import { Boxes, Cloud, ShieldCheck } from "lucide-react";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
 import { Eyebrow, PageTitle } from "@/components/typography";
 import {
+  getBaselines,
   getComponents,
   getParties,
   getProgram,
@@ -11,6 +12,8 @@ import {
   getSystem,
   getSystems,
 } from "@/lib/data";
+
+import { ComponentCrudDialog, NewProgramDialog, SystemCrudDialog } from "./system-crud";
 
 export const metadata: Metadata = { title: "Systems" };
 
@@ -32,16 +35,20 @@ export default async function SystemsPage({
   const { programId } = await params;
 
   const program = await getProgram(programId);
-  const [activeSystem, systems, components, providersRes, parties] = await Promise.all([
+  const [activeSystem, systems, components, baselines, providersRes, parties] = await Promise.all([
     getSystem(program.system_ref),
     getSystems(),
     getComponents(),
+    getBaselines(),
     getProviders(),
     getParties(),
   ]);
 
   const providers = providersRes.data ?? [];
   const componentById = new Map(components.map((c) => [c.id, c]));
+  const partyOptions = [...parties.values()].map((p) => ({ id: p.id, label: p.name ?? p.id }));
+  const systemOptions = systems.map((s) => ({ id: s.id, label: s.name ?? s.id }));
+  const baselineOptions = baselines.map((b) => ({ id: b.id, label: b.name ?? b.id }));
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -49,10 +56,18 @@ export default async function SystemsPage({
         eyebrow={program.name}
         title="Systems"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {systems.length} {systems.length === 1 ? "system" : "systems"} · {components.length} components ·{" "}
-            {providers.length} provider bundles
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {systems.length} {systems.length === 1 ? "system" : "systems"} · {components.length} components ·{" "}
+              {providers.length} provider bundles
+            </p>
+            <SystemCrudDialog />
+            <NewProgramDialog
+              systems={systemOptions}
+              baselines={baselineOptions}
+              defaultSystemId={activeSystem.id}
+            />
+          </div>
         }
       />
 
@@ -62,7 +77,18 @@ export default async function SystemsPage({
             <Eyebrow>Program system</Eyebrow>
             <h2 className="font-display text-2xl tracking-[-0.01em]">{activeSystem.name}</h2>
           </div>
-          <span className="font-mono text-xs text-muted-foreground">{activeSystem.id}</span>
+          <div className="flex items-center gap-3">
+            <span className="font-mono text-xs text-muted-foreground">{activeSystem.id}</span>
+            <SystemCrudDialog
+              existing={{
+                id: activeSystem.id,
+                modified: activeSystem.modified,
+                name: activeSystem.name ?? activeSystem.id,
+                function: activeSystem.function,
+                boundary: activeSystem.boundary,
+              }}
+            />
+          </div>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -132,9 +158,19 @@ export default async function SystemsPage({
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5" aria-label="Components">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <Eyebrow>Components</Eyebrow>
-            <Boxes className="size-4 text-muted-foreground" aria-hidden />
+            <div className="flex items-center gap-2">
+              <ComponentCrudDialog
+                parties={partyOptions}
+                attachToSystem={{
+                  id: activeSystem.id,
+                  modified: activeSystem.modified,
+                  currentRefs: activeSystem.component_refs ?? [],
+                }}
+              />
+              <Boxes className="size-4 text-muted-foreground" aria-hidden />
+            </div>
           </div>
           <div className="divide-y">
             {(activeSystem.component_refs ?? []).map((cid) => {
@@ -150,7 +186,20 @@ export default async function SystemsPage({
                       {provider ? ` · ${provider}` : ""}
                     </div>
                   </div>
-                  <span className="font-mono text-[11px] text-muted-foreground">{comp.id}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[11px] text-muted-foreground">{comp.id}</span>
+                    <ComponentCrudDialog
+                      parties={partyOptions}
+                      existing={{
+                        id: comp.id,
+                        modified: comp.modified,
+                        name: comp.name ?? comp.id,
+                        kind: comp.kind,
+                        partyId: comp.party_ref,
+                        description: comp.description,
+                      }}
+                    />
+                  </div>
                 </div>
               );
             })}

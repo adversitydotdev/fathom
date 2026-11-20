@@ -40,6 +40,10 @@ export const getBaseline = cache((id: string) =>
   unwrap(api.GET("/baselines/{id}", { params: { path: { id } } })),
 );
 
+export const getBaselines = cache(() =>
+  all((cursor) => unwrap(api.GET("/baselines", { params: { query: { cursor, limit: 200 } } }))),
+);
+
 export const getProgramSummary = cache((id: string, at?: string) =>
   unwrap(api.GET("/programs/{id}/summary", { params: { path: { id }, query: { at } } })),
 );

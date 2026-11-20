@@ -8,6 +8,8 @@ import { Eyebrow, PageTitle } from "@/components/typography";
 import { getControls, getParties, getPolicies, getProcedures, getProgram } from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
+import { PolicyCrudDialog, ProcedureCrudDialog } from "./policy-crud";
+
 export const metadata: Metadata = { title: "Policies" };
 
 function DocStatusBadge({ status }: { status: "adopted" | "draft" | "retired" }) {
@@ -38,6 +40,9 @@ export default async function PoliciesPage({
 
   const controlById = new Map(controls.map((c) => [c.id, c]));
   const policyById = new Map(policies.map((p) => [p.id, p]));
+  const partyOptions = [...parties.values()].map((p) => ({ id: p.id, label: p.name ?? p.id }));
+  const controlOptions = controls.map((c) => ({ id: c.id, label: `${c.display_id ?? c.id} · ${c.name ?? ""}`.trim() }));
+  const policyOptions = policies.map((p) => ({ id: p.id, label: p.name ?? p.id }));
 
   const adopted = policies.filter((p) => p.status === "adopted").length;
   const drafts = policies.filter((p) => p.status === "draft").length;
@@ -48,9 +53,13 @@ export default async function PoliciesPage({
         eyebrow={program.name}
         title="Policies"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {policies.length} policies · {procedures.length} procedures
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {policies.length} policies · {procedures.length} procedures
+            </p>
+            <PolicyCrudDialog parties={partyOptions} controls={controlOptions} />
+            <ProcedureCrudDialog policies={policyOptions} parties={partyOptions} controls={controlOptions} />
+          </div>
         }
       />
 
@@ -74,6 +83,7 @@ export default async function PoliciesPage({
                   <th className="px-4 py-3 font-medium">Owner</th>
                   <th className="px-4 py-3 font-medium">Reviewed</th>
                   <th className="px-4 py-3 font-medium">Controls</th>
+                  <th className="px-4 py-3 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -122,6 +132,23 @@ export default async function PoliciesPage({
                           })}
                         </div>
                       </td>
+                      <td className="px-4 py-3 text-right">
+                        <PolicyCrudDialog
+                          parties={partyOptions}
+                          controls={controlOptions}
+                          existing={{
+                            id: p.id,
+                            modified: p.modified,
+                            name: p.name ?? p.id,
+                            status: p.status,
+                            version: p.version,
+                            ownerId: p.owner_ref,
+                            reviewInterval: p.review_interval,
+                            controlIds: p.control_refs ?? [],
+                            hasResource: Boolean(p.resource?.digest),
+                          }}
+                        />
+                      </td>
                     </tr>
                   );
                 })}
@@ -143,6 +170,7 @@ export default async function PoliciesPage({
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Owner</th>
                   <th className="px-4 py-3 font-medium">Controls</th>
+                  <th className="px-4 py-3 text-right font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -172,6 +200,23 @@ export default async function PoliciesPage({
                             );
                           })}
                         </div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <ProcedureCrudDialog
+                          policies={policyOptions}
+                          parties={partyOptions}
+                          controls={controlOptions}
+                          existing={{
+                            id: proc.id,
+                            modified: proc.modified,
+                            name: proc.name ?? proc.id,
+                            status: proc.status,
+                            policyId: proc.policy_ref,
+                            ownerId: proc.owner_ref,
+                            controlIds: proc.control_refs ?? [],
+                            hasResource: Boolean(proc.resource?.digest),
+                          }}
+                        />
                       </td>
                     </tr>
                   );

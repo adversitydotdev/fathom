@@ -14,6 +14,8 @@ import {
 } from "@/lib/data";
 import { isoDate, slug } from "@/lib/format";
 
+import { FindingCrudDialog } from "./finding-crud";
+
 export const metadata: Metadata = { title: "Findings" };
 
 export default async function FindingsPage({
@@ -45,16 +47,25 @@ export default async function FindingsPage({
     const ctrl = impl?.control_ref ? controlById.get(impl.control_ref) : undefined;
     return {
       id: f.id,
-      name: f.name,
+      modified: f.modified,
+      name: f.name ?? f.id,
       determination: f.determination,
       observed: f.observed,
       objectiveRef: f.objective_ref,
       narrative: f.narrative,
+      implementationId: f.implementation_ref,
       controlId: ctrl?.id,
       controlDisplayId: ctrl?.display_id,
       controlName: ctrl?.name,
     };
   });
+
+  const implOptions = impls
+    .filter((i) => i.control_ref)
+    .map((i) => {
+      const ctrl = controlById.get(i.control_ref!);
+      return { id: i.id, label: `${ctrl?.display_id ?? i.control_ref} · ${ctrl?.name ?? i.id}` };
+    });
 
   const notSatisfied = rows.filter((r) => r.determination === "not-satisfied").length;
   const satisfied = rows.filter((r) => r.determination === "satisfied").length;
@@ -65,10 +76,17 @@ export default async function FindingsPage({
         eyebrow={program.name}
         title="Findings"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} {rows.length === 1 ? "finding" : "findings"} · at{" "}
-            <span className="text-foreground">{isoDate(summary.at)}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} {rows.length === 1 ? "finding" : "findings"} · at{" "}
+              <span className="text-foreground">{isoDate(summary.at)}</span>
+            </p>
+            <FindingCrudDialog
+              systemId={program.system_ref}
+              implementations={implOptions}
+              defaultObjectiveRef={rows[0]?.objectiveRef}
+            />
+          </div>
         }
       />
 
@@ -91,15 +109,22 @@ export default async function FindingsPage({
                   <h2 className="text-base font-medium">{r.name}</h2>
                   {r.narrative && <p className="text-sm text-muted-foreground">{r.narrative}</p>}
                 </div>
-                {r.determination === "not-satisfied" ? (
-                  <StatusBadge tone="gap" icon={CircleX}>
-                    not satisfied
-                  </StatusBadge>
-                ) : (
-                  <StatusBadge tone="met" icon={CircleCheck}>
-                    satisfied
-                  </StatusBadge>
-                )}
+                <div className="flex items-center gap-2">
+                  {r.determination === "not-satisfied" ? (
+                    <StatusBadge tone="gap" icon={CircleX}>
+                      not satisfied
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge tone="met" icon={CircleCheck}>
+                      satisfied
+                    </StatusBadge>
+                  )}
+                  <FindingCrudDialog
+                    systemId={program.system_ref}
+                    implementations={implOptions}
+                    existing={r}
+                  />
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t pt-3 font-mono text-xs text-muted-foreground">

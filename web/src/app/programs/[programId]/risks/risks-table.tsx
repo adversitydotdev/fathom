@@ -5,14 +5,19 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, Clock, ShieldAlert } from "lucide-react";
 import { cn } from "cn";
 
+import { RevokeButton } from "@/components/crud";
 import { DataTable, type DataTableColumn } from "@/components/spectrumui/data-table";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
 import { Eyebrow } from "@/components/typography";
+import { revokeRisk } from "@/lib/actions";
 import type { Risk } from "@/lib/api/types";
 import { isoDate } from "@/lib/format";
 
+import { RiskCrudDialog, type Option } from "./risk-crud";
+
 export type RiskRow = {
   id: string;
+  modified: string;
   name: string;
   statement: string;
   likelihood: number;
@@ -21,6 +26,7 @@ export type RiskRow = {
   residualImpact?: number;
   treatment?: Risk["treatment"];
   status: Risk["status"];
+  ownerId?: string;
   owner: string;
   controls: { id: string; displayId: string }[];
   milestones: { name: string; due?: string; completed?: string }[];
@@ -57,7 +63,21 @@ function matrixCellTone(score: number, hasItems: boolean): string {
   return "bg-met-soft text-met-ink border-met/40 font-semibold";
 }
 
-export function RisksView({ rows, programId, at }: { rows: RiskRow[]; programId: string; at?: string }) {
+export function RisksView({
+  rows,
+  systemId,
+  parties,
+  controls,
+  programId,
+  at,
+}: {
+  rows: RiskRow[];
+  systemId: string;
+  parties: Option[];
+  controls: Option[];
+  programId: string;
+  at?: string;
+}) {
   const [statusFilter, setStatusFilter] = useState<Risk["status"] | null>(null);
   const [selectedCell, setSelectedCell] = useState<{ l: number; i: number } | null>(null);
   const [matrixMode, setMatrixMode] = useState<"inherent" | "residual">("inherent");
@@ -183,7 +203,7 @@ export function RisksView({ rows, programId, at }: { rows: RiskRow[]; programId:
       {
         id: "controls",
         header: "Controls",
-        width: 108,
+        width: 96,
         cell: (r) => (
           <div className="flex flex-wrap gap-1.5">
             {r.controls.length === 0 ? (
@@ -202,8 +222,24 @@ export function RisksView({ rows, programId, at }: { rows: RiskRow[]; programId:
           </div>
         ),
       },
+      {
+        id: "actions",
+        header: "",
+        width: 76,
+        cell: (r) => (
+          <div className="flex items-center justify-end gap-1">
+            <RiskCrudDialog
+              systemId={systemId}
+              parties={parties}
+              controls={controls}
+              existing={{ ...r, controlIds: r.controls.map((c) => c.id) }}
+            />
+            <RevokeButton compact label={`Revoke ${r.name}`} onRevoke={() => revokeRisk(r.id, r.modified)} />
+          </div>
+        ),
+      },
     ],
-    [programId, q],
+    [controls, parties, programId, q, systemId],
   );
 
   return (

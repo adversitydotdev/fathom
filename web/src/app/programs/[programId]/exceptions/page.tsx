@@ -16,6 +16,8 @@ import {
 } from "@/lib/data";
 import { daysBetween, isoDate } from "@/lib/format";
 
+import { ExceptionCrudDialog } from "./exception-crud";
+
 export const metadata: Metadata = { title: "Exceptions" };
 
 export default async function ExceptionsPage({
@@ -56,10 +58,13 @@ export default async function ExceptionsPage({
       const state: "expired" | "expiring" | "active" = days < 0 ? "expired" : days <= 30 ? "expiring" : "active";
       return {
         id: ex.id,
+        modified: ex.modified,
+        implementationId: ex.implementation_ref,
         justification: ex.justification,
         expires: ex.expires,
         days,
         state,
+        approverId: ex.approver_ref,
         approver: ex.approver_ref ? (parties.get(ex.approver_ref)?.name ?? ex.approver_ref) : "—",
         controlId: ctrl?.id,
         controlDisplayId: ctrl?.display_id ?? ex.implementation_ref,
@@ -68,6 +73,15 @@ export default async function ExceptionsPage({
         riskId: ex.risk_ref,
       };
     });
+
+  const implOptions = impls
+    .filter((i) => i.control_ref)
+    .map((i) => {
+      const ctrl = controlById.get(i.control_ref!);
+      return { id: i.id, label: `${ctrl?.display_id ?? i.control_ref} · ${ctrl?.name ?? i.id}` };
+    });
+  const partyOptions = [...parties.values()].map((p) => ({ id: p.id, label: p.name ?? p.id }));
+  const riskOptions = risks.map((r) => ({ id: r.id, label: r.name ?? r.id }));
 
   const active = rows.filter((r) => r.state === "active").length;
   const expiring = rows.filter((r) => r.state === "expiring").length;
@@ -79,10 +93,13 @@ export default async function ExceptionsPage({
         eyebrow={program.name}
         title="Exceptions"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} {rows.length === 1 ? "waiver" : "waivers"} · evaluated at{" "}
-            <span className="text-foreground">{evalDate}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} {rows.length === 1 ? "waiver" : "waivers"} · evaluated at{" "}
+              <span className="text-foreground">{evalDate}</span>
+            </p>
+            <ExceptionCrudDialog implementations={implOptions} parties={partyOptions} risks={riskOptions} />
+          </div>
         }
       />
 
@@ -127,19 +144,27 @@ export default async function ExceptionsPage({
                   <p className="text-sm text-muted-foreground">{r.justification}</p>
                 </div>
 
-                {r.state === "expired" ? (
-                  <StatusBadge tone="gap" icon={CircleX}>
-                    expired {isoDate(r.expires)}
-                  </StatusBadge>
-                ) : r.state === "expiring" ? (
-                  <StatusBadge tone="waived" icon={CirclePause}>
-                    expires in {r.days}d ({isoDate(r.expires)})
-                  </StatusBadge>
-                ) : (
-                  <StatusBadge tone="met" icon={CircleCheck}>
-                    active until {isoDate(r.expires)}
-                  </StatusBadge>
-                )}
+                <div className="flex items-center gap-2">
+                  {r.state === "expired" ? (
+                    <StatusBadge tone="gap" icon={CircleX}>
+                      expired {isoDate(r.expires)}
+                    </StatusBadge>
+                  ) : r.state === "expiring" ? (
+                    <StatusBadge tone="waived" icon={CirclePause}>
+                      expires in {r.days}d ({isoDate(r.expires)})
+                    </StatusBadge>
+                  ) : (
+                    <StatusBadge tone="met" icon={CircleCheck}>
+                      active until {isoDate(r.expires)}
+                    </StatusBadge>
+                  )}
+                  <ExceptionCrudDialog
+                    implementations={implOptions}
+                    parties={partyOptions}
+                    risks={riskOptions}
+                    existing={r}
+                  />
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-t pt-3 font-mono text-xs text-muted-foreground">

@@ -4,13 +4,18 @@ import { useMemo, useState } from "react";
 import { Building2, Shield, User, Users } from "lucide-react";
 import { cn } from "cn";
 
+import { RevokeButton } from "@/components/crud";
 import { DataTable, type DataTableColumn } from "@/components/spectrumui/data-table";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
 import { AgentMark } from "@/components/status";
+import { revokeParty } from "@/lib/actions";
 import type { Party } from "@/lib/api/types";
+
+import { PartyCrudDialog } from "./party-crud";
 
 export type PartyRow = {
   id: string;
+  modified: string;
   name: string;
   kind: Party["kind"];
   isAgent: boolean;
@@ -90,9 +95,20 @@ export function PartiesTable({ rows }: { rows: PartyRow[] }) {
       {
         id: "id",
         header: "ID",
-        width: 180,
+        width: 168,
         hideBelow: "lg",
         cell: (r) => <span className="font-mono text-xs text-muted-foreground">{r.id}</span>,
+      },
+      {
+        id: "actions",
+        header: "",
+        width: 76,
+        cell: (r) => (
+          <div className="flex items-center justify-end gap-1">
+            <PartyCrudDialog existing={r} />
+            <RevokeButton compact label={`Revoke ${r.name}`} onRevoke={() => revokeParty(r.id, r.modified)} />
+          </div>
+        ),
       },
     ],
     [],

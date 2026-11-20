@@ -11,6 +11,7 @@ import {
 } from "@/lib/data";
 import { daysBetween, isoDate } from "@/lib/format";
 
+import { EvidenceCrudDialog } from "./evidence-crud";
 import { EvidenceTable, type EvidenceRow, type ValidityState } from "./evidence-table";
 
 export const metadata: Metadata = { title: "Evidence" };
@@ -50,8 +51,10 @@ export default async function EvidencePage({
     }
     return {
       id: e.id,
+      modified: e.modified,
       name: e.name ?? e.id,
       method: e.method,
+      implementationId: e.implementation_ref,
       controlId: ctrl?.id,
       controlDisplayId: ctrl?.display_id,
       collected: e.collected ?? e.created,
@@ -59,8 +62,16 @@ export default async function EvidencePage({
       validity,
       digestShort: e.resource?.digest?.value?.slice(0, 12),
       mediaType: e.resource?.media_type,
+      uri: e.resource?.uri,
     };
   });
+
+  const implOptions = impls
+    .filter((i) => i.control_ref)
+    .map((i) => {
+      const ctrl = controlById.get(i.control_ref!);
+      return { id: i.id, label: `${ctrl?.display_id ?? i.control_ref} · ${ctrl?.name ?? i.id}` };
+    });
 
   const expired = rows.filter((r) => r.validity === "expired").length;
   const expiring = rows.filter((r) => r.validity === "expiring").length;
@@ -72,9 +83,12 @@ export default async function EvidencePage({
         eyebrow={program.name}
         title="Evidence"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} items · validity at <span className="text-foreground">{evalDate}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} items · validity at <span className="text-foreground">{evalDate}</span>
+            </p>
+            <EvidenceCrudDialog implementations={implOptions} />
+          </div>
         }
       />
 
@@ -85,7 +99,7 @@ export default async function EvidencePage({
         <StatCard label="Expired" value={expired} tone={expired > 0 ? "gap" : undefined} />
       </div>
 
-      <EvidenceTable rows={rows} programId={programId} at={atParam} />
+      <EvidenceTable rows={rows} implementations={implOptions} programId={programId} at={atParam} />
     </div>
   );
 }

@@ -5,17 +5,23 @@ import { useMemo, useState } from "react";
 import { FileCheck, FileUp, Link2, Terminal } from "lucide-react";
 import { cn } from "cn";
 
+import { RevokeButton } from "@/components/crud";
 import { DataTable, type DataTableColumn } from "@/components/spectrumui/data-table";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
+import { revokeEvidence } from "@/lib/actions";
 import type { Evidence } from "@/lib/api/types";
 import { isoDate } from "@/lib/format";
+
+import { EvidenceCrudDialog, type ImplOption } from "./evidence-crud";
 
 export type ValidityState = "expired" | "expiring" | "valid";
 
 export type EvidenceRow = {
   id: string;
+  modified: string;
   name: string;
   method: Evidence["method"];
+  implementationId?: string;
   controlId?: string;
   controlDisplayId?: string;
   collected: string;
@@ -23,6 +29,7 @@ export type EvidenceRow = {
   validity: ValidityState;
   digestShort?: string;
   mediaType?: string;
+  uri?: string;
 };
 
 const ORDER: Record<ValidityState, number> = { expired: 0, expiring: 1, valid: 2 };
@@ -32,7 +39,17 @@ function MethodIcon({ method }: { method: Evidence["method"] }) {
   return <Icon className="size-3.5 text-muted-foreground" aria-hidden />;
 }
 
-export function EvidenceTable({ rows, programId, at }: { rows: EvidenceRow[]; programId: string; at?: string }) {
+export function EvidenceTable({
+  rows,
+  implementations,
+  programId,
+  at,
+}: {
+  rows: EvidenceRow[];
+  implementations: ImplOption[];
+  programId: string;
+  at?: string;
+}) {
   const [validity, setValidity] = useState<ValidityState | null>(null);
   const [method, setMethod] = useState<string>("");
   const q = at ? `?at=${at}` : "";
@@ -98,7 +115,7 @@ export function EvidenceTable({ rows, programId, at }: { rows: EvidenceRow[]; pr
       {
         id: "validUntil",
         header: "Valid until",
-        width: 140,
+        width: 128,
         sortable: true,
         value: (r) => ORDER[r.validity],
         cell: (r) => {
@@ -106,8 +123,19 @@ export function EvidenceTable({ rows, programId, at }: { rows: EvidenceRow[]; pr
           return <StatusBadge tone={tone}>{r.validUntil ? isoDate(r.validUntil) : "open"}</StatusBadge>;
         },
       },
+      {
+        id: "actions",
+        header: "",
+        width: 84,
+        cell: (r) => (
+          <div className="flex items-center justify-end gap-1">
+            <EvidenceCrudDialog implementations={implementations} existing={r} />
+            <RevokeButton compact label={`Revoke ${r.name}`} onRevoke={() => revokeEvidence(r.id, r.modified)} />
+          </div>
+        ),
+      },
     ],
-    [programId, q],
+    [implementations, programId, q],
   );
 
   return (

@@ -66,6 +66,64 @@ function sub<T>(path: string, parent: () => Obj[], children: (id: string) => T[]
 const eq = (field: string) => (item: object, v: string) => (item as Record<string, unknown>)[field] === v;
 const q = (item: Obj, v: string) => matchesQuery(item, v);
 
+type MutableObj = Obj & { type?: string; spec_version?: string; created?: string; modified?: string; [k: string]: unknown };
+
+function crud<T extends MutableObj>(path: string, typeName: string, items: () => T[], extraDefaults: Record<string, unknown> = {}) {
+  return [
+    http.post(`${V}${path}`, async ({ request }) => {
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+      const now = new Date().toISOString();
+      const created = {
+        type: typeName,
+        id: typeof body.id === "string" && body.id ? body.id : `${typeName}--${crypto.randomUUID().slice(0, 8)}`,
+        spec_version: "0.1.0",
+        created: now,
+        modified: now,
+        ...extraDefaults,
+        ...body,
+      } as unknown as T;
+      items().unshift(created);
+      return HttpResponse.json(created, { status: 201 });
+    }),
+    http.patch(`${V}${path}/:id`, async ({ params, request }) => {
+      const arr = items();
+      const idx = arr.findIndex((i) => i.id === params.id);
+      if (idx < 0) return notFound();
+      const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+      const updated = { ...arr[idx], ...body, modified: new Date().toISOString() } as T;
+      arr[idx] = updated;
+      return HttpResponse.json(updated);
+    }),
+    http.post(`${V}${path}/:id/revoke`, ({ params }) => {
+      const arr = items();
+      const idx = arr.findIndex((i) => i.id === params.id);
+      if (idx < 0) return notFound();
+      const updated = { ...arr[idx], revoked: true, modified: new Date().toISOString() } as T;
+      arr[idx] = updated;
+      return HttpResponse.json(updated);
+    }),
+  ];
+}
+
+function contentUpload<T extends MutableObj>(path: string, items: () => T[]) {
+  return http.post(`${V}${path}/:id/content`, ({ params }) => {
+    const arr = items();
+    const idx = arr.findIndex((i) => i.id === params.id);
+    if (idx < 0) return notFound();
+    const updated = {
+      ...arr[idx],
+      modified: new Date().toISOString(),
+      resource: {
+        uri: `s3://acme-ogrl-evidence/${params.id}`,
+        media_type: "text/markdown",
+        digest: { algorithm: "sha-256", value: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" },
+      },
+    } as T;
+    arr[idx] = updated;
+    return HttpResponse.json(updated);
+  });
+}
+
 export const handlers = [
   http.get("*/health", () => HttpResponse.json({ status: "ok" })),
 
@@ -190,4 +248,24 @@ export const handlers = [
 
   list("/jobs", () => db.jobs, { type: eq("type"), status: eq("status") }),
   one("/jobs", () => db.jobs),
+
+  // Write handlers (POST, PATCH, revoke, content upload) for full CRUD in mock mode
+  ...crud("/controls", "control", () => db.controls as unknown as MutableObj[], { origin: "custom" }),
+  ...crud("/baselines", "baseline", () => db.baselines as unknown as MutableObj[]),
+  ...crud("/tests", "test", () => db.tests as unknown as MutableObj[]),
+  ...crud("/parties", "party", () => db.parties as unknown as MutableObj[]),
+  ...crud("/components", "component", () => db.components as unknown as MutableObj[]),
+  ...crud("/systems", "system", () => db.systems as unknown as MutableObj[]),
+  ...crud("/programs", "program", () => db.programs as unknown as MutableObj[]),
+  ...crud("/implementations", "implementation", () => db.implementations as unknown as MutableObj[], { origin: "organization" }),
+  ...crud("/results", "result", () => db.results as unknown as MutableObj[]),
+  ...crud("/evidence", "evidence", () => db.evidence as unknown as MutableObj[]),
+  ...crud("/exceptions", "exception", () => db.exceptions as unknown as MutableObj[]),
+  ...crud("/findings", "finding", () => db.findings as unknown as MutableObj[]),
+  ...crud("/risks", "risk", () => db.risks as unknown as MutableObj[]),
+  ...crud("/policies", "policy", () => db.policies as unknown as MutableObj[]),
+  ...crud("/procedures", "procedure", () => db.procedures as unknown as MutableObj[]),
+  contentUpload("/evidence", () => db.evidence as unknown as MutableObj[]),
+  contentUpload("/policies", () => db.policies as unknown as MutableObj[]),
+  contentUpload("/procedures", () => db.procedures as unknown as MutableObj[]),
 ];

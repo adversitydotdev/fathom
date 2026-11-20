@@ -7,7 +7,6 @@ import {
   FileText,
   FlaskConical,
   Gavel,
-  Hexagon,
   LayoutDashboard,
   ListChecks,
   Paperclip,
@@ -20,6 +19,7 @@ import {
 import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "cn";
+import { OgrlMark } from "@/components/brand-mark";
 
 type Item = { label: string; icon: React.ComponentType<{ className?: string }>; href: string };
 
@@ -66,9 +66,7 @@ export function Sidebar() {
   return (
     <nav className="flex h-full flex-col gap-1 border-r bg-sidebar/80 px-3 py-4 text-sm backdrop-blur" aria-label="Main">
       <Link href={withAt(base)} className="mb-4 flex items-center gap-2.5 px-2">
-        <span className="flex size-7 items-center justify-center rounded-md bg-foreground text-background">
-          <Hexagon className="size-4" aria-hidden />
-        </span>
+        <OgrlMark className="size-6 shrink-0 text-foreground" aria-hidden />
         <span className="font-mono text-sm tracking-[0.18em] uppercase">OGRL</span>
       </Link>
       {sections.map((section, i) => (

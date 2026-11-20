@@ -39,6 +39,12 @@ import {
 } from "@/lib/data";
 import { daysBetween, isoDate } from "@/lib/format";
 
+import {
+  CustomControlActions,
+  ImplementationCrudButton,
+  QuickAddEvidenceButton,
+  RecordManualResultButton,
+} from "./control-crud";
 import { RunTestButton } from "./run-test-button";
 
 export async function generateMetadata({ params }: PageProps<"/programs/[programId]/controls/[controlId]">): Promise<Metadata> {
@@ -89,6 +95,7 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
   const reqById = new Map(requirements.map((r) => [r.id, r]));
   const fwShort = new Map(frameworks.map((f) => [f.id, (f.name ?? f.id).replace(/^NIST SP /, "").replace(/ Revision /, " r")]));
   const backHref = `/programs/${programId}/controls${atParam ? `?at=${atParam}` : ""}`;
+  const partyOptions = [...parties.values()].map((p) => ({ id: p.id, name: p.name ?? p.id }));
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
@@ -103,6 +110,11 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
             </nav>
           }
           title={control.name}
+          aside={
+            control.origin === "custom" ? (
+              <CustomControlActions control={control} backHref={backHref} />
+            ) : undefined
+          }
         >
           <div className="flex flex-wrap items-center gap-3">
             {entry && <ControlStateBadge state={entry.state} />}
@@ -142,15 +154,35 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
           </Card>
 
           {systemImpl ? (
-            <ImplementationCard impl={systemImpl} parties={parties} title="Implementation" />
+            <ImplementationCard
+              impl={systemImpl}
+              parties={parties}
+              title="Implementation"
+              action={
+                <ImplementationCrudButton
+                  systemId={system.id}
+                  controlId={control.id}
+                  parameters={control.parameters}
+                  parties={partyOptions}
+                  existing={systemImpl}
+                />
+              }
+            />
           ) : (
             <Card>
               <CardHeader>
                 <CardTitle>Implementation</CardTitle>
+                <CardAction>
+                  <ImplementationCrudButton
+                    systemId={system.id}
+                    controlId={control.id}
+                    parameters={control.parameters}
+                    parties={partyOptions}
+                  />
+                </CardAction>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                {system.name} has no implementation of this control. Create one with{" "}
-                <InlineCode className="text-xs font-normal">POST /v1/implementations</InlineCode>.
+                {system.name} has no implementation of this control yet. Add one to record narrative, owner, and parameters.
               </CardContent>
             </Card>
           )}
@@ -184,6 +216,13 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
                           {r?.summary && r.outcome !== "pass" && <div className="mt-1 text-xs text-gap-ink">{r.summary}</div>}
                         </div>
                         {t.run && systemImpl && <RunTestButton testId={t.id} implementationId={systemImpl.id} />}
+                        {t.method === "manual" && systemImpl && (
+                          <RecordManualResultButton
+                            testId={t.id}
+                            testName={t.name ?? t.id}
+                            implementationId={systemImpl.id}
+                          />
+                        )}
                       </li>
                     );
                   })}
@@ -195,7 +234,10 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
           <Card>
             <CardHeader>
               <CardTitle>Evidence</CardTitle>
-              <CardAction className="text-xs text-muted-foreground">valid until</CardAction>
+              <CardAction className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>valid until</span>
+                {systemImpl && <QuickAddEvidenceButton implementationId={systemImpl.id} />}
+              </CardAction>
             </CardHeader>
             <CardContent>
               {evidence.length === 0 ? (
@@ -309,15 +351,28 @@ function Statement({
   );
 }
 
-function ImplementationCard({ impl, parties, title }: { impl: Implementation; parties: Map<string, Party>; title: string }) {
+function ImplementationCard({
+  impl,
+  parties,
+  title,
+  action,
+}: {
+  impl: Implementation;
+  parties: Map<string, Party>;
+  title: string;
+  action?: React.ReactNode;
+}) {
   const byAgent = createdByAgent(impl.created_by_ref, parties);
   const owner = impl.owner_ref ? (parties.get(impl.owner_ref)?.name ?? impl.owner_ref) : "—";
   return (
     <Card>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
-        <CardAction className="font-mono text-xs text-muted-foreground" title="Sent as If-Match on the next write">
-          modified {impl.modified.replace("T", " ").replace("Z", "")}
+        <CardAction className="flex items-center gap-3">
+          <span className="font-mono text-xs text-muted-foreground" title="Sent as If-Match on the next write">
+            modified {impl.modified.replace("T", " ").replace("Z", "")}
+          </span>
+          {action}
         </CardAction>
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">

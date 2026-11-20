@@ -4,6 +4,7 @@ import { PageTitle } from "@/components/typography";
 import { createdByAgent } from "@/lib/agents";
 import {
   evaluationInstant,
+  getBaseline,
   getControls,
   getImplementations,
   getParties,
@@ -12,6 +13,7 @@ import {
 } from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
+import { NewControlButton } from "./control-dialog";
 import { ControlsTable, type ControlRow } from "./controls-table";
 
 export const metadata: Metadata = { title: "Controls" };
@@ -23,7 +25,8 @@ export default async function ControlsPage({ params, searchParams }: PageProps<"
   const instant = evaluationInstant(atParam);
 
   const program = await getProgram(programId);
-  const [status, controls, impls, parties] = await Promise.all([
+  const [baseline, status, controls, impls, parties] = await Promise.all([
+    getBaseline(program.baseline_ref),
     getProgramStatus(programId, instant),
     getControls(),
     getImplementations(program.system_ref),
@@ -54,9 +57,16 @@ export default async function ControlsPage({ params, searchParams }: PageProps<"
         eyebrow={program.name}
         title="Controls"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} on the baseline · at <span className="text-foreground">{isoDate(status.at)}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} on the baseline · at <span className="text-foreground">{isoDate(status.at)}</span>
+            </p>
+            <NewControlButton
+              baselineId={baseline.id}
+              baselineModified={baseline.modified}
+              baselineControlRefs={baseline.control_refs ?? []}
+            />
+          </div>
         }
       />
       <ControlsTable rows={rows} programId={programId} at={atParam} />

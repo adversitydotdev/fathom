@@ -12,6 +12,7 @@ import {
 } from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
+import { TestCrudDialog } from "./test-crud";
 import { TestsTable, type TestRow, type TestStatus } from "./tests-table";
 
 export const metadata: Metadata = { title: "Tests" };
@@ -59,18 +60,26 @@ export default async function TestsPage({
       else if (latest?.outcome === "error") outcome = "error";
       return {
         id: t.id,
+        modified: t.modified,
         name: t.name ?? t.id,
         controlId: t.control_ref,
         controlDisplayId: ctrl?.display_id ?? t.control_ref,
         implementationId: impl?.id,
         method: t.method,
         interval: t.interval,
+        required: t.required,
+        command: t.run?.command,
         hasRun: Boolean(t.run),
         status: outcome,
         observed: latest?.observed,
         summary: latest?.summary,
       };
     });
+
+  const controlOptions = status.controls.map((c) => {
+    const ctrl = controlById.get(c.control_id);
+    return { id: c.control_id, label: `${ctrl?.display_id ?? c.control_id} · ${ctrl?.name ?? ""}`.trim() };
+  });
 
   const passing = rows.filter((r) => r.status === "pass").length;
   const failing = rows.filter((r) => r.status === "fail" || r.status === "error").length;
@@ -82,9 +91,12 @@ export default async function TestsPage({
         eyebrow={program.name}
         title="Tests"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} tests · at <span className="text-foreground">{isoDate(status.at)}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} tests · at <span className="text-foreground">{isoDate(status.at)}</span>
+            </p>
+            <TestCrudDialog controls={controlOptions} />
+          </div>
         }
       />
 
@@ -95,7 +107,7 @@ export default async function TestsPage({
         <StatCard label="No methodology" value={missing} tone={missing > 0 ? "waived" : undefined} />
       </div>
 
-      <TestsTable rows={rows} programId={programId} at={atParam} />
+      <TestsTable rows={rows} controls={controlOptions} programId={programId} at={atParam} />
     </div>
   );
 }

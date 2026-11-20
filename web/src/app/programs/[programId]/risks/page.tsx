@@ -11,6 +11,7 @@ import {
 } from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
+import { RiskCrudDialog } from "./risk-crud";
 import { RisksView, type RiskRow } from "./risks-table";
 
 export const metadata: Metadata = { title: "Risks" };
@@ -39,6 +40,7 @@ export default async function RisksPage({
 
   const rows: RiskRow[] = risks.map((r) => ({
     id: r.id,
+    modified: r.modified,
     name: r.name ?? r.id,
     statement: r.statement,
     likelihood: r.likelihood ?? 0,
@@ -47,6 +49,7 @@ export default async function RisksPage({
     residualImpact: r.residual_impact,
     treatment: r.treatment,
     status: r.status,
+    ownerId: r.owner_ref,
     owner: r.owner_ref ? (parties.get(r.owner_ref)?.name ?? r.owner_ref) : "—",
     controls: (r.control_refs ?? []).map((cid) => ({
       id: cid,
@@ -59,6 +62,9 @@ export default async function RisksPage({
     })),
   }));
 
+  const partyOptions = [...parties.values()].map((p) => ({ id: p.id, label: p.name ?? p.id }));
+  const controlOptions = controls.map((c) => ({ id: c.id, label: `${c.display_id ?? c.id} · ${c.name ?? ""}`.trim() }));
+
   const open = rows.filter((r) => r.status === "open").length;
   const treating = rows.filter((r) => r.status === "treating").length;
   const acceptedOrClosed = rows.filter((r) => r.status === "accepted" || r.status === "closed").length;
@@ -69,9 +75,12 @@ export default async function RisksPage({
         eyebrow={program.name}
         title="Risks"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} risks · at <span className="text-foreground">{isoDate(summary.at)}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} risks · at <span className="text-foreground">{isoDate(summary.at)}</span>
+            </p>
+            <RiskCrudDialog systemId={program.system_ref} parties={partyOptions} controls={controlOptions} />
+          </div>
         }
       />
 
@@ -82,7 +91,14 @@ export default async function RisksPage({
         <StatCard label="Accepted / Closed" value={acceptedOrClosed} tone={acceptedOrClosed > 0 ? "met" : undefined} />
       </div>
 
-      <RisksView rows={rows} programId={programId} at={atParam} />
+      <RisksView
+        rows={rows}
+        systemId={program.system_ref}
+        parties={partyOptions}
+        controls={controlOptions}
+        programId={programId}
+        at={atParam}
+      />
     </div>
   );
 }

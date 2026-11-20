@@ -9,6 +9,7 @@ import {
   getRisks,
 } from "@/lib/data";
 
+import { PartyCrudDialog } from "./party-crud";
 import { PartiesTable, type PartyRow } from "./parties-table";
 
 export const metadata: Metadata = { title: "Parties" };
@@ -43,6 +44,7 @@ export default async function PartiesPage({
 
   const rows: PartyRow[] = [...partiesMap.values()].map((p) => ({
     id: p.id,
+    modified: p.modified,
     name: p.name ?? p.id,
     kind: p.kind,
     isAgent: Boolean(p.tags?.includes("agent")),
@@ -63,9 +65,12 @@ export default async function PartiesPage({
         eyebrow={program.name}
         title="Parties"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} parties
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} parties
+            </p>
+            <PartyCrudDialog />
+          </div>
         }
       />
 

@@ -5,21 +5,29 @@ import { useMemo, useState } from "react";
 import { CircleCheck, CircleDashed, CircleX, AlertCircle } from "lucide-react";
 import { cn } from "cn";
 
+import { RecordManualResultButton } from "@/app/programs/[programId]/controls/[controlId]/control-crud";
 import { RunTestButton } from "@/app/programs/[programId]/controls/[controlId]/run-test-button";
+import { RevokeButton } from "@/components/crud";
 import { DataTable, type DataTableColumn } from "@/components/spectrumui/data-table";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
+import { revokeTest } from "@/lib/actions";
 import { isoDate } from "@/lib/format";
+
+import { TestCrudDialog, type ControlOption } from "./test-crud";
 
 export type TestStatus = "fail" | "error" | "missing" | "pass";
 
 export type TestRow = {
   id: string;
+  modified: string;
   name: string;
   controlId: string;
   controlDisplayId: string;
   implementationId?: string;
   method: "automated" | "manual";
   interval?: string;
+  required?: boolean;
+  command?: string;
   hasRun: boolean;
   status: TestStatus;
   observed?: string;
@@ -36,7 +44,17 @@ function TestOutcomeBadge({ status }: { status: TestStatus }) {
   return <StatusBadge tone="waived" icon={CircleDashed}>no methodology</StatusBadge>;
 }
 
-export function TestsTable({ rows, programId, at }: { rows: TestRow[]; programId: string; at?: string }) {
+export function TestsTable({
+  rows,
+  controls,
+  programId,
+  at,
+}: {
+  rows: TestRow[];
+  controls: ControlOption[];
+  programId: string;
+  at?: string;
+}) {
   const [filter, setFilter] = useState<TestStatus | null>(null);
   const [method, setMethod] = useState<string>("");
   const q = at ? `?at=${at}` : "";
@@ -114,16 +132,21 @@ export function TestsTable({ rows, programId, at }: { rows: TestRow[]; programId
       {
         id: "action",
         header: "",
-        width: 96,
-        cell: (r) =>
-          r.hasRun && r.implementationId ? (
-            <RunTestButton testId={r.id} implementationId={r.implementationId} />
-          ) : (
-            <span className="text-xs text-muted-foreground">—</span>
-          ),
+        width: 152,
+        cell: (r) => (
+          <div className="flex items-center justify-end gap-1">
+            {r.hasRun && r.implementationId ? (
+              <RunTestButton testId={r.id} implementationId={r.implementationId} />
+            ) : r.method === "manual" && r.implementationId ? (
+              <RecordManualResultButton testId={r.id} testName={r.name} implementationId={r.implementationId} />
+            ) : null}
+            <TestCrudDialog controls={controls} existing={r} />
+            <RevokeButton compact label={`Revoke ${r.name}`} onRevoke={() => revokeTest(r.id, r.modified)} />
+          </div>
+        ),
       },
     ],
-    [programId, q],
+    [controls, programId, q],
   );
 
   return (
