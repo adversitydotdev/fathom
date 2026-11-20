@@ -1,13 +1,27 @@
-# Local stand-ins for the production bindings in RFC 0003 section 9:
-# Postgres 18 for RDS (the template's default engine), and SeaweedFS as an
-# S3-compatible store for the evidence bucket.
+# Full local OGRL stack (RFC 0003 §2 & §9):
+#   - Postgres 18 (organization store + auth tables)
+#   - SeaweedFS S3 + bucket init (evidence & render blobs)
+#   - Alembic migration runner
+#   - OGRL FastAPI server (`http://localhost:8080`)
+#   - Idempotent local dev seeder (pulls ogrl-library v0.2.0 + starter Acme Platform;
+#     set `OGRL_SKIP_SEED=true` to boot an empty workspace)
+#   - OGRL Next.js Web UI (`http://localhost:3000`)
 #
-#   docker compose up -d
-#   OGRL_DATABASE_URL=postgresql://ogrl:ogrl@localhost:5432/ogrl \
-#   OGRL_S3_ENDPOINT=http://localhost:8333 OGRL_S3_BUCKET=ogrl \
-#   AWS_ACCESS_KEY_ID=ogrl AWS_SECRET_ACCESS_KEY=ogrl-secret uv run ogrl
+# Quickstart:
+#   docker compose up --build
+#   open http://localhost:3000
 
 name: ogrl
+
+x-api-env: &api-env
+  OGRL_DATABASE_URL: postgresql://ogrl:ogrl@postgres:5432/ogrl
+  OGRL_S3_ENDPOINT: http://s3:8333
+  OGRL_S3_BUCKET: ogrl
+  AWS_ACCESS_KEY_ID: ogrl
+  AWS_SECRET_ACCESS_KEY: ogrl-secret
+  AWS_DEFAULT_REGION: us-east-1
+  OGRL_API_TOKENS: '{"ogrl_pat_local_dev_admin":{"actor_id":"party--local-admin","roles":["administrator"],"kind":"person"}}'
+  OGRL_ALLOWED_ORIGINS: http://localhost:3000
 
 services:
   postgres:
@@ -51,6 +65,72 @@ services:
                aws --endpoint-url http://s3:8333 s3api create-bucket --bucket ogrl && exit 0;
                sleep 1;
              done; exit 1"
+
+  migrate:
+    image: ogrl-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment: *api-env
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    image: ogrl-api:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      s3-bucket:
+        condition: service_completed_successfully
+    environment: *api-env
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health', timeout=3)"]
+      interval: 5s
+      timeout: 3s
+      start_period: 5s
+      retries: 15
+
+  seed:
+    image: ogrl-api:local
+    pull_policy: never
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      OGRL_API_ORIGIN: http://api:8080
+      OGRL_API_TOKEN: ogrl_pat_local_dev_admin
+      OGRL_SKIP_SEED: ${OGRL_SKIP_SEED:-false}
+    volumes:
+      - ./deploy/local/seed.py:/app/seed.py:ro
+    command: ["python", "/app/seed.py"]
+    restart: "no"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        OGRL_API_ORIGIN: http://api:8080
+    depends_on:
+      api:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    environment:
+      OGRL_API_ORIGIN: http://api:8080
+      OGRL_API_TOKEN: ogrl_pat_local_dev_admin
+    ports:
+      - "3000:3000"
 
 volumes:
   postgres:
