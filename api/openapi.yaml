@@ -26,6 +26,7 @@ servers:
         default: localhost:8080
 tags:
   - name: Meta
+  - name: Auth
   - name: Library
   - name: Frameworks
   - name: Requirements
@@ -65,6 +66,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Health"
+
+  /auth/oidc/{provider}/begin:
+    get:
+      tags: [Auth]
+      operationId: beginOidcLogin
+      summary: Redirect to an OIDC identity provider with PKCE.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: redirect_to
+          in: query
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the identity provider authorization endpoint.
+  /auth/oidc/{provider}/callback:
+    get:
+      tags: [Auth]
+      operationId: finishOidcLogin
+      summary: Verify OIDC callback, upsert party, and set session cookie.
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: code
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to the application with the session cookie set.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/session:
+    get:
+      tags: [Auth]
+      operationId: getAuthSession
+      summary: Describe the currently authenticated principal.
+      responses:
+        "200":
+          description: Active session principal and effective permissions.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutSession
+      summary: Revoke the active browser session and clear its cookie.
+      responses:
+        "204":
+          description: Session revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/tokens:
+    get:
+      tags: [Auth]
+      operationId: listAuthTokens
+      summary: List API token metadata (never plaintext).
+      responses:
+        "200":
+          description: Token metadata list.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Auth]
+      operationId: createAuthToken
+      summary: Mint a new API token for the caller or a managed actor.
+      responses:
+        "201":
+          description: Newly minted token (plaintext returned once).
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /auth/tokens/{id}/revoke:
+    post:
+      tags: [Auth]
+      operationId: revokeAuthToken
+      summary: Revoke a minted API token.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Token revoked.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /library:
     get:

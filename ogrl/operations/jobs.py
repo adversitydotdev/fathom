@@ -80,6 +80,18 @@ class BackgroundExecutor:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
 
 
+class QueuedExecutor:
+    """Defers job execution to a dedicated `OGRL_PROCESS=jobs` worker via a wakeup queue."""
+
+    def __init__(self, queue: Any | None = None) -> None:
+        self._queue = queue
+
+    async def submit(self, run: Callable[[], Awaitable[None]]) -> None:
+        job_id = getattr(run, "job_id", None)
+        if self._queue is not None and job_id:
+            await self._queue.enqueue(job_id)
+
+
 def problem_of(exc: BaseException) -> JobProblem:
     if isinstance(exc, OGRLError):
         status = STATUS_OF.get(type(exc).__name__, HTTPStatus.INTERNAL_SERVER_ERROR)
@@ -145,8 +157,13 @@ class JobService:
         async def run() -> None:
             await self._run(job, work)
 
+        run.job_id = job.id  # type: ignore[attr-defined]
         await self._executor.submit(run)
         return await self._store.get_job(job.id) or job
+
+    async def run_existing(self, job: Job, work: Work) -> None:
+        """Claim and execute an already-persisted queued job (used by `OGRL_PROCESS=jobs`)."""
+        await self._run(job, work)
 
     async def _run(self, job: Job, work: Work) -> None:
         if not await self._store.claim_job(job.id, self._worker):

@@ -4,20 +4,24 @@ Everything below this file depends on protocols. Swapping Postgres for
 memory, Casbin for the static policy, or adding a runner happens here.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from ogrl.access import Authorizer, StaticPolicy
+from ogrl.access import Authorizer, Role, StaticPolicy
 from ogrl.adapters.fetch import UrlFetcher
 from ogrl.adapters.git import GitCli
 from ogrl.adapters.library import DirectoryLibrary, GitLibrary
+from ogrl.adapters.queue import JobQueue
 from ogrl.adapters.secrets import EnvSecrets
 from ogrl.auth import Authenticator
+from ogrl.auth.oidc import IdentityProvider
+from ogrl.auth.store import AuthStore, MemoryAuthStore
 from ogrl.features import Feature, FeatureEvaluator, StaticFeatures
 from ogrl.importer import OGRLBundleImporter, OscalComponentImporter
 from ogrl.kernel.timeutil import now
+from ogrl.operations.auth import AuthService
 from ogrl.operations.connectors import ConnectorService
 from ogrl.operations.content import ContentService
 from ogrl.operations.exports import ExportService, ExportSettings
@@ -58,6 +62,8 @@ class Container:
     features: FeatureEvaluator
     store: ObjectStore
     blobs: BlobStore
+    auth_store: AuthStore
+    auth: AuthService
     objects: ObjectService
     status: StatusService
     content: ContentService
@@ -70,6 +76,8 @@ class Container:
     restore: RestoreService
     connectors: ConnectorService
     plugins: Plugins = field(default_factory=Plugins)
+    queue: JobQueue | None = None
+    allowed_origins: tuple[str, ...] = ()
 
 
 def build(
@@ -80,13 +88,19 @@ def build(
     authorizer: Authorizer | None = None,
     features: FeatureEvaluator | None = None,
     blobs: BlobStore | None = None,
+    auth_store: AuthStore | None = None,
+    oidc_providers: Mapping[str, IdentityProvider] | None = None,
+    bootstrap_admin_emails: frozenset[str] = frozenset(),
+    default_oidc_roles: tuple[Role, ...] = (Role.VIEWER,),
     executor: Executor | None = None,
+    queue: JobQueue | None = None,
     library_source: LibrarySource | None = None,
     fetcher: Fetcher | None = None,
     git: Git | None = None,
     secrets: Secrets | None = None,
     export: ExportSettings | None = None,
     harness_user: str | None = None,
+    allowed_origins: tuple[str, ...] = (),
     clock: Callable[[], datetime] = now,
     version: str = "0.1.0",
 ) -> Container:
@@ -94,6 +108,7 @@ def build(
     authorizer = authorizer or StaticPolicy()
     store = store or controls or MemoryStore()
     blobs = blobs or MemoryBlobs()
+    auth_store = auth_store or MemoryAuthStore(clock=clock)
     fetcher = fetcher or UrlFetcher()
     git = git or GitCli()
     library_source = library_source or default_library_source()
@@ -110,6 +125,15 @@ def build(
 
     objects = ObjectService(store, authorizer, clock)
     jobs = JobService(store, blobs, authorizer, executor or InlineExecutor(), clock)
+    auth = AuthService(
+        store,
+        auth_store,
+        authorizer,
+        providers=oidc_providers,
+        default_roles=default_oidc_roles,
+        bootstrap_admin_emails=bootstrap_admin_emails,
+        clock=clock,
+    )
     return Container(
         version=version,
         authenticator=authenticator,
@@ -117,6 +141,8 @@ def build(
         features=features,
         store=store,
         blobs=blobs,
+        auth_store=auth_store,
+        auth=auth,
         objects=objects,
         status=StatusService(store, authorizer, clock),
         content=ContentService(objects, blobs, authorizer, clock),
@@ -129,4 +155,6 @@ def build(
         restore=RestoreService(store, blobs, authorizer, jobs, library_source, fetcher, git, clock),
         connectors=ConnectorService(objects, blobs, authorizer, jobs, plugins, clock),
         plugins=plugins,
+        queue=queue,
+        allowed_origins=allowed_origins,
     )

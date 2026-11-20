@@ -89,3 +89,45 @@ store_state = Table(
     Column("history_start", DateTime(timezone=True)),
     Column("library_pin", JSONB),
 )
+
+# --- Interactive auth: OIDC identities, browser sessions, and minted API tokens ---
+
+auth_identities = Table(
+    "auth_identities",
+    metadata,
+    Column("actor_id", Text, primary_key=True),
+    Column("issuer", Text),
+    Column("subject", Text),
+    Column("email", Text),
+    Column("kind", Text, nullable=False, server_default="person"),
+    Column("roles", JSONB, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("updated_at", DateTime(timezone=True), nullable=False),
+    Index("auth_identities_issuer_subject", "issuer", "subject", unique=True),
+)
+
+auth_sessions = Table(
+    "auth_sessions",
+    metadata,
+    Column("token_digest", Text, primary_key=True),
+    Column("actor_id", Text, nullable=False),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("expires_at", DateTime(timezone=True), nullable=False),
+    Column("revoked_at", DateTime(timezone=True)),
+    Index("auth_sessions_actor", "actor_id"),
+)
+
+auth_tokens = Table(
+    "auth_tokens",
+    metadata,
+    Column("token_digest", Text, primary_key=True),
+    Column("id", Text, nullable=False, unique=True),
+    Column("actor_id", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("created_by_ref", Text),
+    Column("created_at", DateTime(timezone=True), nullable=False),
+    Column("expires_at", DateTime(timezone=True)),
+    Column("revoked_at", DateTime(timezone=True)),
+    Column("last_used_at", DateTime(timezone=True)),
+    Index("auth_tokens_actor", "actor_id"),
+)

@@ -1,12 +1,14 @@
 """Binds a catalog `Endpoint` to a handler and enforces the endpoint's rules.
 
 Before any handler runs, the guard authenticates, checks the endpoint's
-permission and feature, and puts the `Principal` on the request. Handlers
-read it with the `CurrentPrincipal` dependency and never touch credentials.
+permission and feature, enforces same-origin CSRF checks for cookie-authenticated
+unsafe requests, and puts the `Principal` on the request. Handlers read it with
+the `CurrentPrincipal` dependency and never touch credentials.
 """
 
 from collections.abc import Callable, Iterable
 from typing import Annotated, Any
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Request
 
@@ -16,11 +18,41 @@ from ogrl.auth import SESSION_COOKIE, Authenticator, Credentials
 from ogrl.errors import FeatureDisabled, Forbidden, Unauthenticated
 from ogrl.features import FeatureEvaluator
 
+UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
 
 def credentials_from(request: Request) -> Credentials:
     scheme, _, token = request.headers.get("authorization", "").partition(" ")
     bearer = token.strip() if scheme.lower() == "bearer" and token.strip() else None
     return Credentials(bearer=bearer, session=request.cookies.get(SESSION_COOKIE))
+
+
+def _check_csrf_origin(request: Request, allowed_origins: frozenset[str]) -> None:
+    """Cookie-authenticated unsafe methods must carry a matching Origin or Referer."""
+    if request.method.upper() not in UNSAFE_METHODS:
+        return
+    origin = request.headers.get("origin")
+    if origin:
+        parsed = urlparse(origin)
+        candidate = f"{parsed.scheme}://{parsed.netloc}".lower() if parsed.scheme else ""
+    else:
+        referer = request.headers.get("referer")
+        if not referer:
+            raise Forbidden("missing Origin header on cookie-authenticated write", slug="csrf")
+        parsed = urlparse(referer)
+        candidate = f"{parsed.scheme}://{parsed.netloc}".lower() if parsed.scheme else ""
+
+    expected_host = (
+        request.headers.get("x-forwarded-host") or request.headers.get("host") or request.url.netloc
+    ).lower()
+    expected_scheme = (
+        request.headers.get("x-forwarded-proto") or request.url.scheme or "http"
+    ).lower()
+    expected_origin = f"{expected_scheme}://{expected_host}"
+
+    if candidate == expected_origin or candidate in allowed_origins:
+        return
+    raise Forbidden("Origin does not match request host", slug="csrf")
 
 
 def current_principal(request: Request) -> Principal:
@@ -40,11 +72,13 @@ class Registrar:
         authenticator: Authenticator,
         authorizer: Authorizer,
         features: FeatureEvaluator,
+        allowed_origins: Iterable[str] = (),
     ) -> None:
         self._router = router
         self._authenticator = authenticator
         self._authorizer = authorizer
         self._features = features
+        self._allowed_origins = frozenset(o.rstrip("/").lower() for o in allowed_origins if o)
         self._bound: set[str] = set()
 
     def handle(self, endpoint: Endpoint, handler: Callable[..., Any]) -> None:
@@ -75,10 +109,12 @@ class Registrar:
         async def guard(request: Request) -> None:
             principal: Principal | None = None
             if endpoint.authenticated:
-                principal = await self._authenticator.authenticate(credentials_from(request))
+                creds = credentials_from(request)
+                principal = await self._authenticator.authenticate(creds)
                 if principal is None:
                     raise Unauthenticated("a session or bearer token is required")
-                # TODO: cookie-authenticated unsafe methods must also pass an Origin check (CSRF).
+                if creds.bearer is None and creds.session is not None:
+                    _check_csrf_origin(request, self._allowed_origins)
                 if endpoint.permission and not self._authorizer.allows(
                     principal, endpoint.permission
                 ):
