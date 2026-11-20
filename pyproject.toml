@@ -13,7 +13,7 @@ dependencies = [
     "fastapi>=0.162.2",
     "httpx>=0.28.1",
     "ogrl-rs==0.1.0",
-    "pydantic-ai-slim>=1.0.0",
+    "pydantic-ai-slim[anthropic,openai]>=1.0.0",
     "python-multipart>=0.0.33",
     "pyyaml>=6.0.3",
     "sqlalchemy[asyncio]>=2.0",

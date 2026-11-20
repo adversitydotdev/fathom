@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ogrl.access import ActorKind, Principal, Role
 from ogrl.container import Container
+from ogrl.operations import types as t
 
 DEFAULT_AGENT_ID = "party--ogrl-agent"
 ORGANIZATION = "organization"
@@ -21,7 +22,34 @@ def agent_principal(actor_id: str = DEFAULT_AGENT_ID) -> Principal:
     )
 
 
+async def ensure_agent_party(container: Container, actor_id: str = DEFAULT_AGENT_ID) -> None:
+    """Ensure the agent's organization `party` exists with `tags: ['agent']`."""
+    if await container.store.get(actor_id) is not None:
+        return
+    bootstrap = Principal(
+        actor_id="party--ogrl-system",
+        organization_id=ORGANIZATION,
+        kind=ActorKind.SERVICE,
+        roles=frozenset({Role.ADMINISTRATOR}),
+    )
+    try:
+        await container.objects.create(
+            bootstrap,
+            t.PARTY,
+            {
+                "id": actor_id,
+                "name": "OGRL Compliance Agent",
+                "kind": "role",
+                "tags": ["agent"],
+            },
+        )
+    except Exception:
+        # Ignore race if created concurrently.
+        return
+
+
 @dataclass(frozen=True, slots=True)
 class AgentDeps:
     container: Container
     principal: Principal
+    created_drafts: list[dict[str, str]] = field(default_factory=list)

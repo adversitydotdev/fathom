@@ -1,21 +1,38 @@
-"""Pydantic AI agent factory and high-level drafting helpers (RFC 0003 §4)."""
+"""Pydantic AI agent factory, streaming runner, and drafting helpers (RFC 0003 §4)."""
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from typing import Any
 
 from pydantic_ai import Agent
+from pydantic_ai.messages import (
+    FunctionToolCallEvent,
+    FunctionToolResultEvent,
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    PartDeltaEvent,
+    PartStartEvent,
+    TextPart,
+    TextPartDelta,
+    UserPromptPart,
+)
 from pydantic_ai.models import KnownModelName, Model
 
-from ogrl.agent.deps import DEFAULT_AGENT_ID, AgentDeps, agent_principal
+from ogrl.agent.config import AgentConfig
+from ogrl.agent.deps import DEFAULT_AGENT_ID, AgentDeps, agent_principal, ensure_agent_party
 from ogrl.agent.tools import register_tools
 from ogrl.container import Container
 
 SYSTEM_PROMPT = (
-    "You are an OGRL security program assistant operating under RFC 0003 section 4. "
-    "You read computed program status and gaps from the OGRL kernel, draft `planned` "
-    "implementation narratives, and propose `draft` crosswalk mappings for human review. "
-    "Never claim a control is met or implemented; humans review and attest all drafts."
+    "You are the OGRL security program assistant operating under RFC 0003 section 4. "
+    "Read computed program status, control details, gaps, risks, and policies using your tools—never "
+    "recompute control state on your own. When asked to draft work, write real OGRL draft objects "
+    "(`implementation` with `status: planned`, `policy` with `status: draft`, `risk` with `status: open`, "
+    "or `mapping` with `review_status: draft`) so humans can review and attest them directly in the UI. "
+    "Be concise, cite exact control display IDs and requirement IDs, and never claim a control is met "
+    "or implemented on a human's behalf."
 )
 
 
@@ -28,6 +45,97 @@ def build_agent(model: Model | KnownModelName | str) -> Agent[AgentDeps, str]:
     )
     register_tools(agent)
     return agent
+
+
+def _to_message_history(history: list[dict[str, str]] | None) -> list[ModelMessage]:
+    out: list[ModelMessage] = []
+    for turn in history or []:
+        role = turn.get("role")
+        content = (turn.get("content") or "").strip()
+        if not content:
+            continue
+        if role == "user":
+            out.append(ModelRequest(parts=[UserPromptPart(content=content)]))
+        elif role == "assistant":
+            out.append(ModelResponse(parts=[TextPart(content=content)]))
+    return out
+
+
+def _compose_prompt(message: str, context: dict[str, str | None] | None) -> str:
+    if not context:
+        return message
+    bits = [f"{k}={v}" for k, v in context.items() if v]
+    if not bits:
+        return message
+    return f"[Active UI context: {', '.join(bits)}]\n\n{message}"
+
+
+async def stream_agent_turn(
+    container: Container,
+    *,
+    config: AgentConfig,
+    message: str,
+    history: list[dict[str, str]] | None = None,
+    context: dict[str, str | None] | None = None,
+) -> AsyncIterator[dict[str, Any]]:
+    """Run one agent turn and yield structured SSE event dicts."""
+    if not config.enabled:
+        yield {"type": "error", "message": config.hint or "AI assistant is not configured."}
+        return
+
+    await ensure_agent_party(container, config.actor_id)
+    agent = build_agent(config.resolve_model())
+    deps = AgentDeps(container=container, principal=agent_principal(config.actor_id))
+    prompt = _compose_prompt(message, context)
+    msg_history = _to_message_history(history)
+    emitted_drafts = 0
+    accumulated = ""
+
+    try:
+        async with agent.iter(prompt, deps=deps, message_history=msg_history) as run:
+            async for node in run:
+                if Agent.is_model_request_node(node):
+                    async with node.stream(run.ctx) as request_stream:
+                        async for event in request_stream:
+                            if isinstance(event, PartStartEvent) and isinstance(
+                                event.part, TextPart
+                            ):
+                                if event.part.content:
+                                    accumulated += event.part.content
+                                    yield {"type": "delta", "text": event.part.content}
+                            elif isinstance(event, PartDeltaEvent) and isinstance(
+                                event.delta, TextPartDelta
+                            ):
+                                if event.delta.content_delta:
+                                    accumulated += event.delta.content_delta
+                                    yield {"type": "delta", "text": event.delta.content_delta}
+                elif Agent.is_call_tools_node(node):
+                    async with node.stream(run.ctx) as handle_stream:
+                        async for event in handle_stream:
+                            if isinstance(event, FunctionToolCallEvent):
+                                yield {
+                                    "type": "tool_call",
+                                    "name": event.part.tool_name,
+                                    "args": event.part.args_as_dict(),
+                                }
+                            elif isinstance(event, FunctionToolResultEvent):
+                                yield {
+                                    "type": "tool_result",
+                                    "name": event.result.tool_name,
+                                }
+                                while emitted_drafts < len(deps.created_drafts):
+                                    yield {"type": "draft", **deps.created_drafts[emitted_drafts]}
+                                    emitted_drafts += 1
+
+        final_text = (run.result.output if run.result else "") or accumulated
+        if not accumulated and final_text:
+            yield {"type": "delta", "text": final_text}
+        while emitted_drafts < len(deps.created_drafts):
+            yield {"type": "draft", **deps.created_drafts[emitted_drafts]}
+            emitted_drafts += 1
+        yield {"type": "done", "text": final_text, "drafts": deps.created_drafts}
+    except Exception as exc:
+        yield {"type": "error", "message": str(exc)}
 
 
 async def draft_gap_remediation(
