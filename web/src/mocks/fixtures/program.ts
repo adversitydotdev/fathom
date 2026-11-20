@@ -17,9 +17,13 @@ import type {
   Framework,
   Implementation,
   Job,
+  LibraryPin,
   Mapping,
   Party,
+  Policy,
+  Procedure,
   Program,
+  ProviderPin,
   Result,
   Risk,
   System,
@@ -565,4 +569,106 @@ export const jobs: Job[] = [
   { id: "job--0193-git-export", type: "git_export", status: "succeeded", created: at(0, "02:00:00Z"), finished: at(0, "02:01:12Z") },
   { id: "job--0193-ir-drill", type: "test_run", status: "failed", created: at(-4, "06:00:00Z"), finished: at(-4, "06:00:09Z"), error: { type: "urn:ogrl:problem:runner-error", title: "Runner exited with status 1", status: 500 } },
   { id: "job--0193-library-pull", type: "library_pull", status: "succeeded", created: at(-18, "10:12:00Z"), finished: at(-18, "10:14:51Z") },
+];
+
+// Policies & procedures ----------------------------------------------------
+
+export const policies: Policy[] = [
+  {
+    ...envelope("policy", "information-security", at(-210), at(-25)),
+    name: "Information Security Policy",
+    status: "adopted",
+    version: "2.3",
+    owner_ref: P("priya-shah"),
+    adopted: day(-200),
+    reviewed: day(-25),
+    review_interval: "annual",
+    control_refs: ["control--security-policies", "control--risk-assessment"],
+    resource: { uri: "s3://acme-ogrl-evidence/policies/infosec-v2.3.md", media_type: "text/markdown" },
+  },
+  {
+    ...envelope("policy", "access-control", at(-180), at(-15)),
+    name: "Access Control & Identity Policy",
+    status: "adopted",
+    version: "1.8",
+    owner_ref: P("jordan-lee"),
+    adopted: day(-175),
+    reviewed: day(-15),
+    review_interval: "annual",
+    control_refs: ["control--account-lifecycle", "control--mfa-privileged", "control--least-privilege"],
+    resource: { uri: "s3://acme-ogrl-evidence/policies/access-control-v1.8.md", media_type: "text/markdown" },
+  },
+  {
+    ...envelope("policy", "incident-response", at(-160), at(-62)),
+    name: "Incident Response Plan",
+    status: "adopted",
+    version: "3.0",
+    owner_ref: P("secops"),
+    adopted: day(-150),
+    reviewed: day(-62),
+    review_interval: "annual",
+    control_refs: ["control--incident-handling", "control--incident-reporting"],
+    resource: { uri: "s3://acme-ogrl-evidence/policies/ir-plan-v3.0.md", media_type: "text/markdown" },
+  },
+  {
+    ...envelope("policy", "change-management", at(-14), at(-3)),
+    name: "Production Change Control Policy",
+    status: "draft",
+    version: "0.9",
+    owner_ref: P("platform"),
+    control_refs: ["control--change-control", "control--least-functionality"],
+    created_by_ref: AGENT_PARTY,
+  },
+];
+
+export const procedures: Procedure[] = [
+  {
+    ...envelope("procedure", "quarterly-access-review", at(-150), at(-40)),
+    name: "Quarterly Access Certification Runbook",
+    status: "adopted",
+    policy_ref: "policy--access-control",
+    owner_ref: P("jordan-lee"),
+    control_refs: ["control--account-lifecycle", "control--least-privilege"],
+  },
+  {
+    ...envelope("procedure", "vuln-triage", at(-120), at(-10)),
+    name: "Vulnerability Triage & Patching SLA",
+    status: "adopted",
+    policy_ref: "policy--information-security",
+    owner_ref: P("secops"),
+    control_refs: ["control--vulnerability-scanning", "control--flaw-remediation"],
+  },
+  {
+    ...envelope("procedure", "backup-restore-drill", at(-90), at(-35)),
+    name: "Cross-Account Backup Restore Drill",
+    status: "draft",
+    policy_ref: "policy--information-security",
+    owner_ref: P("platform"),
+    control_refs: ["control--backups"],
+  },
+];
+
+// Library & provider pins --------------------------------------------------
+
+export const libraryPin: LibraryPin = {
+  id: "ogrl-library",
+  version: "0.2.0",
+  commit: "33d2a76f9b1c4d8e2a107c5b4f90e8d1a2c3b4d5",
+};
+
+export const providers: ProviderPin[] = [
+  {
+    id: "bundle--com.okta.workforce",
+    name: "Okta Workforce Identity Responsibility Matrix",
+    version: "2026.10",
+    digest: "sha-256:4a9e7c2b1f08d6e3a5c4b2d8f0e1a9c7b5d3f1e2a4c6b8d0e2f4a6c8b0d2e4f6",
+    kind: "ogrl",
+  },
+  {
+    id: "bundle--com.aws.us-east-1",
+    name: "AWS Shared Responsibility Matrix (us-east-1)",
+    version: "2026.09",
+    digest: "sha-256:9c1b3d5e7f9a0b2c4d6e8f0a1b3c5d7e9f1a3b5c7d9e0f2a4b6c8d0e2f4a6b8c",
+    kind: "oscal-component",
+  },
 ];

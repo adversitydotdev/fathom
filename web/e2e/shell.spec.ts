@@ -17,9 +17,10 @@ test("sidebar marks the current page and navigates", async ({ page }) => {
   await nav.getByRole("link", { name: "Controls" }).click();
   await expect(page).toHaveURL(new RegExp(`/programs/${PROGRAM_171}/controls$`));
   await expect(nav.getByRole("link", { name: "Controls" })).toHaveAttribute("aria-current", "page");
-  // Unbuilt sections render as inert labels, not links.
-  await expect(nav.getByRole("link", { name: "Risks" })).toHaveCount(0);
-  await expect(nav.getByText("Risks")).toHaveAttribute("title", "Not built yet");
+  // All program and organization sections are wired routes.
+  await nav.getByRole("link", { name: "Risks" }).click();
+  await expect(page).toHaveURL(new RegExp(`/programs/${PROGRAM_171}/risks$`));
+  await expect(nav.getByRole("link", { name: "Risks" })).toHaveAttribute("aria-current", "page");
 });
 
 test("program switcher changes program and keeps ?at", async ({ page }) => {

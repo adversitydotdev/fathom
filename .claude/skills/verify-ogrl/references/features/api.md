@@ -4,8 +4,8 @@ The HTTP contract is `api/openapi.yaml` (RFC 0004). There are two implementation
 
 ## Sub-features
 
-- python-api: `ogrl/api/` (FastAPI). It is built with `create_app(container)` and has no standalone server entrypoint yet. Implemented paths: meta and controls.
-- mock-api: `web/src/mocks/handlers.ts` (MSW) serves the full read surface plus `POST /tests/{id}/runs`, with cursor paging, filters, and `application/problem+json` errors.
+- python-api: `ogrl/api/` (FastAPI) served via `ogrl/main.py` (`ogrl-api` entrypoint / `OGRL_PROCESS=api|jobs`) backed by `ogrl-rs` kernel, Postgres, S3, OIDC/PKCE + API token auth, and `/v1/*` + `/health`.
+- mock-api: `web/src/mocks/handlers.ts` (MSW) serves the full read surface (including policies, procedures, library pin, provider bundles) plus `POST /tests/{id}/runs`, `POST /library/pull`, `POST /programs/{id}/renders`, and `POST /exports/git`, with cursor paging, filters, and `application/problem+json` errors.
 
 ## How to get to it (user POV)
 

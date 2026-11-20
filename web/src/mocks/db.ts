@@ -23,6 +23,10 @@ export const db = {
   exceptions: [...f.exceptions],
   findings: [...f.findings],
   risks: [...f.risks],
+  policies: [...f.policies],
+  procedures: [...f.procedures],
   jobs: [...f.jobs],
+  libraryPin: { ...f.libraryPin },
+  providers: [...f.providers],
   controlStates: f.controlStates,
 };

@@ -15,7 +15,7 @@ A behavior-level inventory of the web UI. Agents use it to decide what to drive 
 
 - Exercise every entry point the feature file lists, and the success, empty, error, and `?at` (past date) paths the change can affect.
 - Mocks count because they sit behind the same `/v1` boundary the real API uses. They stop counting if you bypass a page's data loading.
-- Unbuilt sidebar sections render as inert text with `title="Not built yet"`. Say so instead of skipping them silently.
+- All 13 sidebar sections are built routes under `/programs/[programId]/...`.
 
 ## Full sweep
 
@@ -27,4 +27,5 @@ A behavior-level inventory of the web UI. Agents use it to decide what to drive 
 - [program-overview](program-overview.md): status metrics, requirement coverage, gaps list, needs-attention, recent jobs.
 - [controls-list](controls-list.md): controls table with state chips, family filter, search, sort, row navigation.
 - [control-detail](control-detail.md): statement and parameters, implementation, agent drafts, tests and Run, evidence validity, exceptions, mappings.
+- [program-views](program-views.md): requirements, tests, evidence, risks (5×5 matrix + register), exceptions, findings, policies & procedures, systems & provider bundles, parties, library pin & pull, jobs & OSCAL/SSP/Git export triggers.
 - [api](api.md): the Python API and the mock `/v1` surface, driven with curl and pytest.

@@ -5,7 +5,7 @@ The frame around every program page: `web/src/app/programs/[programId]/layout.ts
 ## Sub-features
 
 - home-redirect: `/` redirects to the first program. With no programs it shows "Create your first program".
-- sidebar: Overview and Controls are links. The others are inert (`title="Not built yet"`). The active link has `aria-current="page"`. Links carry `?at`.
+- sidebar: all 13 sections (Overview, Controls, Requirements, Tests, Evidence, Risks, Exceptions, Findings, Policies, Systems, Parties, Library, Jobs) are links under `/programs/[programId]/...`. The active link has `aria-current="page"`. Links carry `?at`.
 - fixtures-badge: `Fixtures · no auth` in the header, only in mock mode.
 - program-switcher: a `<select aria-label="Program">` listing programs on the same system. Changing it navigates and keeps `?at`.
 - evaluation-date: `<input type="date" aria-label="Evaluation date">` writes `?at=YYYY-MM-DD`. The "Evaluate now" button clears it.

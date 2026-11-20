@@ -11,6 +11,17 @@ const ROUTES: [string, string][] = [
   ["overview-past", `/programs/${PROGRAM_171}?at=2026-09-01`],
   ["controls", `/programs/${PROGRAM_171}/controls`],
   ["controls-gap", `/programs/${PROGRAM_171}/controls?state=gap`],
+  ["requirements", `/programs/${PROGRAM_171}/requirements`],
+  ["tests", `/programs/${PROGRAM_171}/tests`],
+  ["evidence", `/programs/${PROGRAM_171}/evidence`],
+  ["risks", `/programs/${PROGRAM_171}/risks`],
+  ["exceptions", `/programs/${PROGRAM_171}/exceptions`],
+  ["findings", `/programs/${PROGRAM_171}/findings`],
+  ["policies", `/programs/${PROGRAM_171}/policies`],
+  ["systems", `/programs/${PROGRAM_171}/systems`],
+  ["parties", `/programs/${PROGRAM_171}/parties`],
+  ["library", `/programs/${PROGRAM_171}/library`],
+  ["jobs", `/programs/${PROGRAM_171}/jobs`],
   ...Object.entries(CONTROL).map(([k, id]): [string, string] => [`control-${k}`, `/programs/${PROGRAM_171}/controls/${id}`]),
 ];
 

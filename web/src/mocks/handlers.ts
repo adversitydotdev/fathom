@@ -152,6 +152,42 @@ export const handlers = [
   one("/findings", () => db.findings),
   list("/risks", () => db.risks, { system_id: eq("system_ref"), status: eq("status"), treatment: eq("treatment"), control_id: (r, v) => r.control_refs?.includes(v) ?? false }),
   one("/risks", () => db.risks),
+  list("/policies", () => db.policies, { status: eq("status"), q }),
+  one("/policies", () => db.policies),
+  list("/procedures", () => db.procedures, { status: eq("status"), policy_id: eq("policy_ref"), q }),
+  one("/procedures", () => db.procedures),
+
+  http.get(`${V}/library`, () => HttpResponse.json(db.libraryPin)),
+  http.post(`${V}/library/pull`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as { version?: string; commit?: string };
+    if (!body.version && !body.commit) return problem(400, "bad-request", "Provide version or commit.");
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "library_pull", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+
+  http.get(`${V}/providers`, () => HttpResponse.json({ data: db.providers })),
+  http.get(`${V}/providers/:id`, ({ params }) => {
+    const item = db.providers.find((p) => p.id === params.id);
+    return item ? HttpResponse.json(item) : notFound();
+  }),
+
+  http.post(`${V}/programs/:id/renders`, async ({ params, request }) => {
+    if (!db.programs.some((p) => p.id === params.id)) return notFound();
+    const body = (await request.json().catch(() => ({}))) as { view?: string; framework_id?: string };
+    if (body.view !== "oscal" && body.view !== "ssp") return problem(400, "bad-request", "view must be oscal or ssp.");
+    if (body.view === "oscal" && !body.framework_id) return problem(400, "bad-request", "framework_id is required for oscal.");
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "render", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+
+  http.post(`${V}/exports/git`, () => {
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "git_export", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+
   list("/jobs", () => db.jobs, { type: eq("type"), status: eq("status") }),
   one("/jobs", () => db.jobs),
 ];

@@ -180,12 +180,12 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             </CardHeader>
             <CardContent>
               <ul className="divide-y text-sm">
-                <Attention icon={FlaskConical} label="Tests not passing" value={summary.failing_tests} />
-                <Attention icon={Paperclip} label="Evidence expiring in 30 days" value={summary.expiring_evidence} />
-                <Attention icon={PauseCircle} label="Exceptions expiring in 30 days" value={summary.expiring_exceptions} />
-                <Attention icon={Gavel} label="Open findings" value={summary.open_findings} />
-                <Attention icon={AlertTriangle} label="Open risks" value={summary.open_risks} />
-                <Attention icon={Sparkles} label="Agent drafts to review" value={agentDrafts} />
+                <Attention icon={FlaskConical} label="Tests not passing" value={summary.failing_tests} href={`${base}/tests${q}`} />
+                <Attention icon={Paperclip} label="Evidence expiring in 30 days" value={summary.expiring_evidence} href={`${base}/evidence${q}`} />
+                <Attention icon={PauseCircle} label="Exceptions expiring in 30 days" value={summary.expiring_exceptions} href={`${base}/exceptions${q}`} />
+                <Attention icon={Gavel} label="Open findings" value={summary.open_findings} href={`${base}/findings${q}`} />
+                <Attention icon={AlertTriangle} label="Open risks" value={summary.open_risks} href={`${base}/risks${q}`} />
+                <Attention icon={Sparkles} label="Agent drafts to review" value={agentDrafts} href={`${base}/controls${q}`} />
               </ul>
             </CardContent>
           </Card>
@@ -220,14 +220,26 @@ function Metric({ label, value, hint, tone, href }: { label: string; value: numb
   );
 }
 
-function Attention({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value?: number }) {
+function Attention({
+  icon: Icon,
+  label,
+  value,
+  href,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value?: number;
+  href: string;
+}) {
   return (
-    <li className="flex items-center justify-between py-2">
-      <span className="flex items-center gap-2 text-muted-foreground">
-        <Icon className="size-4" />
-        {label}
-      </span>
-      <span className="font-medium tabular-nums">{value ?? 0}</span>
+    <li>
+      <Link href={href} className="-mx-2 flex items-center justify-between rounded-md px-2 py-2 transition-colors hover:bg-muted">
+        <span className="flex items-center gap-2 text-muted-foreground">
+          <Icon className="size-4" />
+          {label}
+        </span>
+        <span className="font-medium tabular-nums">{value ?? 0}</span>
+      </Link>
     </li>
   );
 }

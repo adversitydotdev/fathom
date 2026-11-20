@@ -106,6 +106,62 @@ export const getExceptions = cache((implementationId: string) =>
 
 export const getJobs = cache(() => unwrap(api.GET("/jobs", { params: { query: { limit: 5 } } })));
 
+export const getAllJobs = cache(() =>
+  all((cursor) => unwrap(api.GET("/jobs", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getMappings = cache(() =>
+  all((cursor) => unwrap(api.GET("/mappings", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getTests = cache(() =>
+  all((cursor) => unwrap(api.GET("/tests", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getResults = cache(() =>
+  all((cursor) => unwrap(api.GET("/results", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getEvidence = cache(() =>
+  all((cursor) => unwrap(api.GET("/evidence", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getAllExceptions = cache(() =>
+  all((cursor) => unwrap(api.GET("/exceptions", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getFindings = cache((systemId?: string) =>
+  all((cursor) =>
+    unwrap(api.GET("/findings", { params: { query: { system_id: systemId, cursor, limit: 200 } } })),
+  ),
+);
+
+export const getRisks = cache((systemId?: string) =>
+  all((cursor) =>
+    unwrap(api.GET("/risks", { params: { query: { system_id: systemId, cursor, limit: 200 } } })),
+  ),
+);
+
+export const getPolicies = cache(() =>
+  all((cursor) => unwrap(api.GET("/policies", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getProcedures = cache(() =>
+  all((cursor) => unwrap(api.GET("/procedures", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getSystems = cache(() =>
+  all((cursor) => unwrap(api.GET("/systems", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getComponents = cache(() =>
+  all((cursor) => unwrap(api.GET("/components", { params: { query: { cursor, limit: 200 } } }))),
+);
+
+export const getLibraryPin = cache(() => unwrap(api.GET("/library")));
+
+export const getProviders = cache(() => unwrap(api.GET("/providers")));
+
 export const getParties = cache(async () => {
   const parties = await all((cursor) => unwrap(api.GET("/parties", { params: { query: { cursor, limit: 200 } } })));
   return new Map<string, Party>(parties.map((p) => [p.id, p]));

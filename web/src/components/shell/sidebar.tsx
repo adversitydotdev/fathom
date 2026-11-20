@@ -21,7 +21,7 @@ import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "cn";
 
-type Item = { label: string; icon: React.ComponentType<{ className?: string }>; href?: string };
+type Item = { label: string; icon: React.ComponentType<{ className?: string }>; href: string };
 
 export function Sidebar() {
   const { programId } = useParams<{ programId: string }>();
@@ -36,27 +36,27 @@ export function Sidebar() {
       items: [
         { label: "Overview", icon: LayoutDashboard, href: base },
         { label: "Controls", icon: ShieldCheck, href: `${base}/controls` },
-        { label: "Requirements", icon: ListChecks },
-        { label: "Tests", icon: FlaskConical },
-        { label: "Evidence", icon: Paperclip },
+        { label: "Requirements", icon: ListChecks, href: `${base}/requirements` },
+        { label: "Tests", icon: FlaskConical, href: `${base}/tests` },
+        { label: "Evidence", icon: Paperclip, href: `${base}/evidence` },
       ],
     },
     {
       title: "Program",
       items: [
-        { label: "Risks", icon: AlertTriangle },
-        { label: "Exceptions", icon: PauseCircle },
-        { label: "Findings", icon: Gavel },
-        { label: "Policies", icon: FileText },
+        { label: "Risks", icon: AlertTriangle, href: `${base}/risks` },
+        { label: "Exceptions", icon: PauseCircle, href: `${base}/exceptions` },
+        { label: "Findings", icon: Gavel, href: `${base}/findings` },
+        { label: "Policies", icon: FileText, href: `${base}/policies` },
       ],
     },
     {
       title: "Organization",
       items: [
-        { label: "Systems", icon: Server },
-        { label: "Parties", icon: Users },
-        { label: "Library", icon: BookOpen },
-        { label: "Jobs", icon: Play },
+        { label: "Systems", icon: Server, href: `${base}/systems` },
+        { label: "Parties", icon: Users, href: `${base}/parties` },
+        { label: "Library", icon: BookOpen, href: `${base}/library` },
+        { label: "Jobs", icon: Play, href: `${base}/jobs` },
       ],
     },
   ];
@@ -78,31 +78,20 @@ export function Sidebar() {
               {section.title}
             </div>
           )}
-          {section.items.map(({ label, icon: Icon, href }) =>
-            href ? (
-              <Link
-                key={label}
-                href={withAt(href)}
-                aria-current={isActive(href) ? "page" : undefined}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
-                  isActive(href) && "bg-sidebar-accent text-foreground",
-                )}
-              >
-                <Icon className="size-4" />
-                {label}
-              </Link>
-            ) : (
-              <span
-                key={label}
-                className="flex cursor-default items-center gap-2.5 rounded-lg px-2 py-1.5 text-muted-foreground/50"
-                title="Not built yet"
-              >
-                <Icon className="size-4" />
-                {label}
-              </span>
-            ),
-          )}
+          {section.items.map(({ label, icon: Icon, href }) => (
+            <Link
+              key={label}
+              href={withAt(href)}
+              aria-current={isActive(href) ? "page" : undefined}
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground",
+                isActive(href) && "bg-sidebar-accent text-foreground",
+              )}
+            >
+              <Icon className="size-4" />
+              {label}
+            </Link>
+          ))}
         </div>
       ))}
       <div className="mt-auto flex items-center gap-2 px-2 pt-4 font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">

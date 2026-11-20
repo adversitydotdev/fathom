@@ -19,7 +19,11 @@ export type Evidence = S["Evidence"];
 export type Exception = S["Exception"];
 export type Finding = S["Finding"];
 export type Risk = S["Risk"];
+export type Policy = S["Policy"];
+export type Procedure = S["Procedure"];
 export type Job = S["Job"];
+export type LibraryPin = S["LibraryPin"];
+export type ProviderPin = S["ProviderPin"];
 
 export type ProgramSummary = S["ProgramSummary"];
 export type ProgramStatus = S["ProgramStatus"];
