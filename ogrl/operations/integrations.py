@@ -49,6 +49,7 @@ log = logging.getLogger(__name__)
 
 SUPPORTED_AUTH = frozenset({"fields"})  # oauth2 and aws_role arrive with RFC 0005 phase P0b
 RATE_LIMIT_RETRIES = 3
+SNAPSHOT_REUSE = timedelta(hours=1)  # RFC 0005 section 6: OGRL_SNAPSHOT_REUSE
 RETRY_CAP_SECONDS = 60
 SNAPSHOT_MAX_BYTES = 100 * 1024 * 1024
 
@@ -249,7 +250,9 @@ class IntegrationService:
         packages: Registry[Package],
         clock: Callable[[], datetime] = now,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        reuse: timedelta = SNAPSHOT_REUSE,
     ) -> None:
+        self._reuse = reuse
         self._objects = objects
         self._blobs = blobs
         self._authorizer = authorizer
@@ -632,7 +635,9 @@ class IntegrationService:
         """Snapshot selection, RFC 0001 section 7.6. Raises SelectionError."""
         assert test.run is not None
         bound = self.bound(impl, graph, await self._store.list_connections())
-        not_before = at - timedelta(days=window_days(test))
+        # The freshness window bounds what RFC 0001 allows; the reuse window keeps a run from
+        # re-reading old vendor state when a fresh collection is cheap (RFC 0005 section 6).
+        not_before = max(at - timedelta(days=window_days(test)), at - self._reuse)
         chosen: dict[str, list[Selected]] = {}
         for text in test.run.sources_read():
             source = rules.parse_reference(text)

@@ -5,7 +5,7 @@ The fake integration in tests/integrations/fake stands in for a vendor.
 
 import asyncio
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -28,6 +28,26 @@ ADMIN = PRINCIPALS["administrator"]
 
 def run(coro):
     return asyncio.run(coro)
+
+
+class Clock:
+    """Real time until a test moves it forward."""
+
+    def __init__(self) -> None:
+        self.offset = timedelta()
+
+    def __call__(self) -> datetime:
+        return datetime.now(UTC) + self.offset
+
+
+@pytest.fixture
+def clock() -> Clock:
+    return Clock()
+
+
+@pytest.fixture
+def app(make_app, clock):
+    return make_app(clock=clock)
 
 
 @pytest.fixture
@@ -346,3 +366,46 @@ def test_route_permissions(world, client):
     contributor.post(f"/connections/{cid}/validate", expect=202)
     assert viewer.get("/connections")["data"][0]["id"] == cid
     Api(client, "agent").post(f"/integrations/{FAKE}/templates/mfa-enforcement/enable", expect=403)
+
+
+# --- Scheduling (RFC 0005 section 6) ---------------------------------------------------------
+
+SYSTEM = PRINCIPALS["administrator"]
+
+
+def test_scheduler_runs_due_pairs_and_collects_fresh_snapshots(world, clock):
+    c, api = world["c"], world["api"]
+    test = rule_test(api)
+    assert run(c.scheduler.tick(SYSTEM)) == []  # nothing bound yet
+
+    connect(c, world["component"])
+    (job,) = run(c.scheduler.tick(SYSTEM))
+    assert (job.type, job.status) == ("test_run", "succeeded")
+    assert run(c.scheduler.tick(SYSTEM)) == []  # the result is current
+
+    clock.offset += timedelta(hours=21)
+    assert run(c.scheduler.tick(SYSTEM)) == []  # inside the daily cadence
+    clock.offset += timedelta(hours=2)
+    (job,) = run(c.scheduler.tick(SYSTEM))
+    result = api.get(f"/results/{job.result_id}")
+    assert result["test_ref"] == test["id"]
+    # The day-old snapshot is past the reuse window, so the run collected again.
+    assert len(run(c.integrations.list_snapshots(ADMIN, None, USERS))) == 2
+
+
+def test_scheduler_skips_event_driven_and_other_runners(world):
+    c, api = world["c"], world["api"]
+    connect(c, world["component"])
+    test = rule_test(api)
+    api.patch(f"/tests/{test['id']}", {"interval": "event-driven"}, if_match=test["modified"])
+    api.post(
+        "/tests",
+        {
+            "name": "shell",
+            "control_ref": C1,
+            "method": "automated",
+            "interval": "daily",
+            "run": {"runner": "shell", "command": "true"},
+        },
+    )
+    assert run(c.scheduler.tick(SYSTEM)) == []

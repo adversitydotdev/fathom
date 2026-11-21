@@ -6,7 +6,7 @@ memory, Casbin for the static policy, or adding a runner happens here.
 
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from ogrl.access import Authorizer, Role, StaticPolicy
@@ -29,13 +29,14 @@ from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.content import ContentService
 from ogrl.operations.exports import ExportService, ExportSettings
 from ogrl.operations.harness import HarnessService
-from ogrl.operations.integrations import IntegrationService
+from ogrl.operations.integrations import SNAPSHOT_REUSE, IntegrationService
 from ogrl.operations.jobs import Executor, InlineExecutor, JobService
 from ogrl.operations.library import LibraryService
 from ogrl.operations.objects import ObjectService
 from ogrl.operations.providers import ProviderService
 from ogrl.operations.renders import RenderService
 from ogrl.operations.restore import RestoreService
+from ogrl.operations.schedule import IntegrationScheduler
 from ogrl.operations.sources import Fetcher, Git, LibrarySource
 from ogrl.operations.status import StatusService
 from ogrl.operations.store import BlobStore, ObjectStore
@@ -79,6 +80,7 @@ class Container:
     exports: ExportService
     restore: RestoreService
     integrations: IntegrationService
+    scheduler: IntegrationScheduler
     plugins: Plugins = field(default_factory=Plugins)
     queue: JobQueue | None = None
     allowed_origins: tuple[str, ...] = ()
@@ -107,6 +109,7 @@ def build(
     vault: SecretVault | None = None,
     integration_host: IntegrationHost | None = None,
     integrations_dir: Path | None = None,
+    snapshot_reuse: timedelta = SNAPSHOT_REUSE,
     export: ExportSettings | None = None,
     harness_user: str | None = None,
     allowed_origins: tuple[str, ...] = (),
@@ -137,17 +140,20 @@ def build(
 
     objects = ObjectService(store, authorizer, clock)
     jobs = JobService(store, blobs, authorizer, executor or InlineExecutor(), clock)
+    connections = connections or MemoryConnections()
     integrations = IntegrationService(
         objects,
         blobs,
         authorizer,
         jobs,
-        connections or MemoryConnections(),
+        connections,
         vault or MemoryVault(),
         integration_host or SubprocessHost(user=harness_user),
         plugins.integrations,
         clock,
+        reuse=snapshot_reuse,
     )
+    harness = HarnessService(objects, blobs, authorizer, jobs, plugins, clock, integrations)
     auth = AuthService(
         store,
         auth_store,
@@ -172,11 +178,12 @@ def build(
         jobs=jobs,
         library=LibraryService(store, authorizer, jobs, library_source, clock),
         providers=ProviderService(store, authorizer, jobs, fetcher, plugins, clock),
-        harness=HarnessService(objects, blobs, authorizer, jobs, plugins, clock, integrations),
+        harness=harness,
         renders=RenderService(store, authorizer, jobs, plugins, clock),
         exports=ExportService(store, blobs, authorizer, jobs, git, export, clock),
         restore=RestoreService(store, blobs, authorizer, jobs, library_source, fetcher, git, clock),
         integrations=integrations,
+        scheduler=IntegrationScheduler(store, connections, integrations, harness, clock),
         plugins=plugins,
         queue=queue,
         allowed_origins=allowed_origins,

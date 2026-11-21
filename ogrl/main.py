@@ -22,6 +22,9 @@ OGRL_BLOB_DIR            A directory instead of S3. Unset with no bucket: memory
 OGRL_EXPORT_REMOTE       Git remote for the snapshot. Unset: export is disabled.
 OGRL_RUN_SCHEDULER       `true` runs the export schedule in this process (RFC 0003 section 2).
 OGRL_EXPORT_INTERVAL     Seconds between scheduled exports. Default 86400.
+OGRL_INTEGRATION_TICK    Seconds between scheduled integration test runs (RFC 0005 section 6).
+                            Default 300. Runs where OGRL_RUN_SCHEDULER=true.
+OGRL_SNAPSHOT_REUSE      Seconds a snapshot may be reused before a run collects again. Default 3600.
 OGRL_QUEUE_URL           Optional SQS queue URL for job worker wakeups.
 OGRL_SSM_PREFIX          AWS SSM Parameter Store prefix (e.g. `/ogrl/ogrl`) for harness secrets.
 OGRL_HARNESS_USER        Operating-system user the shell runner switches to.
@@ -42,6 +45,7 @@ import logging
 import os
 from collections.abc import AsyncIterator, Mapping
 from contextlib import asynccontextmanager
+from datetime import timedelta
 from pathlib import Path
 from urllib.parse import quote_plus
 
@@ -73,6 +77,8 @@ from ogrl.auth.store import (
 )
 from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.exports import ExportSettings
+from ogrl.operations.harness import RunRequest as HarnessRunRequest
+from ogrl.operations.integrations import CollectionRequest
 from ogrl.operations.jobs import BackgroundExecutor, Executor, QueuedExecutor
 from ogrl.operations.library import LibraryPullRequest
 from ogrl.operations.providers import ProviderImportRequest
@@ -270,6 +276,7 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         connections=connections,
         vault=vault,
         integrations_dir=integrations_dir,
+        snapshot_reuse=timedelta(seconds=float(env.get("OGRL_SNAPSHOT_REUSE", "3600"))),
         export=ExportSettings(remote=env.get("OGRL_EXPORT_REMOTE") or None),
         harness_user=env.get("OGRL_HARNESS_USER") or None,
         allowed_origins=allowed_origins,
@@ -289,6 +296,21 @@ async def export_schedule(c: container.Container, interval: float) -> None:
             log.info("scheduled export %s queued", job.id)
         except Exception:
             log.exception("scheduled export could not start")
+
+
+async def integration_schedule(c: container.Container, interval: float) -> None:
+    """Scheduled snapshot runs (RFC 0005 section 6), as the system principal."""
+    system = Principal(
+        "party--ogrl-scheduler", ORGANIZATION, ActorKind.SERVICE, frozenset({Role.ADMINISTRATOR})
+    )
+    while True:
+        try:
+            jobs = await c.scheduler.tick(system)
+            if jobs:
+                log.info("scheduled %d integration test runs", len(jobs))
+        except Exception:
+            log.exception("integration schedule tick failed")
+        await asyncio.sleep(interval)
 
 
 async def dispatch_queued_job(c: container.Container, job: Job) -> None:
@@ -312,6 +334,15 @@ async def dispatch_queued_job(c: container.Container, job: Job) -> None:
         await c.exports.export(principal)
     elif job.type == "restore":
         await c.restore.restore(principal, RestoreRequest.model_validate(req))
+    elif job.type == "test_run":
+        await c.harness.run(
+            principal, req.get("test_id", ""), HarnessRunRequest.model_validate(req)
+        )
+    elif job.type == "collection" and req.get("validate"):
+        await c.integrations.validate(principal, req.get("connection_id", ""))
+    elif job.type == "collection":
+        sources = CollectionRequest(sources=req.get("sources"))
+        await c.integrations.collect(principal, req.get("connection_id", ""), sources)
     else:
         log.warning("worker skipping unsupported queued job %s (type=%s)", job.id, job.type)
 
@@ -353,6 +384,9 @@ def app_from_env() -> FastAPI:
         tasks: list[asyncio.Task[None]] = []
         if scheduler and c.exports is not None and os.environ.get("OGRL_EXPORT_REMOTE"):
             tasks.append(asyncio.create_task(export_schedule(c, interval)))
+        if scheduler and c.plugins.integrations.names():
+            tick = float(os.environ.get("OGRL_INTEGRATION_TICK", "300"))
+            tasks.append(asyncio.create_task(integration_schedule(c, tick)))
         if process_mode == "jobs":
             tasks.append(asyncio.create_task(job_worker_loop(c)))
         yield
