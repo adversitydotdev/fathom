@@ -27,6 +27,8 @@ export type ProviderPin = S["ProviderPin"];
 export type Integration = S["Integration"];
 export type Connection = S["Connection"];
 export type Snapshot = S["Snapshot"];
+export type IntegrationInstall = S["IntegrationInstall"];
+export type TemplateUpdate = S["TemplateUpdate"];
 
 export type ProgramSummary = S["ProgramSummary"];
 export type ProgramStatus = S["ProgramStatus"];

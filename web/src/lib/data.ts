@@ -176,3 +176,14 @@ export const getIntegrations = cache(async () => (await unwrap(api.GET("/integra
 export const getConnections = cache(async () => (await unwrap(api.GET("/connections"))).data);
 
 export const getSnapshots = cache(async () => (await unwrap(api.GET("/snapshots", { params: { query: {} } }))).data);
+
+export const getIntegrationVersions = cache(
+  async (id: string) =>
+    (await unwrap(api.GET("/integrations/{id}/versions", { params: { path: { id } } }))).data,
+);
+
+export const getTemplateUpdates = cache(
+  async (id: string) =>
+    (await unwrap(api.GET("/integrations/{id}/template-updates", { params: { path: { id } } }))).data,
+);
+

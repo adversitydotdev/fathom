@@ -159,6 +159,33 @@ export async function startOAuth(id: string): Promise<{ url?: string; error?: st
   return { url: data.authorize_url };
 }
 
+export async function installIntegration(url: string, digest?: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations", {
+    body: { url, ...(digest ? { digest } : {}), enable: true },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't queue install.") };
+  refresh();
+  return { jobId: data.id };
+}
+
+export async function enableIntegrationVersion(id: string, version: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations/{id}/versions/{version}/enable", {
+    params: { path: { id, version } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't enable that version.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function applyTemplateUpdate(id: string, testId: string, ifMatch: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations/{id}/template-updates/{test_id}/apply", {
+    params: { path: { id, test_id: testId }, header: { "If-Match": ifMatch } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't apply the update.") };
+  refresh();
+  return { id: data.id };
+}
+
 export async function enableTemplate(integrationId: string, name: string): Promise<ActionState> {
   const { data, error } = await api.POST("/integrations/{id}/templates/{name}/enable", {
     params: { path: { id: integrationId, name } },

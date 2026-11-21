@@ -1630,7 +1630,109 @@ export interface paths {
          */
         get: operations["listIntegrations"];
         put?: never;
+        /**
+         * Install an integration archive from a URL. Returns a job.
+         * @description RFC 0005 section 4. The archive is unpacked and validated, stored in
+         *     object storage, and (with `enable`, the default) enabled. Unsigned
+         *     archives install only with `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A
+         *     version is immutable: reinstalling it with other bytes is refused.
+         */
+        post: operations["installIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/archives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install an uploaded integration archive. Returns a job.
+         * @description RFC 0005 section 4. Same checks as `POST /integrations`.
+         */
+        post: operations["uploadIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the installed archive versions of an integration. */
+        get: operations["listIntegrationVersions"];
+        put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/versions/{version}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable an installed version: an upgrade or a rollback.
+         * @description Refused with 409 `upgrade-breaks-tests` when an enabled test reads a
+         *     source or check major that version does not provide.
+         */
+        post: operations["enableIntegrationVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/template-updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tests whose template changed in the enabled version.
+         * @description RFC 0005 section 8. A person accepts or skips each one.
+         */
+        get: operations["listTemplateUpdates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/template-updates/{test_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a template update for one test. */
+        post: operations["applyTemplateUpdate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1972,7 +2074,7 @@ export interface components {
             commit?: string;
         };
         /** @enum {string} */
-        JobType: "library_pull" | "provider_import" | "test_run" | "render" | "git_export" | "restore" | "collection";
+        JobType: "library_pull" | "provider_import" | "test_run" | "render" | "git_export" | "restore" | "collection" | "integration_install";
         /** @enum {string} */
         JobStatus: "queued" | "running" | "succeeded" | "failed";
         Job: {
@@ -2046,6 +2148,40 @@ export interface components {
                 control_ref?: string;
                 runner?: string;
             }[];
+        };
+        InstallRequest: {
+            url: string;
+            /** @description The expected sha-256 of the archive. The install fails on a mismatch. */
+            digest?: string;
+            /** @default true */
+            enable?: boolean;
+        };
+        IntegrationInstall: {
+            id: string;
+            version: string;
+            digest: string;
+            uri: string;
+            /** @enum {string} */
+            tier: "first-party" | "verified" | "local";
+            enabled: boolean;
+            /** Format: date-time */
+            installed: string;
+            installed_by?: string;
+            source?: string;
+        };
+        TemplateUpdate: {
+            test_id: string;
+            test_name: string;
+            template: string;
+            from_version?: string;
+            to_version: string;
+            /** @description Test fields the new template sets differently. */
+            changes: string[];
+            /**
+             * Format: date-time
+             * @description The test's `modified`, for If-Match when applying.
+             */
+            modified: string;
         };
         TemplateEnable: {
             id?: string;
@@ -6393,6 +6529,156 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    installIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRequest"];
+            };
+        };
+        responses: {
+            202: components["responses"]["AcceptedJob"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    uploadIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    digest?: string;
+                    /** @default true */
+                    enable?: boolean;
+                };
+            };
+        };
+        responses: {
+            202: components["responses"]["AcceptedJob"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listIntegrationVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The versions, oldest first. At most one is enabled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["IntegrationInstall"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enableIntegrationVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The integration, now at that version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listTemplateUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending updates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TemplateUpdate"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    applyTemplateUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The object's current `modified` timestamp. */
+                "If-Match": components["parameters"]["ifMatch"];
+            };
+            path: {
+                id: components["parameters"]["id"];
+                test_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The updated test. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Test"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
         };
     };
     getIntegration: {

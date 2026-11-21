@@ -252,6 +252,49 @@ export const handlers = [
     const item = db.integrations.find((i) => i.id === params.id);
     return item ? HttpResponse.json(item) : notFound();
   }),
+  http.post(`${V}/integrations`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as { url?: string };
+    if (!body.url?.trim()) return problem(400, "bad-request", "url is required.");
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "integration_install", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+  http.get(`${V}/integrations/:id/versions`, ({ params }) => {
+    if (!db.integrations.some((i) => i.id === params.id)) return notFound();
+    return HttpResponse.json({ data: db.integrationVersions.filter((v) => v.id === params.id) });
+  }),
+  http.post(`${V}/integrations/:id/versions/:version/enable`, ({ params }) => {
+    const integration = db.integrations.find((i) => i.id === params.id);
+    if (!integration || !db.integrationVersions.some((v) => v.id === params.id && v.version === params.version)) {
+      return notFound();
+    }
+    db.integrationVersions = db.integrationVersions.map((v) =>
+      v.id === params.id ? { ...v, enabled: v.version === params.version } : v,
+    );
+    integration.version = params.version as string;
+    return HttpResponse.json(integration);
+  }),
+  http.get(`${V}/integrations/:id/template-updates`, ({ params }) => {
+    if (!db.integrations.some((i) => i.id === params.id)) return notFound();
+    const updates = db.templateUpdates.filter((u) => u.integration_id === params.id);
+    return HttpResponse.json({
+      data: updates.map((u) => {
+        const copy: Partial<typeof u> = { ...u };
+        delete copy.integration_id;
+        return copy;
+      }),
+    });
+  }),
+  http.post(`${V}/integrations/:id/template-updates/:testId/apply`, ({ params, request }) => {
+    const idx = db.templateUpdates.findIndex((u) => u.integration_id === params.id && u.test_id === params.testId);
+    if (idx < 0) return notFound();
+    if (request.headers.get("If-Match") !== db.templateUpdates[idx].modified) {
+      return problem(412, "stale-write", "If-Match does not equal modified.");
+    }
+    db.templateUpdates.splice(idx, 1);
+    const test = db.tests.find((t) => t.id === params.testId);
+    return test ? HttpResponse.json({ ...test, modified: new Date().toISOString() }) : notFound();
+  }),
   http.post(`${V}/integrations/:id/templates/:name/enable`, ({ params }) => {
     const integration = db.integrations.find((i) => i.id === params.id);
     const template = integration?.templates.find((t) => t.name === params.name);

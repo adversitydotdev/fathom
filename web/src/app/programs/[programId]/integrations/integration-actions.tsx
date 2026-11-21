@@ -1,6 +1,6 @@
 "use client";
 
-import { KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
+import { Download, KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { CrudDialog, Field, FormActions, FormError, RevokeButton, Select } from "@/components/crud";
@@ -8,10 +8,13 @@ import { LoadingButton } from "@/components/spectrumui/loading-button-dependenci
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
+  applyTemplateUpdate,
   collectConnection,
   createConnection,
   deleteConnection,
+  enableIntegrationVersion,
   enableTemplate,
+  installIntegration,
   setConnectionState,
   startOAuth,
   validateConnection,
@@ -306,5 +309,129 @@ export function NewConnectionDialog({ integrations, bindings }: { integrations: 
         <FormActions pending={pending} submitLabel="Connect" onCancel={() => setOpen(false)} />
       </form>
     </CrudDialog>
+  );
+}
+
+/** Install an archive from a URL; an optional sha-256 pins the exact bytes. */
+export function InstallIntegrationDialog() {
+  const [open, setOpen] = useState(false);
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string>();
+  const [url, setUrl] = useState("");
+  const [digest, setDigest] = useState("");
+  const [queued, setQueued] = useState<string>();
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(undefined);
+    start(async () => {
+      const res = await installIntegration(url.trim(), digest.trim() || undefined);
+      if (res.error) {
+        setError(res.error);
+        return;
+      }
+      setQueued(res.jobId);
+      setOpen(false);
+      setUrl("");
+      setDigest("");
+    });
+  }
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      {queued && (
+        <span className="font-mono text-xs text-met-ink" title={queued}>
+          Install queued
+        </span>
+      )}
+      <CrudDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Install integration"
+        description="Install a packed integration archive. Unsigned archives need OGRL_ALLOW_LOCAL_INTEGRATIONS."
+        trigger={
+          <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs">
+            <Download className="size-3.5" aria-hidden />
+            Install
+          </Button>
+        }
+      >
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <FormError error={error} />
+          <Field label="Archive URL" required htmlFor="install-url">
+            <Input
+              id="install-url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              placeholder="https://github.com/acme/ogrl-okta/releases/download/v1.4.0/dev.acme.okta-1.4.0.tar.gz"
+              required
+            />
+          </Field>
+          <Field label="SHA-256" htmlFor="install-digest" hint="Optional. The install fails if the bytes differ.">
+            <Input
+              id="install-digest"
+              value={digest}
+              onChange={(e) => setDigest(e.target.value)}
+              pattern="[0-9a-f]{64}"
+              className="font-mono"
+            />
+          </Field>
+          <FormActions pending={pending} submitLabel="Install" onCancel={() => setOpen(false)} />
+        </form>
+      </CrudDialog>
+    </span>
+  );
+}
+
+export function EnableVersionButton({ integrationId, version }: { integrationId: string; version: string }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionState>({});
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {state.error && <span className="text-xs text-gap-ink">{state.error}</span>}
+      <LoadingButton
+        variant="ghost"
+        size="sm"
+        className="h-6 px-2 text-xs"
+        loading={pending}
+        disabled={pending}
+        aria-label={`Enable version ${version}`}
+        onClick={() => start(async () => setState(await enableIntegrationVersion(integrationId, version)))}
+      >
+        Enable
+      </LoadingButton>
+    </span>
+  );
+}
+
+export function ApplyUpdateButton({
+  integrationId,
+  testId,
+  testName,
+  modified,
+}: {
+  integrationId: string;
+  testId: string;
+  testName: string;
+  modified: string;
+}) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<ActionState>({});
+  if (state.id) return <span className="font-mono text-xs text-met-ink">Applied</span>;
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1.5">
+      {state.error && <span className="text-xs text-gap-ink">{state.error}</span>}
+      <LoadingButton
+        variant="outline"
+        size="sm"
+        className="h-7 px-2.5 text-xs"
+        loading={pending}
+        disabled={pending}
+        aria-label={`Apply update to ${testName}`}
+        onClick={() => start(async () => setState(await applyTemplateUpdate(integrationId, testId, modified)))}
+      >
+        Apply
+      </LoadingButton>
+    </span>
   );
 }

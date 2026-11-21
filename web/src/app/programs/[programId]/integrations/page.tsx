@@ -4,10 +4,26 @@ import { CircleCheck, CircleDashed, CircleX, PauseCircle, Plug } from "lucide-re
 import { StatusBadge, type StatusTone } from "@/components/spectrumui/status-badge";
 import { Eyebrow, PageTitle } from "@/components/typography";
 import type { Connection } from "@/lib/api/types";
-import { getComponents, getConnections, getIntegrations, getProgram, getSnapshots, getSystems } from "@/lib/data";
+import {
+  getComponents,
+  getConnections,
+  getIntegrationVersions,
+  getIntegrations,
+  getProgram,
+  getSnapshots,
+  getSystems,
+  getTemplateUpdates,
+} from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
-import { ConnectionActions, EnableTemplateButton, NewConnectionDialog } from "./integration-actions";
+import {
+  ApplyUpdateButton,
+  ConnectionActions,
+  EnableTemplateButton,
+  EnableVersionButton,
+  InstallIntegrationDialog,
+  NewConnectionDialog,
+} from "./integration-actions";
 
 export const metadata: Metadata = { title: "Integrations" };
 
@@ -31,6 +47,12 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
     getSystems(),
   ]);
 
+  const [versions, updates] = await Promise.all([
+    Promise.all(integrations.map((i) => getIntegrationVersions(i.id))),
+    Promise.all(integrations.map((i) => getTemplateUpdates(i.id))),
+  ]);
+  const versionsOf = new Map(integrations.map((i, n) => [i.id, versions[n]]));
+  const updatesOf = new Map(integrations.map((i, n) => [i.id, updates[n]]));
   const integrationName = new Map(integrations.map((i) => [i.id, i.name]));
   const connectionName = new Map(connections.map((c) => [c.id, c.name]));
   const bindingName = new Map<string, string>([
@@ -49,6 +71,7 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
             <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
               {integrations.length} installed · {connections.length} connected
             </p>
+            <InstallIntegrationDialog />
             {integrations.length > 0 && <NewConnectionDialog integrations={integrations} bindings={bindingOptions} />}
           </div>
         }
@@ -160,6 +183,53 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
                     ))}
                   </div>
                 </div>
+                {(versionsOf.get(i.id)?.length ?? 0) > 0 && (
+                  <div className="flex flex-col gap-1.5" aria-label={`${i.name} versions`}>
+                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                      Installed versions
+                    </span>
+                    {versionsOf.get(i.id)!.map((v) => (
+                      <div key={v.version} className="flex items-center justify-between gap-3 text-xs">
+                        <span className="font-mono">
+                          v{v.version} <span className="text-muted-foreground">· {isoDate(v.installed)}</span>
+                        </span>
+                        {v.enabled ? (
+                          <StatusBadge tone="met" icon={CircleCheck}>
+                            enabled
+                          </StatusBadge>
+                        ) : (
+                          <EnableVersionButton integrationId={i.id} version={v.version} />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(updatesOf.get(i.id)?.length ?? 0) > 0 && (
+                  <div
+                    className="flex flex-col gap-2 rounded-xl border border-waived/40 bg-waived-soft/40 p-3"
+                    aria-label={`${i.name} template updates`}
+                  >
+                    <span className="font-mono text-[11px] tracking-[0.1em] text-waived-ink uppercase">
+                      Template updates
+                    </span>
+                    {updatesOf.get(i.id)!.map((u) => (
+                      <div key={u.test_id} className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="truncate text-sm">{u.test_name}</div>
+                          <div className="truncate font-mono text-[11px] text-muted-foreground">
+                            v{u.from_version ?? "?"} → v{u.to_version} · changes {u.changes.join(", ") || "none"}
+                          </div>
+                        </div>
+                        <ApplyUpdateButton
+                          integrationId={i.id}
+                          testId={u.test_id}
+                          testName={u.test_name}
+                          modified={u.modified}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {i.templates.length > 0 && (
                   <div className="flex flex-col gap-2 border-t pt-3">
                     <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">

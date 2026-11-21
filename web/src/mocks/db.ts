@@ -28,6 +28,8 @@ function createDb() {
     integrations: [...f.integrations],
     connections: [...f.connections],
     snapshots: [...f.snapshots],
+    integrationVersions: [...f.integrationVersions],
+    templateUpdates: [...f.templateUpdates],
     controlStates: f.controlStates,
   };
 }

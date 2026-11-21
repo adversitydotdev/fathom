@@ -124,3 +124,24 @@ test("an AWS role connection shows the external ID its trust policy needs", asyn
   await expect(dialog).toBeHidden();
   await expect(region.locator("tr", { hasText: "AWS staging" }).getByText(/^ext-/)).toBeVisible();
 });
+
+test("install, roll back a version, and apply a template update", async ({ page }) => {
+  await page.goto(PAGE);
+  await page.getByRole("button", { name: "Install", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Install integration" });
+  await dialog.getByLabel("Archive URL").fill("https://example.test/dev.acme.okta-2.0.0.tar.gz");
+  await dialog.getByRole("button", { name: "Install" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText("Install queued")).toBeVisible();
+
+  const okta = page.getByRole("article", { name: "Okta" });
+  const versions = okta.getByLabel("Okta versions");
+  await expect(versions.getByText("v1.4.0")).toBeVisible();
+  await versions.getByRole("button", { name: "Enable version 1.3.0" }).click();
+  await expect(okta.getByText("dev.adversity.okta · v1.3.0")).toBeVisible();
+
+  const updates = okta.getByLabel("Okta template updates");
+  await expect(updates.getByText("v1.3.0 → v1.4.0 · changes run")).toBeVisible();
+  await updates.getByRole("button", { name: "Apply update to Privileged groups require phishing-resistant MFA" }).click();
+  await expect(okta.getByLabel("Okta template updates")).toHaveCount(0);
+});

@@ -259,6 +259,7 @@ const JOB_LABEL: Record<Job["type"], string> = {
   git_export: "Git export",
   restore: "Restore",
   collection: "Collection",
+  integration_install: "Integration install",
 };
 
 function JobIcon({ type }: { type: Job["type"] }) {
@@ -270,6 +271,7 @@ function JobIcon({ type }: { type: Job["type"] }) {
     git_export: GitBranch,
     restore: History,
     collection: Plug,
+    integration_install: PackageOpen,
   }[type];
   return <Icon />;
 }

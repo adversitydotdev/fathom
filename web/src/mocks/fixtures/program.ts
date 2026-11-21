@@ -18,6 +18,7 @@ import type {
   Framework,
   Implementation,
   Integration,
+  IntegrationInstall,
   Job,
   LibraryPin,
   Mapping,
@@ -30,6 +31,7 @@ import type {
   Risk,
   Snapshot,
   System,
+  TemplateUpdate,
   Test,
 } from "@/lib/api/types";
 
@@ -838,3 +840,22 @@ export const snapshots: Snapshot[] = [
     digest: "0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9",
   },
 ];
+
+export const integrationVersions: IntegrationInstall[] = [
+  { id: "dev.adversity.okta", version: "1.3.0", digest: "3c5e7b9d1f3a5c7e9b0d2f4a6c8e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e", uri: "s3://acme-ogrl-evidence/integrations/dev.adversity.okta/1.3.0.tar.gz", tier: "first-party", enabled: false, installed: at(-60), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.3.0/dev.adversity.okta-1.3.0.tar.gz" },
+  { id: "dev.adversity.okta", version: "1.4.0", digest: "7f3a9c1e5b2d8f0a4c6e8b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f1a", uri: "s3://acme-ogrl-evidence/integrations/dev.adversity.okta/1.4.0.tar.gz", tier: "first-party", enabled: true, installed: at(-3), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.4.0/dev.adversity.okta-1.4.0.tar.gz" },
+];
+
+export const templateUpdates: (TemplateUpdate & { integration_id: string })[] = [
+  {
+    integration_id: "dev.adversity.okta",
+    test_id: "test--mfa-enforced",
+    test_name: "Privileged groups require phishing-resistant MFA",
+    template: "mfa-enforcement",
+    from_version: "1.3.0",
+    to_version: "1.4.0",
+    changes: ["run"],
+    modified: at(-150),
+  },
+];
+
