@@ -114,3 +114,32 @@ def test_version_mismatch_is_refused(package):
     stale = type(package)(moved, package.root, package.digest)
     with pytest.raises(IntegrationError, match="installed is dev.ogrl.fake 9.9.9"):
         run(SubprocessHost().validate(stale, {"dataset": "acme"}, TOKEN))
+
+
+def test_sts_assumer_builds_a_fresh_client_per_call(monkeypatch):
+    """A reused STS client stays denied after a trust-policy change (seen against live AWS)."""
+    import boto3
+
+    from ogrl.adapters.sts import StsRoleAssumer
+
+    made = []
+
+    class Client:
+        def assume_role(self, **kwargs):
+            made.append(kwargs["ExternalId"])
+            return {
+                "Credentials": {"AccessKeyId": "a", "SecretAccessKey": "b", "SessionToken": "c"}
+            }
+
+    clients = []
+
+    def factory(service, region_name=None):
+        clients.append(Client())
+        return clients[-1]
+
+    monkeypatch.setattr(boto3, "client", factory)
+    assumer = StsRoleAssumer()
+    for external in ("one", "two"):
+        run(assumer.assume("arn:aws:iam::123456789012:role/r", external, "ogrl-x"))
+    assert made == ["one", "two"]
+    assert len(clients) == 2 and clients[0] is not clients[1]

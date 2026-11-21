@@ -13,11 +13,14 @@ class StsRoleAssumer:
         self._region = region
 
     def _sts(self) -> Any:
-        if self._client is None:
-            import boto3
+        """A new client per call. A reused client keeps its connection to an STS host that
+        cached the role's old trust policy, and stays denied long after the operator fixes
+        the trust (seen live: over 75 s, against 11 s for a fresh client)."""
+        if self._client is not None:
+            return self._client  # injected, for tests
+        import boto3
 
-            self._client = boto3.client("sts", region_name=self._region)
-        return self._client
+        return boto3.client("sts", region_name=self._region)
 
     async def assume(self, role_arn: str, external_id: str, session_name: str) -> Mapping[str, str]:
         def call() -> Mapping[str, str]:
