@@ -1,6 +1,6 @@
 # OGRL agent guide
 
-Read `README.md` for what this is, `../ogrl-rfcs/rfcs/` for the language specs (RFC 0001–0002), and `docs/rfcs/` for the application architecture, HTTP API, and integrations (RFC 0003–0005). RFCs win over code.
+Read `README.md` for what this is, `../ogrl-rfcs/rfcs/` for the language specs (RFC 0001–0002), and `docs/rfcs/` for the application architecture, HTTP API, integrations, and query sources (RFC 0003–0006). RFCs win over code.
 
 ## Layout
 

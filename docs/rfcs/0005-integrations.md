@@ -19,7 +19,7 @@ Three properties drive the design:
 - **Collect once, evaluate many times.** Only collection talks to the vendor and only collection holds credentials. Checks see snapshots and nothing else, so ten tests about Okta users make one set of Okta API calls, and the auditor can open the exact data each result was computed from.
 - **Integrations cannot change status.** They produce snapshots and check outcomes. Status computation stays in the kernel ([RFC 0003 section 5](0003-application.md#5-ports)).
 
-Organizations extend the system at three levels, from cheapest to most involved: write a rule test against a source an installed integration already collects; enable a test template an integration ships; or build an integration with the SDK.
+Organizations extend the system at four levels, from cheapest to most involved: write a rule test against a source an installed integration already collects; enable a test template an integration ships; define a query source over the vendor's OpenAPI description ([RFC 0006](0006-query-sources.md)); or build an integration with the SDK.
 
 ## 2. Terms
 
