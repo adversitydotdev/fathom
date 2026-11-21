@@ -15,6 +15,7 @@ import { useRouter } from "next/navigation";
 import * as React from "react";
 import { cn } from "cn";
 
+import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 
 type AgentStatus = {
@@ -439,10 +440,10 @@ export function AgentProvider({
                         )}
 
                         {(m.content || m.streaming) && (
-                          <div className="whitespace-pre-wrap rounded-2xl border bg-background/40 px-3.5 py-2.5 text-sm leading-relaxed">
-                            {m.content}
+                          <div className="w-full rounded-2xl border bg-background/40 px-3.5 py-2.5">
+                            {m.content && <Markdown>{m.content}</Markdown>}
                             {m.streaming && (
-                              <span className="ml-1 inline-block size-2 animate-pulse rounded-full bg-agent align-middle" />
+                              <span className="mt-1 inline-block size-2 animate-pulse rounded-full bg-agent align-middle" />
                             )}
                           </div>
                         )}

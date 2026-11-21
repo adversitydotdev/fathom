@@ -97,6 +97,7 @@ async def stream_agent_turn(
         async with agent.iter(prompt, deps=deps, message_history=msg_history) as run:
             async for node in run:
                 if Agent.is_model_request_node(node):
+                    need_sep = bool(accumulated) and not accumulated.endswith("\n\n")
                     async with node.stream(run.ctx) as request_stream:
                         async for event in request_stream:
                             if (
@@ -104,15 +105,23 @@ async def stream_agent_turn(
                                 and isinstance(event.part, TextPart)
                                 and event.part.content
                             ):
-                                accumulated += event.part.content
-                                yield {"type": "delta", "text": event.part.content}
+                                chunk = event.part.content
+                                if need_sep:
+                                    chunk = ("\n" if accumulated.endswith("\n") else "\n\n") + chunk
+                                    need_sep = False
+                                accumulated += chunk
+                                yield {"type": "delta", "text": chunk}
                             elif (
                                 isinstance(event, PartDeltaEvent)
                                 and isinstance(event.delta, TextPartDelta)
                                 and event.delta.content_delta
                             ):
-                                accumulated += event.delta.content_delta
-                                yield {"type": "delta", "text": event.delta.content_delta}
+                                chunk = event.delta.content_delta
+                                if need_sep:
+                                    chunk = ("\n" if accumulated.endswith("\n") else "\n\n") + chunk
+                                    need_sep = False
+                                accumulated += chunk
+                                yield {"type": "delta", "text": chunk}
                 elif Agent.is_call_tools_node(node):
                     async with node.stream(run.ctx) as handle_stream:
                         async for event in handle_stream:
