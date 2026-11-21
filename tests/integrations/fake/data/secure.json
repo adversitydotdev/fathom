@@ -1,0 +1,5 @@
+{
+  "users": [
+    {"id": "s1", "name": "dana@secure.test", "status": "ACTIVE", "mfa": true, "admin": true}
+  ]
+}

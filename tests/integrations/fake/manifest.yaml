@@ -1,0 +1,45 @@
+# A test integration. It reads users from data/<dataset>.json instead of a vendor,
+# and `mode` makes it misbehave on purpose so the host's error paths are exercised.
+id: dev.ogrl.fake
+name: Fake directory
+version: 0.1.0
+protocol: 1
+publisher: ogrl.dev
+description: Users from a fixture file, for tests.
+runtime:
+  kind: python
+  entrypoint: fake_integration:main
+config:
+  - name: dataset
+    label: Dataset
+    pattern: "^[a-z0-9-]+$"
+  - name: mode
+    label: Failure mode
+    required: false
+auth:
+  - kind: fields
+    label: Token
+    fields:
+      - name: FAKE_TOKEN
+        label: Token
+resources:
+  - name: users
+    version: 1
+    schema: schemas/users.json
+checks:
+  - name: admins-have-mfa
+    version: 1
+    sources: [users]
+templates:
+  - name: mfa-enforcement
+    fulfills_ref: test--ogrl-ac-01-unique-idp-users
+    test:
+      name: Every active fake user has MFA
+      control_ref: control--ogrl-ac-01
+      method: automated
+      interval: daily
+      run:
+        runner: rule
+        source: dev.ogrl.fake/users@1
+        select: item.status == "ACTIVE"
+        assert: item.mfa

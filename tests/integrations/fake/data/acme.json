@@ -1,0 +1,7 @@
+{
+  "users": [
+    {"id": "u1", "name": "alice@acme.test", "status": "ACTIVE", "mfa": true, "admin": true},
+    {"id": "u2", "name": "bob@acme.test", "status": "ACTIVE", "mfa": false, "admin": false},
+    {"id": "u3", "name": "carol@acme.test", "status": "SUSPENDED", "mfa": false, "admin": true}
+  ]
+}

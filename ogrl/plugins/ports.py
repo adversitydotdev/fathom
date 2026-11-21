@@ -8,10 +8,13 @@ changed them would make two installations disagree about one bundle.
 from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Envelope, Implementation, Program, Test
+
+if TYPE_CHECKING:
+    from ogrl.integrations.manifest import Package
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,13 +88,26 @@ class RunRequest:
 
 
 @dataclass(frozen=True)
+class StoredArtifact:
+    """Bytes already in object storage, such as a snapshot, cited without a second upload."""
+
+    name: str
+    media_type: str
+    uri: str
+    digest: str
+    collected: datetime
+
+
+@dataclass(frozen=True)
 class RunReport:
-    """The harness turns this into one `result` and one `evidence` per file."""
+    """The harness turns this into one `result` and one `evidence` per file or artifact."""
 
     outcome: Literal["pass", "fail", "error"]
     summary: str
     observed: datetime
     files: Sequence[CollectedFile] = ()
+    artifacts: Sequence[StoredArtifact] = ()
+    subjects: Sequence[Mapping[str, str]] = ()
 
 
 class Runner(Protocol):
@@ -116,3 +132,66 @@ class Connector(Protocol):
     def collect(self, request: CollectionRequest) -> AsyncIterator[CollectedFile]:
         """Yields files that become `evidence`. Shipped as a subprocess speaking RFC 0001 JSON."""
         ...
+
+
+# --- Integrations (RFC 0005) --------------------------------------------------------------------
+
+
+class IntegrationError(Exception):
+    """A failed integration operation. `kind` is one of RFC 0005 section 7's error kinds,
+    or `protocol` when the process misbehaved (crash, timeout, malformed output)."""
+
+    def __init__(self, kind: str, message: str, retry_after: int | None = None) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.retry_after = retry_after
+
+
+@dataclass(frozen=True)
+class ValidateReport:
+    identity: str
+    granted_scopes: Sequence[str] = ()
+    warnings: Sequence[str] = ()
+
+
+@dataclass(frozen=True)
+class CollectReport:
+    items: Sequence[Mapping[str, Any]]
+    complete: bool
+    reason: str | None = None
+
+
+@dataclass(frozen=True)
+class CheckReport:
+    outcome: Literal["pass", "fail", "error"]
+    summary: str
+    subjects: Sequence[Mapping[str, str]] = ()
+
+
+class IntegrationHost(Protocol):
+    """Runs one operation of an installed package. Failures raise IntegrationError."""
+
+    async def validate(
+        self, package: "Package", config: Mapping[str, str], env: Mapping[str, str]
+    ) -> ValidateReport: ...
+
+    async def collect(
+        self,
+        package: "Package",
+        resource: str,
+        version: int,
+        config: Mapping[str, str],
+        env: Mapping[str, str],
+    ) -> CollectReport: ...
+
+    async def check(
+        self,
+        package: "Package",
+        check: str,
+        version: int,
+        args: Mapping[str, str],
+        params: Mapping[str, str],
+        snapshots: Mapping[str, bytes],
+        time_limit: int,
+    ) -> CheckReport: ...
