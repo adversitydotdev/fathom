@@ -700,8 +700,8 @@ export const integrations: Integration[] = [
       { kind: "oauth2", label: "OAuth application", supported: true, scopes: ["okta.users.read", "okta.groups.read"] },
     ],
     resources: [
-      { name: "users", version: 1, source: `${OKTA}/users@1` },
-      { name: "groups", version: 1, source: `${OKTA}/groups@1` },
+      { name: "users", version: 1, source: `${OKTA}/users@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true, description: 'The Okta login.' }, { name: 'email', type: 'string', nullable: true, required: false }, { name: 'status', type: 'string', nullable: false, required: true }, { name: 'last_login', type: 'string', nullable: true, required: false }, { name: 'admin', type: 'boolean', nullable: false, required: true, description: 'Holds at least one Okta admin role.' }, { name: 'mfa_factors', type: 'array of string', nullable: false, required: true, description: 'Active factor types.' }, { name: 'mfa_enrolled', type: 'boolean', nullable: false, required: true }, { name: 'strong_mfa', type: 'boolean', nullable: false, required: true, description: 'TOTP, hardware token, or phishing-resistant.' }, { name: 'phishing_resistant', type: 'boolean', nullable: false, required: true, description: 'WebAuthn, U2F, or Okta FastPass.' }] },
+      { name: "groups", version: 1, source: `${OKTA}/groups@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'group_type', type: 'string', nullable: false, required: true }, { name: 'members', type: 'array of string', nullable: false, required: true, description: 'User ids.' }] },
     ],
     checks: [{ name: "admin-mfa-phishing-resistant", version: 1, check: `${OKTA}/admin-mfa-phishing-resistant@1`, sources: [`${OKTA}/users@1`, `${OKTA}/groups@1`] }],
     templates: [
@@ -723,8 +723,8 @@ export const integrations: Integration[] = [
       { kind: "fields", label: "GitHub App", supported: true, fields: [{ name: "GITHUB_APP_ID", label: "App ID", secret: false }, { name: "GITHUB_APP_PRIVATE_KEY", label: "Private key", secret: true }] },
     ],
     resources: [
-      { name: "repositories", version: 1, source: `${GITHUB}/repositories@1` },
-      { name: "rulesets", version: 1, source: `${GITHUB}/rulesets@1` },
+      { name: "repositories", version: 1, source: `${GITHUB}/repositories@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'private', type: 'boolean', nullable: false, required: true }, { name: 'archived', type: 'boolean', nullable: false, required: true }, { name: 'fork', type: 'boolean', nullable: false, required: true }, { name: 'default_branch', type: 'string', nullable: true, required: true }] },
+      { name: "rulesets", version: 1, source: `${GITHUB}/rulesets@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'required_approvals', type: 'integer', nullable: false, required: true }, { name: 'status_checks', type: 'array of string', nullable: false, required: true }, { name: 'force_push_blocked', type: 'boolean', nullable: false, required: true }] },
     ],
     checks: [{ name: "branch-protection", version: 1, check: `${GITHUB}/branch-protection@1`, sources: [`${GITHUB}/repositories@1`, `${GITHUB}/rulesets@1`] }],
     templates: [
@@ -746,8 +746,8 @@ integrations.push({
   config: [],
   auth: [{ kind: "aws_role", label: "IAM role", supported: true }],
   resources: [
-    { name: "iam-users", version: 1, source: "dev.adversity.aws/iam-users@1" },
-    { name: "password-policy", version: 1, source: "dev.adversity.aws/password-policy@1" },
+    { name: "iam-users", version: 1, source: "dev.adversity.aws/iam-users@1", fields: [{ name: 'id', type: 'string', nullable: false, required: true, description: "The user's ARN." }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'root', type: 'boolean', nullable: false, required: true }, { name: 'console_access', type: 'boolean', nullable: false, required: true }, { name: 'mfa_active', type: 'boolean', nullable: false, required: true }, { name: 'active_access_keys', type: 'integer', nullable: false, required: true }, { name: 'oldest_active_key_rotated', type: 'string', nullable: true, required: true }] },
+    { name: "password-policy", version: 1, source: "dev.adversity.aws/password-policy@1", fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'minimum_length', type: 'integer', nullable: false, required: true }] },
   ],
   checks: [],
   templates: [],
@@ -858,4 +858,15 @@ export const templateUpdates: (TemplateUpdate & { integration_id: string })[] = 
     modified: at(-150),
   },
 ];
+
+/** Latest snapshot items per source, for the rule preview in mock mode. */
+export const snapshotItems: Record<string, Record<string, unknown>[]> = {
+  "dev.adversity.okta/users@1": [
+    { id: "00u1ada", name: "ada@acme.test", email: "ada@acme.test", status: "ACTIVE", last_login: at(-1, "08:00:00Z"), admin: true, mfa_factors: ["webauthn"], mfa_enrolled: true, strong_mfa: true, phishing_resistant: true },
+    { id: "00u2ben", name: "ben@acme.test", email: "ben@acme.test", status: "ACTIVE", last_login: at(-2, "08:00:00Z"), admin: false, mfa_factors: ["token:software:totp"], mfa_enrolled: true, strong_mfa: true, phishing_resistant: false },
+    { id: "00u3cy", name: "cy@acme.test", email: "cy@acme.test", status: "ACTIVE", last_login: at(-140, "08:00:00Z"), admin: false, mfa_factors: ["sms"], mfa_enrolled: true, strong_mfa: false, phishing_resistant: false },
+    { id: "00u4dee", name: "dee@acme.test", email: "dee@acme.test", status: "ACTIVE", last_login: null, admin: true, mfa_factors: ["push"], mfa_enrolled: true, strong_mfa: false, phishing_resistant: false },
+    { id: "00u5eve", name: "eve@acme.test", email: "eve@acme.test", status: "SUSPENDED", last_login: at(-300, "08:00:00Z"), admin: false, mfa_factors: [], mfa_enrolled: false, strong_mfa: false, phishing_resistant: false },
+  ],
+};
 

@@ -213,6 +213,8 @@ During `collect` the process sends `{"method": "items", "params": {"items": [...
 
 **Rules** are evaluated in process by the `rule` runner (`ogrl/kernel/rules.py`). The first release uses [`common-expression-language`](https://pypi.org/project/common-expression-language/), Python bindings over the Rust `cel` crate. Evaluation moves into [`ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) on the same crate once the CLI gains `ogrl rule eval test.yaml --snapshot users.json`, so authors can test a rule against a saved snapshot without a server and the CLI and server agree.
 
+**Preview.** `POST /rules/preview` evaluates a rule exactly as the runner would, over the latest complete snapshot from each connection (or those bound to an implementation), without collecting, without a freshness window, and without recording anything. It returns compile errors by field, warnings for `item.<field>` names the resource schema lacks, the failing subjects, and the snapshots and parameters it used, so an author sees what a rule would flag before saving it. `GET /integrations` lists each resource's fields from its schema for the same reason.
+
 **Integration checks** run through the `check` operation. The harness resolves `run.check` to the enabled integration version and errors if that version does not provide the check at the requested major.
 
 **Templates.** Enabling a template creates an ordinary organization `test`: the application copies the template's `test`, sets `fulfills_ref`, mints the ID and envelope, sets `created_by_ref` to the enabling person, and records the origin under `extensions`:
@@ -301,6 +303,7 @@ It provides the stdio framing and lifecycle, an HTTP client on `urllib` that ret
 | `POST /connections/{id}/oauth/start`, `GET /oauth/callback` | Bring-your-own OAuth. |
 | `POST /connections/{id}/collections` | Collect one or more sources now (job). |
 | `GET /snapshots`, `GET /snapshots/{id}`, `GET /snapshots/{id}/content` | Snapshot metadata and bytes, filterable by connection and source. |
+| `POST /rules/preview` | Try a rule over the latest snapshots without saving or recording ([Section 8](#8-checks-and-templates)). |
 
 Disabling a connection is `PATCH` with `state: disabled`. `DELETE /connections/{id}` removes a connection and its secrets; the no-delete rule in RFC 0004 section 3 applies to graph objects, and results and evidence produced through the connection are untouched. `JobType` gains `integration_install` and `collection` and drops `connector`.
 

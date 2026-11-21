@@ -7,6 +7,7 @@ The 12 section views under `web/src/app/programs/[programId]/`:
 
 - **Full CRUD**: Create, edit (with `If-Match` optimistic concurrency), and revoke (two-step confirm) across custom Controls, Implementations (status, responsibility, owner, narrative, parameters), Tests + manual Result recording, Evidence (including S3 file upload), Risks, Exceptions, Findings, Policies & Procedures (including S3 Markdown body upload & adoption), Systems, Components, Parties, and Programs.
 - requirements: framework coverage breakdown and filterable table (state chips, family/search, mapped controls carrying `?at`).
+- rule editor (`web/src/components/rule-editor.tsx`): `New rule test` on the tests page and `Write a rule` on each integration card open a wide dialog: name, control, optional `Fulfills` (tests of that control without `fulfills_ref`), source (every installed integration resource), interval, `Select` / `Assert` / `Aggregate` CEL textareas, allow-empty checkbox. The right column has `Preview` (`POST /v1/rules/preview`: outcome badge, summary, failing items table, snapshot and params used, sample items; errors and misspelt-field warnings appear under the expression they belong to) above the resource's fields (from `resources[].fields`), which insert `item.<field>` into the focused expression. `Create test` posts an ordinary test with `run.runner: rule`. In mock mode the preview uses `web/src/mocks/cel.ts`, a small CEL subset (no `aggregate`, no macros) over `snapshotItems` in the fixtures; only Okta `users@1` has items, so other sources preview as `no snapshot yet`.
 - tests: baseline test inventory with pass/fail/error/no-methodology chips, method filter, inline `Run` button (`POST /v1/tests/{id}/runs`), `Record` button for manual tests (`POST /v1/results`), plus `New test`, `Edit`, and `Revoke`.
 - evidence: evidence records with validity status (`valid`, `expiring`, `expired`) evaluated against `?at` (or fixture today), SHA-256 digest prefix, linked control, plus `Add evidence`, `Edit`, and `Revoke`.
 - risks: interactive 5×5 Likelihood × Impact Risk Matrix (Inherent vs. Residual toggle, click cell to filter register) + searchable Risk Register table with inherent/residual scores, treatment, status, owner, milestones, linked controls, plus `New risk`, `Edit`, and `Revoke`.
@@ -25,5 +26,6 @@ The 12 section views under `web/src/app/programs/[programId]/`:
 pnpm --dir web e2e program-views
 pnpm --dir web e2e crud
 pnpm --dir web e2e integrations
+pnpm --dir web e2e rule-editor
 pnpm --dir web e2e sweep
 ```

@@ -186,6 +186,21 @@ export async function applyTemplateUpdate(id: string, testId: string, ifMatch: s
   return { id: data.id };
 }
 
+export type RulePreview = S["RulePreview"];
+
+export async function previewRule(body: S["RulePreviewRequest"]): Promise<{ preview?: RulePreview; error?: string }> {
+  const { data, error } = await api.POST("/rules/preview", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't preview the rule.") };
+  return { preview: data };
+}
+
+export async function createRuleTest(body: S["TestWrite"]): Promise<ActionState> {
+  const { data, error } = await api.POST("/tests", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't create the test.") };
+  refresh();
+  return { id: data.id };
+}
+
 export async function enableTemplate(integrationId: string, name: string): Promise<ActionState> {
   const { data, error } = await api.POST("/integrations/{id}/templates/{name}/enable", {
     params: { path: { id: integrationId, name } },

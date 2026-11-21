@@ -15,7 +15,9 @@ export function CrudDialog({
   description,
   trigger,
   children,
+  wide = false,
 }: {
+  wide?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -28,7 +30,12 @@ export function CrudDialog({
       {trigger && <Dialog.Trigger asChild>{trigger}</Dialog.Trigger>}
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/75 backdrop-blur-xs" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-50 flex max-h-[88dvh] w-[min(94vw,36rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl outline-none">
+        <Dialog.Content
+          className={cn(
+            "fixed top-1/2 left-1/2 z-50 flex max-h-[88dvh] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl outline-none",
+            wide ? "w-[min(96vw,72rem)]" : "w-[min(94vw,36rem)]",
+          )}
+        >
           <div className="flex items-start justify-between gap-4 border-b px-6 py-4">
             <div className="min-w-0">
               <Dialog.Title className="font-display text-xl leading-tight">{title}</Dialog.Title>

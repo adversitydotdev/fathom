@@ -4,9 +4,14 @@ import { CircleCheck, CircleDashed, CircleX, PauseCircle, Plug } from "lucide-re
 import { StatusBadge, type StatusTone } from "@/components/spectrumui/status-badge";
 import { Eyebrow, PageTitle } from "@/components/typography";
 import type { Connection } from "@/lib/api/types";
+import { RuleEditorDialog, ruleSourcesOf } from "@/components/rule-editor-sources";
+import { Button } from "@/components/ui/button";
 import {
   getComponents,
   getConnections,
+  getControls,
+  getProgramStatus,
+  getTests,
   getIntegrationVersions,
   getIntegrations,
   getProgram,
@@ -47,6 +52,17 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
     getSystems(),
   ]);
 
+  const [status, controls, tests] = await Promise.all([getProgramStatus(programId), getControls(), getTests()]);
+  const controlById = new Map(controls.map((c) => [c.id, c]));
+  const inBaseline = new Set(status.controls.map((c) => c.control_id));
+  const controlOptions = status.controls.map((c) => {
+    const control = controlById.get(c.control_id);
+    return { id: c.control_id, label: `${control?.display_id ?? c.control_id} · ${control?.name ?? ""}`.trim() };
+  });
+  const fulfillOptions = tests
+    .filter((t) => !t.fulfills_ref && inBaseline.has(t.control_ref))
+    .map((t) => ({ id: t.id, label: t.name ?? t.id, controlId: t.control_ref }));
+  const ruleSources = ruleSourcesOf(integrations);
   const [versions, updates] = await Promise.all([
     Promise.all(integrations.map((i) => getIntegrationVersions(i.id))),
     Promise.all(integrations.map((i) => getTemplateUpdates(i.id))),
@@ -174,7 +190,22 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
                 </div>
                 {i.description && <p className="text-sm text-muted-foreground">{i.description}</p>}
                 <div className="flex flex-col gap-1.5">
-                  <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Collects</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                      Collects
+                    </span>
+                    <RuleEditorDialog
+                      sources={ruleSources}
+                      controls={controlOptions}
+                      fulfills={fulfillOptions}
+                      initialSource={i.resources[0]?.source}
+                      trigger={
+                        <Button variant="ghost" size="xs" aria-label={`Write a rule on ${i.name}`}>
+                          Write a rule
+                        </Button>
+                      }
+                    />
+                  </div>
                   <div className="flex flex-wrap gap-1.5">
                     {i.resources.map((r) => (
                       <code key={r.source} className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px]">

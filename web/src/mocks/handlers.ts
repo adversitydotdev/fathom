@@ -2,7 +2,9 @@ import { http, HttpResponse, type HttpResponseResolver } from "msw";
 
 import type { Connection, Job, Test } from "@/lib/api/types";
 
+import { CelError, evaluate as evaluateCel } from "./cel";
 import { db } from "./db";
+import { snapshotItems } from "./fixtures/program";
 import { programStatus, programSummary, systemGaps } from "./kernel";
 
 /** Matches `/v1` on any origin, so the same handlers serve in-process and HTTP calls. */
@@ -403,6 +405,93 @@ export const handlers = [
     const job: Job = { id: `job--${crypto.randomUUID()}`, type: "collection", status: "queued", created: new Date().toISOString() };
     db.jobs.unshift(job);
     return HttpResponse.json(job, { status: 202 });
+  }),
+  http.post(`${V}/rules/preview`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as {
+      run?: Record<string, unknown>;
+      params?: Record<string, string>;
+    };
+    const run = body.run ?? {};
+    const source = String(run.source ?? "");
+    const resource = db.integrations.flatMap((i) => i.resources).find((r) => r.source === source);
+    const empty = { selected: 0, total: 0, subjects: [], warnings: [], snapshots: [], params: body.params ?? {}, sample: [] };
+    if (!resource) {
+      return HttpResponse.json({
+        ...empty,
+        outcome: "invalid",
+        summary: `no installed integration emits ${source || "that source"}`,
+        errors: [{ pointer: "/run/source", detail: `no installed integration emits ${source || "that source"}` }],
+      });
+    }
+    if (!run.assert && !run.aggregate) {
+      return HttpResponse.json({
+        ...empty,
+        outcome: "invalid",
+        summary: "the rule does not compile",
+        errors: [{ pointer: "/run/assert", detail: "runner rule requires assert, aggregate, or both" }],
+      });
+    }
+    const known = new Set(resource.fields.map((f) => f.name));
+    const warnings = (["select", "assert", "aggregate"] as const).flatMap((field) =>
+      [...String(run[field] ?? "").matchAll(/\bitem\.([A-Za-z_]\w*)/g)]
+        .filter((m) => !known.has(m[1]))
+        .map((m) => ({ pointer: `/run/${field}`, detail: `item.${m[1]}: the resource has no field '${m[1]}'` })),
+    );
+    const items = snapshotItems[source];
+    if (!items) {
+      return HttpResponse.json({
+        ...empty,
+        warnings,
+        errors: [],
+        outcome: "no-data",
+        summary: `no complete snapshot of ${source} from a connection for it; collect one first`,
+      });
+    }
+    const variables = { params: body.params ?? {} };
+    const errors: { pointer: string; detail: string }[] = [];
+    for (const field of ["select", "assert"] as const) {
+      const text = run[field];
+      if (typeof text !== "string" || !text.trim()) continue;
+      try {
+        evaluateCel(text, { ...variables, item: items[0] });
+      } catch (exc) {
+        if (exc instanceof CelError && exc.message.startsWith("Syntax")) errors.push({ pointer: `/run/${field}`, detail: exc.message });
+      }
+    }
+    if (errors.length) {
+      return HttpResponse.json({ ...empty, warnings, errors, outcome: "invalid", summary: "the rule does not compile" });
+    }
+    const snapshot = db.snapshots.find((x) => x.source === source);
+    const connection = db.connections.find((x) => x.id === snapshot?.connection_id);
+    const base = {
+      ...empty,
+      warnings,
+      errors: [],
+      total: items.length,
+      sample: items.slice(0, 3),
+      snapshots: snapshot
+        ? [{ id: snapshot.id, connection_id: snapshot.connection_id, connection_name: connection?.name ?? snapshot.connection_id, collected: snapshot.collected, item_count: items.length }]
+        : [],
+    };
+    if (run.aggregate) {
+      return HttpResponse.json({ ...base, outcome: "error", summary: "mock mode evaluates select and assert only" });
+    }
+    try {
+      const selected = items.filter((item) => !run.select || evaluateCel(String(run.select), { ...variables, item }) === true);
+      if (!selected.length && !run.allow_empty) {
+        return HttpResponse.json({ ...base, outcome: "error", summary: `no items selected from ${source}` });
+      }
+      const failing = selected.filter((item) => evaluateCel(String(run.assert), { ...variables, item }) !== true);
+      return HttpResponse.json({
+        ...base,
+        outcome: failing.length ? "fail" : "pass",
+        summary: `${selected.length - failing.length} of ${selected.length} selected items pass`,
+        selected: selected.length,
+        subjects: failing.map((item) => ({ kind: resource.name, name: String(item.name ?? item.id), external_id: String(item.id) })),
+      });
+    } catch (exc) {
+      return HttpResponse.json({ ...base, outcome: "error", summary: exc instanceof Error ? exc.message : String(exc) });
+    }
   }),
   http.get(`${V}/snapshots`, ({ request }) => {
     const sp = new URL(request.url).searchParams;

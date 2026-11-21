@@ -1925,6 +1925,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a rule against the latest snapshots without saving or recording anything.
+         * @description Evaluates a `rule` run block (RFC 0001 section 7.6) over the latest
+         *     complete snapshot of its source from each connection: every connection
+         *     of the integration, or only those bound to `implementation_id`. Nothing
+         *     is collected, no freshness window applies, and no result or evidence
+         *     is written. `control_ref` (or the implementation's control) supplies
+         *     `params`; `params` in the body overrides them. Compile errors come back
+         *     as `outcome: invalid`; fields the resource schema lacks come back as
+         *     `warnings`.
+         */
+        post: operations["previewRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/snapshots": {
         parameters: {
             query?: never;
@@ -2134,6 +2161,8 @@ export interface components {
                 name: string;
                 version: number;
                 source: string;
+                /** @description The item fields a rule can read as `item.<name>`, from the resource's schema. */
+                fields: components["schemas"]["ResourceField"][];
             }[];
             checks: {
                 name: string;
@@ -2182,6 +2211,68 @@ export interface components {
              * @description The test's `modified`, for If-Match when applying.
              */
             modified: string;
+        };
+        ResourceField: {
+            name: string;
+            /**
+             * @example string
+             * @example boolean
+             * @example integer
+             * @example array of string
+             */
+            type: string;
+            nullable: boolean;
+            required: boolean;
+            description?: string;
+        };
+        RulePreviewRequest: {
+            /** @description The rule fields of a run block (`source`, `select`, `assert`, `aggregate`, `subject`, `allow_empty`). `runner` is implied. */
+            run: {
+                [key: string]: unknown;
+            };
+            control_ref?: string;
+            implementation_id?: string;
+            params?: {
+                [key: string]: string;
+            };
+            /**
+             * @description At most this many failing subjects are returned.
+             * @default 50
+             */
+            limit?: number;
+        };
+        PreviewProblem: {
+            pointer: string;
+            detail: string;
+        };
+        RulePreview: {
+            /** @enum {string} */
+            outcome: "pass" | "fail" | "error" | "invalid" | "no-data";
+            summary: string;
+            selected: number;
+            total: number;
+            subjects: {
+                kind: string;
+                name: string;
+                external_id?: string;
+            }[];
+            errors: components["schemas"]["PreviewProblem"][];
+            warnings: components["schemas"]["PreviewProblem"][];
+            snapshots: {
+                id: string;
+                connection_id: string;
+                connection_name: string;
+                /** Format: date-time */
+                collected: string;
+                item_count: number;
+            }[];
+            params: {
+                [key: string]: string;
+            };
+            /** @description Up to three items of the snapshot, to see real values while writing. */
+            sample: {
+                [key: string]: unknown;
+            }[];
         };
         TemplateEnable: {
             id?: string;
@@ -6989,6 +7080,41 @@ export interface operations {
                     "text/html": string;
                 };
             };
+        };
+    };
+    previewRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description The caller cannot author tests. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listSnapshots: {
