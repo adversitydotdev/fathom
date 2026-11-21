@@ -27,7 +27,7 @@ from ogrl.integrations.host import SubprocessHost
 from ogrl.integrations.manifest import discover
 from ogrl.kernel.timeutil import now
 from ogrl.operations.auth import AuthService
-from ogrl.operations.catalog import DEFAULT_CACHE, PackageCatalog
+from ogrl.operations.catalog import PackageCatalog
 from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.content import ContentService
 from ogrl.operations.exports import ExportService, ExportSettings
@@ -117,7 +117,6 @@ def build(
     role_assumer: RoleAssumer | None = None,
     public_url: str | None = None,
     allow_local_integrations: bool = False,
-    integration_cache: Path | None = None,
     export: ExportSettings | None = None,
     harness_user: str | None = None,
     allowed_origins: tuple[str, ...] = (),
@@ -138,7 +137,7 @@ def build(
         features = StaticFeatures([Feature.GIT_EXPORT] if export.remote else [])
 
     connections = connections or MemoryConnections()
-    catalog = PackageCatalog(connections, blobs, integration_cache or DEFAULT_CACHE)
+    catalog = PackageCatalog(connections, blobs)
     plugins = Plugins(integrations=catalog)
     plugins.runners.register("shell", ShellRunner(secrets or EnvSecrets(), user=harness_user))
     plugins.importers.register("ogrl", OGRLBundleImporter())

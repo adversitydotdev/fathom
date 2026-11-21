@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 from ogrl import container
-from ogrl.integrations.archive import unpack
+from ogrl.integrations.archive import read_archive
 from ogrl.integrations.host import SubprocessHost
 from ogrl.integrations.manifest import PackageError
 from tests.conftest import C1, LIB_TEST, PRINCIPALS, Api
@@ -52,7 +52,7 @@ def run(coro):
 
 @pytest.fixture
 def app(make_app, tmp_path):
-    return make_app(allow_local_integrations=True, integration_cache=tmp_path / "cache")
+    return make_app(allow_local_integrations=True)
 
 
 @pytest.fixture
@@ -164,10 +164,9 @@ def test_another_process_loads_what_this_one_enabled(app, api, tmp_path, make_ap
         blobs=c.blobs,
         connections=c.integrations._store,
         allow_local_integrations=True,
-        integration_cache=tmp_path / "other-cache",
     )
     assert [v.id for v in run(other.integrations.list_integrations(ADMIN))] == [ID]
-    assert (tmp_path / "other-cache").is_dir()
+    assert other.integrations.package(ID).root is None  # loaded from memory, never unpacked
 
 
 def test_an_sdk_built_archive_runs_from_its_bundled_wheel(api, tmp_path, app):
@@ -182,7 +181,8 @@ def test_an_sdk_built_archive_runs_from_its_bundled_wheel(api, tmp_path, app):
     )
     assert job["status"] == "succeeded", job
     package = c.integrations.package("dev.ogrl.sdkdemo")
-    assert any(p.suffix == ".whl" for p in (package.root / "wheels").iterdir())
+    assert package.root is None
+    assert any(name.endswith(".whl") for name in package.files)
     snapshot = {"items": [{"id": "1", "name": "alpha", "enabled": False}]}
     out = run(
         SubprocessHost().check(
@@ -236,7 +236,7 @@ def test_template_tests_still_run_after_install(api, tmp_path, app, program):
     ("name", "kind"),
     [("/abs.py", tarfile.REGTYPE), ("a/../../b.py", tarfile.REGTYPE), ("link", tarfile.SYMTYPE)],
 )
-def test_unpack_refuses_unsafe_entries(tmp_path, name, kind):
+def test_reading_an_archive_refuses_unsafe_entries(name, kind):
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w") as tar:
         info = tarfile.TarInfo(name)
@@ -244,4 +244,87 @@ def test_unpack_refuses_unsafe_entries(tmp_path, name, kind):
         info.linkname = "/etc/passwd" if kind == tarfile.SYMTYPE else ""
         tar.addfile(info, io.BytesIO(b"") if kind == tarfile.REGTYPE else None)
     with pytest.raises(PackageError):
-        unpack(gzip.compress(raw.getvalue()), tmp_path / "out")
+        read_archive(gzip.compress(raw.getvalue()))
+
+
+def test_integrations_need_no_writable_filesystem(api, tmp_path, app, program, monkeypatch):
+    """RFC 0005 section 7: install, collect, a rule run, and a code check, with every way
+    the server could write a temporary file turned off."""
+    archive = tmp_path / "fake2.tar.gz"
+    archive.write_bytes(build(tmp_path, "0.1.0"))  # before the filesystem goes read-only
+
+    def refuse(*args, **kwargs):
+        raise OSError(30, "Read-only file system")
+
+    import tempfile
+
+    for name in ("mkdtemp", "mkstemp", "TemporaryDirectory", "NamedTemporaryFile"):
+        monkeypatch.setattr(tempfile, name, refuse)
+    monkeypatch.setattr(Path, "write_bytes", refuse)
+    monkeypatch.setattr(Path, "write_text", refuse)
+    monkeypatch.setattr(Path, "mkdir", refuse)
+
+    assert api.post("/integrations", {"url": str(archive)}, expect=202)["status"] == "succeeded"
+    component = api.post("/components", {"name": "IdP", "kind": "software"})
+    impl = api.post(
+        "/implementations",
+        {
+            "component_ref": component["id"],
+            "control_ref": C1,
+            "status": "implemented",
+            "responsibility": "customer",
+        },
+    )
+    connection = api.post(
+        "/connections",
+        {
+            "integration_id": ID,
+            "name": "fake2",
+            "config": {"dataset": "acme"},
+            "auth_kind": "fields",
+            "bindings": [component["id"]],
+        },
+    )
+    api._call(
+        "PUT", f"/connections/{connection['id']}/secrets/FAKE_TOKEN", 200, json={"value": "s3cret"}
+    )
+    assert (
+        api.post(f"/connections/{connection['id']}/validate", expect=202)["status"] == "succeeded"
+    )
+
+    rule = api.post(f"/integrations/{ID}/templates/mfa-enforcement/enable", expect=201)
+    job = api.post(f"/tests/{rule['id']}/runs", {"implementation_id": impl["id"]}, expect=202)
+    assert api.get(f"/results/{job['result_id']}")["summary"] == "1 of 2 selected items pass"
+
+    check = api.post(
+        "/tests",
+        {
+            "name": "admins",
+            "control_ref": C1,
+            "method": "automated",
+            "interval": "daily",
+            "run": {
+                "runner": "integration",
+                "check": f"{ID}/admins-have-mfa@1",
+                "sources": [f"{ID}/users@1"],
+            },
+        },
+    )
+    job = api.post(f"/tests/{check['id']}/runs", {"implementation_id": impl["id"]}, expect=202)
+    result = api.get(f"/results/{job['result_id']}")
+    assert (result["outcome"], result["summary"]) == ("fail", "1 admins without MFA")
+
+    shell = api.post(
+        "/tests",
+        {
+            "name": "shell",
+            "control_ref": C1,
+            "method": "automated",
+            "interval": "daily",
+            "run": {"runner": "shell", "command": "true"},
+        },
+    )
+    job = api.post(f"/tests/{shell['id']}/runs", {"implementation_id": impl["id"]}, expect=202)
+    result = api.get(f"/results/{job['result_id']}")
+    assert result["outcome"] == "error"
+    assert "needs a writable temporary directory" in result["summary"]

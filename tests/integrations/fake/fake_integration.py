@@ -1,4 +1,4 @@
-"""A protocol-1 integration with no vendor: users come from data/<dataset>.json.
+"""A protocol-1 integration with no vendor: users come from fake_data.USERS[<dataset>].
 
 `mode` in the connection config makes it misbehave on purpose: auth_failed,
 rate_limited, crash, hang, garbage, incomplete, extra_fields, bad_item.
@@ -8,9 +8,9 @@ import json
 import os
 import sys
 import time
-from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+from fake_data import USERS
+
 MANIFEST_ID, VERSION = "dev.ogrl.fake", "0.1.0"
 
 
@@ -30,7 +30,7 @@ def fail(request_id, kind, message, **data):
 
 
 def users(config):
-    return json.loads((HERE / "data" / f"{config['dataset']}.json").read_text())["users"]
+    return USERS[config["dataset"]]
 
 
 def handle(request):
@@ -44,7 +44,7 @@ def handle(request):
             }
         )
     if method == "check":
-        snapshot = json.loads(Path(params["snapshots"]["dev.ogrl.fake/users@1"]).read_text())
+        (snapshot,) = params["snapshots"].values()  # users@1, whatever the package id
         weak = [u for u in snapshot["items"] if u.get("admin") and not u.get("mfa")]
         result = {
             "outcome": "fail" if weak else "pass",
@@ -96,9 +96,10 @@ def handle(request):
             rows = [{"id": 1}]
         if mode == "incomplete":
             rows = rows[:1]
-        with open(params["output"], "w") as out:
-            for row in rows:
-                out.write(json.dumps(row) + "\n")
+        for start in range(0, len(rows), 2):  # two per batch, to exercise batching
+            send(
+                {"jsonrpc": "2.0", "method": "items", "params": {"items": rows[start : start + 2]}}
+            )
         return send(
             {
                 "jsonrpc": "2.0",

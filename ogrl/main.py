@@ -33,7 +33,6 @@ OGRL_HARNESS_USER        Operating-system user the shell runner switches to.
 OGRL_HARNESS_<NAME>      The value of `run.env` name <NAME> for the harness.
 OGRL_INTEGRATIONS_DIR    Directory of unpacked integration packages (RFC 0005). Local tier:
                             loaded only with OGRL_ALLOW_LOCAL_INTEGRATIONS=true.
-OGRL_INTEGRATION_CACHE   Where installed integration archives are unpacked. Default: a temp dir.
 OGRL_SECRETS_FILE        JSON file for connection secrets when OGRL_SSM_PREFIX is unset.
                             Unset with no SSM prefix: connection secrets are kept in memory.
 OTEL_EXPORTER_OTLP_ENDPOINT / LOGFIRE_TOKEN   Optional telemetry destinations (RFC 0003 §11).
@@ -284,9 +283,6 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         role_assumer=StsRoleAssumer(region=region),
         public_url=env.get("OGRL_PUBLIC_URL") or None,
         allow_local_integrations=allow_local,
-        integration_cache=Path(env["OGRL_INTEGRATION_CACHE"])
-        if env.get("OGRL_INTEGRATION_CACHE")
-        else None,
         snapshot_reuse=timedelta(seconds=float(env.get("OGRL_SNAPSHOT_REUSE", "3600"))),
         export=ExportSettings(remote=env.get("OGRL_EXPORT_REMOTE") or None),
         harness_user=env.get("OGRL_HARNESS_USER") or None,

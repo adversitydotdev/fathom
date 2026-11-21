@@ -7,8 +7,9 @@ manifest and every schema; nothing here runs the package.
 
 import hashlib
 import re
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Literal
 
 import yaml
@@ -177,15 +178,24 @@ class PackageError(ValueError):
     pass
 
 
+Tier = Literal["first-party", "verified", "local"]
+
+
 @dataclass(frozen=True)
 class Package:
-    """An installed, validated package on local disk."""
+    """An installed, validated package.
+
+    A directory package (`OGRL_INTEGRATIONS_DIR`) has a `root` on disk, which
+    may be read-only. An archive package has no root: its `files` are held in
+    memory and the host runs it from there, so nothing is unpacked to disk.
+    """
 
     manifest: Manifest
-    root: Path
-    digest: str  # sha-256 of manifest.yaml; archives pin the archive digest instead
-    tier: Literal["first-party", "verified", "local"] = "local"
+    root: Path | None
+    digest: str  # sha-256 of manifest.yaml for directories; of the archive for installs
+    tier: Tier = "local"
     schemas: dict[tuple[str, int], dict[str, Any]] = field(default_factory=dict)
+    files: Mapping[str, bytes] = field(default_factory=dict)
 
     @property
     def id(self) -> str:
@@ -200,17 +210,43 @@ def _unique(values: list[Any], what: str) -> None:
         raise PackageError(f"each {what} is listed once")
 
 
-def load_package(
-    root: Path, tier: Literal["first-party", "verified", "local"] = "local"
-) -> Package:
-    path = root / "manifest.yaml"
+def load_package(root: Path, tier: Tier = "local") -> Package:
+    """A package from a directory on disk."""
+
+    def read(relative: str) -> bytes:
+        path = (root / relative).resolve()
+        if root.resolve() not in path.parents:
+            raise PackageError(f"{relative} is outside the package")
+        try:
+            return path.read_bytes()
+        except OSError as exc:
+            raise PackageError(f"{root}: no readable {relative}") from exc
+
+    package = _load(read, tier, where=str(root))
+    return Package(package.manifest, root, package.digest, tier, package.schemas)
+
+
+def load_files(files: Mapping[str, bytes], tier: Tier = "local") -> Package:
+    """A package from an archive already read into memory."""
+
+    def read(relative: str) -> bytes:
+        try:
+            return files[str(PurePosixPath(relative))]
+        except KeyError as exc:
+            raise PackageError(f"the archive has no {relative}") from exc
+
+    package = _load(read, tier, where="archive")
+    return Package(package.manifest, None, package.digest, tier, package.schemas, dict(files))
+
+
+def _load(read: Callable[[str], bytes], tier: Tier, where: str) -> Package:
+    raw = read("manifest.yaml")
     try:
-        raw = path.read_bytes()
         manifest = Manifest.model_validate(yaml.safe_load(raw))
-    except OSError as exc:
-        raise PackageError(f"{root}: no readable manifest.yaml") from exc
     except ValidationError as exc:
-        raise PackageError(f"{path}: {exc}") from exc
+        raise PackageError(f"{where}/manifest.yaml: {exc}") from exc
+    except yaml.YAMLError as exc:
+        raise PackageError(f"{where}/manifest.yaml is not YAML: {exc}") from exc
 
     _unique([(r.name, r.version) for r in manifest.resources], "resource version")
     _unique([(c.name, c.version) for c in manifest.checks], "check version")
@@ -218,14 +254,15 @@ def load_package(
     _unique([a.kind for a in manifest.auth], "auth kind")
 
     schemas: dict[tuple[str, int], dict[str, Any]] = {}
-    base = root.resolve()
     for resource in manifest.resources:
-        schema_file = (root / resource.schema_path).resolve()
-        if base not in schema_file.parents:
+        schema_path = PurePosixPath(resource.schema_path)
+        if ".." in schema_path.parts or schema_path.is_absolute():
             raise PackageError(f"{resource.name}: the schema is outside the package")
         try:
-            schema = yaml.safe_load(schema_file.read_text())
+            schema = yaml.safe_load(read(resource.schema_path))
             Draft202012Validator.check_schema(schema)
+        except PackageError:
+            raise
         except Exception as exc:
             raise PackageError(f"{resource.name}: {resource.schema_path}: {exc}") from exc
         if schema.get("type") != "object":
@@ -249,7 +286,7 @@ def load_package(
             if ref.integration != manifest.id:
                 raise PackageError(f"template {template.name} reads another integration: {text}")
 
-    return Package(manifest, root, hashlib.sha256(raw).hexdigest(), tier, schemas)
+    return Package(manifest, None, hashlib.sha256(raw).hexdigest(), tier, schemas)
 
 
 def discover(directory: Path) -> list[Package]:

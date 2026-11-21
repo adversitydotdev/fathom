@@ -6,24 +6,29 @@ and `progress` notifications until the operation's response arrives, then
 closes stdin. Stdout carries only JSON-RPC, one message per line. Stderr is
 kept (truncated) for the error message.
 
-The process gets a scratch directory as its working directory and `HOME`, a
-fixed `PATH`, and the variables the caller passes. It never inherits the API's
-environment. As with `shell`, this separates credentials; it is not a sandbox.
+Nothing touches the filesystem, so OGRL runs on a read-only root: items stream
+back as `items` notifications, snapshots go inside the `check` request, and
+an installed (archive) package is loaded from memory. The host starts
+`python -I` with BOOTSTRAP, writes the package's `.py` files and wheels as the
+first stdin line, and the bootstrap serves them to `import` from memory.
+Directory packages import from their (possibly read-only) directory.
+
+The process gets a fixed `PATH`, `PYTHONDONTWRITEBYTECODE`, and the variables
+the caller passes, with no `HOME`. It never inherits the API's environment. As
+with `shell`, this separates credentials; it is not a sandbox.
 """
 
 import asyncio
+import base64
 import contextlib
 import itertools
 import json
 import logging
 import os
 import platform
-import shutil
 import signal
 import sys
-import tempfile
 from collections.abc import Mapping
-from pathlib import Path
 from typing import Any
 
 from ogrl.integrations.manifest import PROTOCOL_VERSION, Package
@@ -50,6 +55,44 @@ def platform_tag() -> str:
         machine, machine
     )
     return f"{system}-{arch}"
+
+
+BOOTSTRAP = r"""
+import base64, importlib.abc, importlib.util, io, json, sys, zipfile
+_bundle = json.loads(sys.stdin.readline())["files"]
+_sources = {}
+def _add(path, data, origin):
+    if not path.endswith(".py"):
+        return
+    parts = path[:-3].split("/")
+    package = parts[-1] == "__init__"
+    name = ".".join(parts[:-1] if package else parts)
+    if name and all(p.isidentifier() for p in name.split(".")):
+        _sources.setdefault(name, (data, package, origin + path))
+for _path in sorted(_bundle):  # the package's own modules win over its wheels
+    if not _path.startswith(("wheels/", "tests/")):
+        _add(_path, base64.b64decode(_bundle[_path]), "<ogrl-package>/")
+for _path in sorted(_bundle):
+    if _path.startswith("wheels/") and _path.endswith(".whl"):
+        with zipfile.ZipFile(io.BytesIO(base64.b64decode(_bundle[_path]))) as _wheel:
+            for _member in _wheel.namelist():
+                if ".dist-info/" not in _member and ".data/" not in _member:
+                    _add(_member, _wheel.read(_member), "<ogrl-package>/" + _path + "/")
+del _bundle
+class _MemoryImporter(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    def find_spec(self, name, path=None, target=None):
+        if name not in _sources:
+            return None
+        _, package, origin = _sources[name]
+        return importlib.util.spec_from_loader(name, self, origin=origin, is_package=package)
+    def create_module(self, spec):
+        return None
+    def exec_module(self, module):
+        data, _, origin = _sources[module.__spec__.name]
+        module.__file__ = origin
+        exec(compile(data, origin, "exec"), module.__dict__)
+sys.meta_path.insert(0, _MemoryImporter())
+"""
 
 
 class SubprocessHost:
@@ -83,28 +126,19 @@ class SubprocessHost:
         config: Mapping[str, str],
         env: Mapping[str, str],
     ) -> CollectReport:
-        def params(scratch: Path) -> dict[str, Any]:
-            return {
-                "resource": resource,
-                "version": version,
-                "config": dict(config),
-                "output": str(scratch / "items.jsonl"),
-            }
-
-        def finish(scratch: Path, result: dict[str, Any]) -> CollectReport:
-            complete = result.get("complete")
-            if not isinstance(complete, bool):
-                raise IntegrationError("protocol", "collect returned no complete flag")
-            items = _read_items(scratch / "items.jsonl")
-            count = result.get("count")
-            if count is not None and count != len(items):
-                raise IntegrationError(
-                    "protocol", f"collect reported {count} items and wrote {len(items)}"
-                )
-            reason = result.get("reason")
-            return CollectReport(items, complete, reason if isinstance(reason, str) else None)
-
-        return await self._call(package, "collect", params, env, COLLECT_TIMEOUT, finish)
+        items: list[dict[str, Any]] = []
+        params = {"resource": resource, "version": version, "config": dict(config)}
+        result = await self._call(package, "collect", params, env, COLLECT_TIMEOUT, items)
+        complete = result.get("complete")
+        if not isinstance(complete, bool):
+            raise IntegrationError("protocol", "collect returned no complete flag")
+        count = result.get("count")
+        if count is not None and count != len(items):
+            raise IntegrationError(
+                "protocol", f"collect reported {count} items and sent {len(items)}"
+            )
+        reason = result.get("reason")
+        return CollectReport(items, complete, reason if isinstance(reason, str) else None)
 
     async def check(
         self,
@@ -116,20 +150,13 @@ class SubprocessHost:
         snapshots: Mapping[str, bytes],
         time_limit: int,
     ) -> CheckReport:
-        def request(scratch: Path) -> dict[str, Any]:
-            paths = {}
-            for index, (source, content) in enumerate(sorted(snapshots.items())):
-                path = scratch / f"snapshot-{index}.json"
-                path.write_bytes(content)
-                paths[source] = str(path)
-            return {
-                "check": check,
-                "version": version,
-                "args": dict(args),
-                "params": dict(params),
-                "snapshots": paths,
-            }
-
+        request = {
+            "check": check,
+            "version": version,
+            "args": dict(args),
+            "params": dict(params),
+            "snapshots": {source: json.loads(content) for source, content in snapshots.items()},
+        }
         # A check holds no credentials (RFC 0005 section 7).
         result = await self._call(package, "check", request, {}, time_limit)
         outcome = result.get("outcome")
@@ -155,47 +182,62 @@ class SubprocessHost:
 
     # --- process -------------------------------------------------------------------------------
 
-    def _command(self, package: Package) -> tuple[list[str], dict[str, str]]:
+    def _command(self, package: Package) -> tuple[list[str], bytes | None, str]:
+        """argv, the bundle line to write before the protocol (in-memory packages), and cwd."""
         runtime = package.manifest.runtime
+        module, _, function = runtime.entrypoint.partition(":")
+        start = f"import {module} as m; m.{function or 'main'}()"
+        if runtime.kind == "python" and package.root is None:
+            bundle = {
+                "files": {
+                    name: base64.b64encode(data).decode()
+                    for name, data in package.files.items()
+                    if name.endswith((".py", ".whl"))
+                }
+            }
+            line = json.dumps(bundle, separators=(",", ":")).encode() + b"\n"
+            return [self._python, "-I", "-c", BOOTSTRAP + start], line, "/"
+        if package.root is None:
+            raise IntegrationError(
+                "protocol", "binary packages run from a directory (OGRL_INTEGRATIONS_DIR)"
+            )
         root = package.root.resolve()
         if runtime.kind == "python":
-            module, _, function = runtime.entrypoint.partition(":")
-            code = f"import {module} as m; m.{function or 'main'}()"
             # Pure-Python wheels under wheels/ (the SDK, for one) import straight from the zip.
-            wheels = sorted(str(w) for w in (root / "wheels").glob("*.whl"))
-            return [self._python, "-c", code], {"PYTHONPATH": os.pathsep.join([str(root), *wheels])}
+            paths = [str(root), *sorted(str(w) for w in (root / "wheels").glob("*.whl"))]
+            return (
+                [self._python, "-I", "-c", f"import sys; sys.path[:0] = {paths!r}; {start}"],
+                None,
+                str(root),
+            )
         binary = root / "bin" / platform_tag() / runtime.entrypoint
         if not binary.is_file():
             raise IntegrationError("protocol", f"no {runtime.entrypoint} for {platform_tag()}")
-        return [str(binary)], {}
+        return [str(binary)], None, str(root)
 
     async def _call(
         self,
         package: Package,
         method: str,
-        params: Any,
+        params: dict[str, Any],
         secrets: Mapping[str, str],
         time_limit: int,
-        finish: Any = None,
+        items: list[dict[str, Any]] | None = None,
     ) -> Any:
-        scratch = Path(tempfile.mkdtemp(prefix="ogrl-integration-"))
+        """Run one operation. Nothing touches the filesystem (RFC 0005 section 7)."""
         process: asyncio.subprocess.Process | None = None
         stderr_task: asyncio.Task[bytes] | None = None
         try:
-            if self._user:
-                shutil.chown(scratch, user=self._user)
-            argv, runtime_env = self._command(package)
+            argv, bundle, cwd = self._command(package)
             env = {
                 "PATH": DEFAULT_PATH,
-                "HOME": str(scratch),
                 "LANG": "C.UTF-8",
-                **runtime_env,
+                "PYTHONDONTWRITEBYTECODE": "1",
                 **secrets,
             }
-            body = params(scratch) if callable(params) else params
             process = await asyncio.create_subprocess_exec(
                 *argv,
-                cwd=scratch,
+                cwd=cwd,
                 env=env,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -207,7 +249,8 @@ class SubprocessHost:
             stderr_task = asyncio.create_task(_drain(process.stderr))
             try:
                 result = await asyncio.wait_for(
-                    self._converse(process, package, method, body), timeout=time_limit
+                    self._converse(process, package, method, params, bundle, items),
+                    timeout=time_limit,
                 )
             except TimeoutError:
                 message = f"{method} timed out after {time_limit}s"
@@ -225,7 +268,7 @@ class SubprocessHost:
                 await asyncio.wait_for(process.wait(), timeout=EXIT_GRACE)
             except TimeoutError:
                 log.warning("%s did not exit after %s; killed", package.id, method)
-            return finish(scratch, result) if finish else result
+            return result
         finally:
             if process is not None and process.returncode is None:
                 with contextlib.suppress(ProcessLookupError):
@@ -233,11 +276,23 @@ class SubprocessHost:
                 await process.wait()
             if stderr_task is not None:
                 stderr_task.cancel()
-            shutil.rmtree(scratch, ignore_errors=True)
 
     async def _converse(
-        self, process: asyncio.subprocess.Process, package: Package, method: str, params: Any
+        self,
+        process: asyncio.subprocess.Process,
+        package: Package,
+        method: str,
+        params: Any,
+        bundle: bytes | None,
+        items: list[dict[str, Any]] | None,
     ) -> dict[str, Any]:
+        if bundle is not None:
+            assert process.stdin
+            try:
+                process.stdin.write(bundle)
+                await process.stdin.drain()
+            except (BrokenPipeError, ConnectionResetError):
+                raise IntegrationError("protocol", "the process exited before loading") from None
         hello = await self._request(process, "initialize", {"protocol": PROTOCOL_VERSION})
         if (
             hello.get("protocol") != PROTOCOL_VERSION
@@ -250,10 +305,14 @@ class SubprocessHost:
                 f"{hello.get('protocol')}; installed is {package.manifest.id} "
                 f"{package.manifest.version} protocol {PROTOCOL_VERSION}",
             )
-        return await self._request(process, method, params)
+        return await self._request(process, method, params, items)
 
     async def _request(
-        self, process: asyncio.subprocess.Process, method: str, params: Any
+        self,
+        process: asyncio.subprocess.Process,
+        method: str,
+        params: Any,
+        items: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         assert process.stdin and process.stdout
         request_id = next(self._ids)
@@ -278,8 +337,15 @@ class SubprocessHost:
                 ) from None
             if not isinstance(message, dict):
                 raise IntegrationError("protocol", "stdout carried a message that is not an object")
-            if "id" not in message:  # a notification: log or progress
-                if message.get("method") == "log":
+            if "id" not in message:  # a notification: items, log, or progress
+                if message.get("method") == "items":
+                    batch = (message.get("params") or {}).get("items")
+                    if items is None or not isinstance(batch, list):
+                        raise IntegrationError("protocol", "items arrived outside collect")
+                    if not all(isinstance(i, dict) for i in batch):
+                        raise IntegrationError("protocol", "an item is not an object")
+                    items.extend(batch)
+                elif message.get("method") == "log":
                     log.info("integration: %s", (message.get("params") or {}).get("message"))
                 continue
             if message.get("id") != request_id:
@@ -307,24 +373,6 @@ def _error(error: Any) -> IntegrationError:
 
 def _strings(value: Any) -> list[str]:
     return [str(v) for v in value] if isinstance(value, list) else []
-
-
-def _read_items(path: Path) -> list[dict[str, Any]]:
-    if not path.is_file():
-        return []
-    items = []
-    with path.open("rb") as handle:
-        for number, line in enumerate(handle, start=1):
-            if not line.strip():
-                continue
-            try:
-                item = json.loads(line)
-            except json.JSONDecodeError:
-                raise IntegrationError("protocol", f"items line {number} is not JSON") from None
-            if not isinstance(item, dict):
-                raise IntegrationError("protocol", f"items line {number} is not an object")
-            items.append(item)
-    return items
 
 
 async def _drain(stream: asyncio.StreamReader | None) -> bytes:

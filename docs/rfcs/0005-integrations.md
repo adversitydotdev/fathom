@@ -47,7 +47,7 @@ bin/linux-arm64/okta          # runtime: binary (one per platform)
 bin/linux-amd64/okta
 ```
 
-**Runtimes.** `python` packages carry pure-Python wheels (`py3-none-any`) under `wheels/` and an entry point (`module:callable`, such as `okta_integration:app.run`). The host runs the entry point with the interpreter already in the OGRL image and puts the package root and each wheel on `PYTHONPATH`; pure-Python wheels import straight from the zip, so nothing is installed. The SDK has no dependencies for this reason. Packages that need compiled dependencies use the `binary` runtime. `binary` packages carry one static executable per platform; the production image is `linux/arm64` ([RFC 0003 section 9](0003-application.md#9-production-topology)) and local development commonly needs `darwin/arm64`. Any language that can emit a static binary can target `binary`, which is how the TypeScript SDK ([Section 10](#10-sdk-and-tooling)) ships.
+**Runtimes.** `python` packages carry pure-Python wheels (`py3-none-any`) under `wheels/` and an entry point (`module:callable`, such as `okta_integration:app.run`). The host runs the entry point with the interpreter already in the OGRL image (`python -I`). An installed package runs **from memory**: the host writes the package's `.py` files and wheels as the first line on the process's stdin, and a small bootstrap serves them to `import`, including modules inside the wheels. A directory package imports from its directory, which may be a read-only mount. Either way nothing is unpacked or installed, and nothing is written to disk, so OGRL runs integrations on a read-only root filesystem. The SDK has no dependencies for this reason, and package code must not read files beside its modules: data belongs in code. Packages that need compiled dependencies use the `binary` runtime, which runs only from a directory package because an executable must exist as a file. `binary` packages carry one static executable per platform; the production image is `linux/arm64` ([RFC 0003 section 9](0003-application.md#9-production-topology)) and local development commonly needs `darwin/arm64`. Any language that can emit a static binary can target `binary`, which is how the TypeScript SDK ([Section 10](#10-sdk-and-tooling)) ships.
 
 **Manifest.**
 
@@ -115,7 +115,7 @@ An integration may emit more than one major version of a resource during a trans
 
 ## 4. Installing and trust
 
-**Where packages live.** Fargate tasks have no persistent disk, so installing cannot mean unpacking into the container. An install records a row (`integration id`, `version`, archive digest, trust tier, installer, time, source, enabled) in `integration_installs` and copies the archive into the deployment's object storage under `integrations/<id>/<version>/<digest>.tar.gz`. Each process fetches an archive the first time it needs it, verifies the digest, and unpacks it into a local cache keyed by digest. A replaced task re-fetches on demand, and every process reads which version is enabled from the database before it uses a package, so the API and the job service agree. Installs run as jobs (`integration_install`). A version is immutable: installing the same version with different bytes is refused. Unpacking refuses absolute paths, `..`, links, and devices, and caps entries and size. Packages loaded from `OGRL_INTEGRATIONS_DIR` keep working beside installed ones; an archive cannot take over the id of a directory package.
+**Where packages live.** Fargate tasks have no persistent disk, so installing cannot mean unpacking into the container. An install records a row (`integration id`, `version`, archive digest, trust tier, installer, time, source, enabled) in `integration_installs` and copies the archive into the deployment's object storage under `integrations/<id>/<version>/<digest>.tar.gz`. Each process fetches an archive the first time it needs it, verifies the digest, and holds its files in memory; nothing is unpacked to disk. A replaced task re-fetches on demand, and every process reads which version is enabled from the database before it uses a package, so the API and the job service agree. Installs run as jobs (`integration_install`). A version is immutable: installing the same version with different bytes is refused. Reading an archive refuses absolute paths, `..`, links, and devices, and caps entries and size. Fetches go through the object-storage port, so a deployment that wants a shared cache in front of S3 (Redis, for example) can wrap that port; none is needed by default. Packages loaded from `OGRL_INTEGRATIONS_DIR` keep working beside installed ones; an archive cannot take over the id of a directory package.
 
 **One enabled version.** At most one version of an integration is enabled at a time. Every connection and check uses it. An upgrade that removes a resource major or a check major that an enabled test reads is refused until the tests are migrated ([Section 8](#8-checks-and-templates)).
 
@@ -177,7 +177,7 @@ OAuth requires a stable origin. The default topology has no load balancer and a 
 
 **Scheduling.** The scheduler process ([RFC 0003 section 2](0003-application.md#2-processes)) evaluates every non-revoked test whose runner is `rule` or `integration`. When a test is due (its current result is older than its freshness window, or every hour for `continuous`), the scheduler makes sure each source it reads has a snapshot younger than `OGRL_SNAPSHOT_REUSE` (default one hour) for every bound connection. It enqueues collection jobs for any that are missing, then enqueues the test run once they finish. Collection jobs are deduplicated on `(connection, source)` while one is queued or running, and each connection runs one collection at a time so the integration can respect vendor rate limits. Operators can also trigger a collection or a test run by hand.
 
-**Building the snapshot.** The integration writes items as JSON Lines to a file in its scratch directory ([Section 7](#7-protocol)). The harness then:
+**Building the snapshot.** The integration streams items to the host as `items` notifications ([Section 7](#7-protocol)). The harness then:
 
 1. Validates each item against the resource's JSON Schema and removes properties the schema does not declare, recording a warning. Integrations cannot widen what is stored by adding fields at runtime, which keeps tokens and unneeded personal data out of evidence.
 2. Writes the RFC 0001 snapshot document in canonical JSON, with `source`, `collected` set to the time the integration returned, `complete` as the integration reported it, and the items.
@@ -198,14 +198,16 @@ The application runs an integration process for each operation and talks to it w
 | Method | Params | Result | Credentials |
 |---|---|---|---|
 | `connection.validate` | `config` | `identity`, `granted_scopes`, `warnings` | Yes |
-| `collect` | `resource`, `version`, `config`, `output` (path in the scratch directory) | `count`, `complete`, `reason` when incomplete | Yes |
-| `check` | `check`, `version`, `args`, `params`, `snapshots` (source → snapshot file path) | `outcome` (`pass`, `fail`, `error`), `summary`, `subjects` | No |
+| `collect` | `resource`, `version`, `config` | `count`, `complete`, `reason` when incomplete; the items themselves arrive first as `items` notifications | Yes |
+| `check` | `check`, `version`, `args`, `params`, `snapshots` (source → snapshot document, inline) | `outcome` (`pass`, `fail`, `error`), `summary`, `subjects` | No |
+
+During `collect` the process sends `{"method": "items", "params": {"items": [...]}}` notifications in batches, each line under 1 MB; `count` in the response must equal the items sent. An item larger than 1 MB is an error. No operation uses the filesystem.
 
 `connection.validate` should make the cheapest authenticated call that proves the credential works and report which scopes or permissions were actually granted, so the UI can warn about missing ones before the first collection.
 
 **Errors.** Failures are JSON-RPC errors with these `data.kind` values, which the UI shows to operators: `auth_failed`, `permission_denied` (with the missing permission when known), `rate_limited` (with `retry_after` seconds; the harness retries the collection up to three times), `vendor_error`, and `invalid_config`. A crash, a timeout, malformed output, or a version mismatch fails the operation. For `check`, every failure becomes `outcome: error` as RFC 0001 requires.
 
-**Environment.** Each process gets a scratch directory, a fixed `PATH`, `HOME` set to the scratch directory, `OGRL_CONNECTION_ID`, and, for `connection.validate` and `collect` only, the connection's secrets under their manifest names (or `OGRL_ACCESS_TOKEN`, or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`). Timeouts default to 15 minutes for `collect` and 30 seconds for `connection.validate`; `check` uses the test's `run.timeout`.
+**Environment.** Each process gets no writable directory: its working directory is the package directory (or `/` for a package in memory), there is no `HOME`, and `PYTHONDONTWRITEBYTECODE` is set. It gets a fixed `PATH`, `OGRL_CONNECTION_ID`, and, for `connection.validate` and `collect` only, the connection's secrets under their manifest names (or `OGRL_ACCESS_TOKEN`, or `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_SESSION_TOKEN`). Timeouts default to 15 minutes for `collect` and 30 seconds for `connection.validate`; `check` uses the test's `run.timeout`.
 
 ## 8. Checks and templates
 
@@ -272,7 +274,7 @@ def admin_mfa(ctx, users, groups):
     return pass_(f"{len(admins)} admins use phishing-resistant MFA")
 ```
 
-It provides the stdio framing and lifecycle, an HTTP client on `urllib` that retries with backoff and honors `Retry-After` and maps 401, 403, and 429 to the protocol's error kinds, pagination by `Link` header, body URL, or cursor, JSON Lines writing for `collect` (with `Incomplete`, or a rate limit after some items, marking the snapshot incomplete), and typed errors for the rest. Checks receive one keyword argument per resource they read, and no credentials or HTTP client.
+It provides the stdio framing and lifecycle, an HTTP client on `urllib` that retries with backoff and honors `Retry-After` and maps 401, 403, and 429 to the protocol's error kinds, pagination by `Link` header, body URL, or cursor, batched `items` streaming for `collect` (with `Incomplete`, or a rate limit after some items, marking the snapshot incomplete), and typed errors for the rest. Checks receive one keyword argument per resource they read, and no credentials or HTTP client.
 
 **Testing.** Repository rules forbid tests that call real vendors. The SDK test kit records vendor HTTP traffic once into scrubbed cassettes and replays them, and runs any operation through an in-memory harness, so an integration's tests run offline. A language-agnostic **conformance suite** drives any package through the protocol and checks lifecycle, error mapping, schema adherence, and the no-credentials-in-`check` rule; registry listing requires passing it.
 

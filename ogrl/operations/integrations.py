@@ -16,11 +16,9 @@ import json
 import logging
 import re
 import secrets
-import tempfile
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlencode, urlsplit
 
@@ -29,7 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ogrl.access import Authorizer, Permission, Principal, require
 from ogrl.errors import Conflict, FieldError, Invalid, NotFound, PreconditionFailed
-from ogrl.integrations.archive import unpack
+from ogrl.integrations.archive import read_archive
 from ogrl.integrations.manifest import (
     AwsRoleAuth,
     FieldsAuth,
@@ -37,7 +35,7 @@ from ogrl.integrations.manifest import (
     OAuth2Auth,
     Package,
     PackageError,
-    load_package,
+    load_files,
 )
 from ogrl.kernel import ids, rules
 from ogrl.kernel.bundles import canonical_json, digest
@@ -1035,12 +1033,11 @@ class IntegrationService:
                 raise Invalid(
                     f"the archive digest is {sha}, not {expected}", slug="digest-mismatch"
                 )
-            with tempfile.TemporaryDirectory(prefix="ogrl-install-") as scratch:
-                try:
-                    root = await asyncio.to_thread(unpack, content, Path(scratch))
-                    package = await asyncio.to_thread(load_package, root)
-                except PackageError as exc:
-                    raise Invalid(str(exc), slug="bad-package") from exc
+            try:
+                files = await asyncio.to_thread(read_archive, content)
+                package = await asyncio.to_thread(load_files, files)
+            except PackageError as exc:
+                raise Invalid(str(exc), slug="bad-package") from exc
             manifest = package.manifest
             if not self._allow_local:
                 raise Invalid(
