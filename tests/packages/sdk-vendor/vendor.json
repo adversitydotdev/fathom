@@ -1,0 +1,42 @@
+{
+  "openapi": "3.0.3",
+  "info": {"title": "Emulated vendor", "version": "1"},
+  "paths": {
+    "/api/apps": {
+      "get": {
+        "operationId": "listApps",
+        "summary": "List all applications",
+        "parameters": [
+          {"name": "status", "in": "query", "schema": {"type": "string"}},
+          {"name": "limit", "in": "query", "schema": {"type": "integer"}}
+        ],
+        "responses": {"200": {"content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/App"}}}}}}
+      },
+      "post": {"operationId": "createApp", "responses": {"200": {"content": {"application/json": {"schema": {"$ref": "#/components/schemas/App"}}}}}}
+    },
+    "/api/groups/{groupId}/members": {
+      "get": {
+        "operationId": "listMembers",
+        "summary": "List group members",
+        "parameters": [{"name": "groupId", "in": "path", "required": true, "schema": {"type": "string"}}],
+        "responses": {"200": {"content": {"application/json": {"schema": {"type": "object", "properties": {"value": {"type": "array", "items": {"type": "object", "properties": {"id": {"type": "string"}, "login": {"type": "string"}}}}}}}}}}
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "App": {
+        "type": "object",
+        "required": ["id", "label"],
+        "properties": {
+          "id": {"type": "string"},
+          "label": {"type": "string"},
+          "status": {"type": "string"},
+          "signOnMode": {"type": "string", "description": "How users sign in."},
+          "settings": {"type": "object", "properties": {"mfa": {"type": "boolean"}}},
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}

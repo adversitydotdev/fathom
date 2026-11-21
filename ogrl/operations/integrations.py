@@ -23,6 +23,8 @@ from typing import Any, Literal
 from urllib.parse import urlencode, urlsplit
 
 from jsonschema import Draft202012Validator
+from ogrl_integration.openapi import Query
+from ogrl_integration.openapi import validate as query_validate
 from pydantic import BaseModel, ConfigDict, Field
 
 from ogrl.access import Authorizer, Permission, Principal, require
@@ -45,7 +47,13 @@ from ogrl.kernel.models import Component, Implementation, Run, System, Test
 from ogrl.kernel.parameters import control_values
 from ogrl.kernel.timeutil import FRESHNESS_DAYS, format_timestamp, later_than, now, utc
 from ogrl.operations.catalog import PackageCatalog
-from ogrl.operations.connections import Connection, ConnectionStore, InstallRecord, Snapshot
+from ogrl.operations.connections import (
+    Connection,
+    ConnectionStore,
+    InstallRecord,
+    QueryDefinition,
+    Snapshot,
+)
 from ogrl.operations.jobs import JobOutcome, JobService
 from ogrl.operations.objects import ObjectService
 from ogrl.operations.records import Job
@@ -138,12 +146,63 @@ class InstallRequest(BaseModel):
     enable: bool = True
 
 
+class QueryWrite(BaseModel):
+    """A query source definition (RFC 0006 section 3)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    integration_id: str
+    name: str
+    version: int = Field(default=1, ge=1)
+    description: str | None = None
+    operation: str
+    params: dict[str, str] = Field(default_factory=dict)
+    items: str = ""
+    fields: dict[str, str] = Field(default_factory=dict)
+
+
+class QueryCheck(BaseModel):
+    """Static validation (RFC 0006 section 6)."""
+
+    valid: bool
+    source: str
+    errors: list["PreviewProblem"] = Field(default_factory=list)
+    warnings: list["PreviewProblem"] = Field(default_factory=list)
+    item_schema: dict[str, Any] | None = None
+    fields: list[dict[str, Any]] = Field(default_factory=list)
+
+
+class DryRunRequest(QueryWrite):
+    connection_id: str
+    max_items: int = Field(default=50, ge=1, le=500)
+
+
+class DryRun(BaseModel):
+    """One sample of a query through a real connection; nothing is stored."""
+
+    check: QueryCheck
+    items: list[dict[str, Any]] = Field(default_factory=list)
+    count: int = 0
+    warnings: list["PreviewProblem"] = Field(default_factory=list)
+    error: str | None = None
+
+
+class OperationView(BaseModel):
+    id: str
+    method: str
+    path: str
+    summary: str
+    parameters: list[dict[str, Any]] = Field(default_factory=list)
+    fields: list[dict[str, Any]] | None = None  # the item schema, when described
+
+
 class RulePreviewRequest(BaseModel):
     """A rule run block to try against the latest snapshots, before saving it as a test."""
 
     model_config = ConfigDict(extra="forbid")
 
     run: dict[str, Any]
+    items: list[dict[str, Any]] | None = None  # evaluate these (a dry run's) instead of snapshots
     control_ref: str | None = None
     implementation_id: str | None = None
     params: dict[str, str] | None = None
@@ -174,6 +233,10 @@ class RulePreview(BaseModel):
     snapshots: list[PreviewSnapshot] = Field(default_factory=list)
     params: dict[str, str] = Field(default_factory=dict)
     sample: list[dict[str, Any]] = Field(default_factory=list)
+
+
+QueryCheck.model_rebuild()
+DryRun.model_rebuild()
 
 
 class TemplateUpdate(BaseModel):
@@ -315,6 +378,7 @@ def build_snapshot(
     complete: bool,
     items: list[Mapping[str, Any]],
     schema: Mapping[str, Any],
+    extra: Mapping[str, Any] | None = None,
 ) -> tuple[bytes, list[str]]:
     """The RFC 0001 snapshot document in canonical JSON, and warnings."""
     validator = Draft202012Validator(schema)
@@ -338,6 +402,7 @@ def build_snapshot(
         "collected": format_timestamp(collected),
         "complete": complete,
         "items": cleaned,
+        **(extra or {}),
     }
     return canonical_json(document), warnings
 
@@ -818,7 +883,10 @@ class IntegrationService:
                 except ValueError as exc:
                     errors.append(FieldError(str(exc), f"/sources/{index}"))
                     continue
-                if ref.integration != manifest.id or not manifest.resource(ref.name, ref.major):
+                defined = {q.source for q in await self._store.list_queries()}
+                if ref.integration != manifest.id or (
+                    not manifest.resource(ref.name, ref.major) and text not in defined
+                ):
                     errors.append(
                         FieldError(f"{manifest.id} does not emit {text}", f"/sources/{index}")
                     )
@@ -845,20 +913,21 @@ class IntegrationService:
         lock = self._locks.setdefault(connection_id, asyncio.Lock())
         async with lock:  # one collection at a time per connection (RFC 0005 section 6)
             connection = await self._connection(connection_id)
-            package = self.package(connection.integration_id)
-            spec = package.manifest.resource(source.name, source.major)
-            if spec is None:
-                raise Invalid(f"{package.id} {package.manifest.version} does not emit {source}")
+            package, schema, query = await self.resolve(source)
             try:
                 env = await self._credentials(connection, package)
-                report = await self._collect_with_retries(package, source, connection, env)
+                report = await self._collect_with_retries(
+                    package, source, connection, env, query.query() if query else None
+                )
                 collected = utc(self._clock())
                 content, warnings = build_snapshot(
                     str(source),
                     collected,
                     report.complete,
                     list(report.items),
-                    package.schema(source.name, source.major),
+                    schema,
+                    # The snapshot records the definition it was collected with (RFC 0006 s7).
+                    {"query": _definition(query)} if query else None,
                 )
                 if len(content) > SNAPSHOT_MAX_BYTES:
                     raise IntegrationError(
@@ -896,13 +965,18 @@ class IntegrationService:
             return snapshot
 
     async def _collect_with_retries(
-        self, package: Package, source: rules.Reference, connection: Connection, env: dict[str, str]
+        self,
+        package: Package,
+        source: rules.Reference,
+        connection: Connection,
+        env: dict[str, str],
+        query: Mapping[str, Any] | None = None,
     ) -> Any:
         attempt = 0
         while True:
             try:
                 return await self._host.collect(
-                    package, source.name, source.major, connection.config, env
+                    package, source.name, source.major, connection.config, env, query
                 )
             except IntegrationError as exc:
                 attempt += 1
@@ -1055,6 +1129,237 @@ class IntegrationService:
             subjects=list(report.subjects),
         )
 
+    # --- query sources (RFC 0006) ------------------------------------------------------------
+
+    async def resolve(
+        self, source: rules.Reference
+    ) -> tuple[Package, dict[str, Any], QueryDefinition | None]:
+        """The package, item schema, and (for a query source) definition behind a source."""
+        package = self.package(source.integration)
+        if package.manifest.resource(source.name, source.major) is not None:
+            return package, package.schema(source.name, source.major), None
+        for query in await self._store.list_queries():
+            if query.source == str(source):
+                if package.manifest.openapi is None:
+                    raise Invalid(
+                        f"{package.id} {package.manifest.version} no longer supports query sources"
+                    )
+                return package, query.item_schema, query
+        raise Invalid(
+            f"{package.id} {package.manifest.version} does not emit {source}, "
+            "and no query source defines it"
+        )
+
+    def _openapi(self, integration_id: str) -> tuple[Package, Any, Any]:
+        package = self.package(integration_id)
+        try:
+            bundled = package.openapi()
+        except PackageError as exc:
+            raise Invalid(str(exc)) from exc
+        if bundled is None:
+            raise Invalid(
+                f"{integration_id} does not support query sources (no openapi in its manifest)",
+                errors=[
+                    FieldError("this integration has no OpenAPI description", "/integration_id")
+                ],
+            )
+        return package, *bundled
+
+    async def search_operations(
+        self, principal: Principal, integration_id: str, text: str
+    ) -> list[OperationView]:
+        """Read operations of the description whose id, path, or summary contain every word."""
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        await self.ready()
+        _, settings, description = self._openapi(integration_id)
+        words = text.lower().split()
+        out = []
+        for op in description.operations.values():
+            if op.method != "GET" and op.id not in settings.read_operations:
+                continue
+            if all(w in f"{op.id} {op.path} {op.summary}".lower() for w in words):
+                out.append(_operation_view(op))
+        return out[:100]
+
+    async def describe_operation(
+        self, principal: Principal, integration_id: str, operation: str
+    ) -> OperationView:
+        """Parameters and the flattened item schema of one operation."""
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        await self.ready()
+        _, _, description = self._openapi(integration_id)
+        op = description.operations.get(operation)
+        if op is None:
+            raise NotFound(f"{integration_id} has no operation {operation}")
+        view = _operation_view(op)
+        if op.response is not None:
+            schema = description.schema(op.response)
+            # A list body, or the first list property (such as `value` or `data`), holds the items.
+            items, prefix = None, ""
+            if schema.get("type") == "array":
+                items = schema.get("items")
+            else:
+                for name, child in (schema.get("properties") or {}).items():
+                    child = description.schema(child)
+                    if child.get("type") == "array":
+                        items, prefix = child.get("items"), name
+                        break
+            if items is not None:
+                view.fields = [{**f, "items": prefix} for f in description.fields_of(items)]
+        return view
+
+    async def _check_query(self, write: QueryWrite) -> QueryCheck:
+        source = f"{write.integration_id}/{write.name}@{write.version}"
+        try:
+            package, settings, description = self._openapi(write.integration_id)
+        except (Invalid, NotFound) as exc:
+            problem = PreviewProblem(pointer="/integration_id", detail=exc.detail)
+            return QueryCheck(valid=False, source=source, errors=[problem])
+        problems, schema = query_validate(
+            description,
+            settings,
+            Query(
+                operation=write.operation,
+                params=write.params,
+                items=write.items,
+                fields=write.fields,
+            ),
+            name=write.name,
+        )
+        errors = [
+            PreviewProblem(pointer=p.pointer, detail=p.detail) for p in problems if not p.warning
+        ]
+        warnings = [
+            PreviewProblem(pointer=p.pointer, detail=p.detail) for p in problems if p.warning
+        ]
+        if any(r.name == write.name for r in package.manifest.resources):
+            errors.append(
+                PreviewProblem(
+                    pointer="/name", detail=f"{package.id} has a built-in resource {write.name!r}"
+                )
+            )
+        if any(q.source == source for q in await self._store.list_queries()):
+            errors.append(
+                PreviewProblem(
+                    pointer="/version",
+                    detail=f"{source} exists; versions are immutable, so save it as a new version",
+                )
+            )
+        return QueryCheck(
+            valid=not errors,
+            source=source,
+            errors=errors,
+            warnings=warnings,
+            item_schema=schema,
+            fields=schema_fields(schema) if schema else [],
+        )
+
+    async def validate_query(self, principal: Principal, write: QueryWrite) -> QueryCheck:
+        require(self._authorizer, principal, Permission.TESTS_WRITE)
+        await self.ready()
+        return await self._check_query(write)
+
+    async def dry_run(self, principal: Principal, request: DryRunRequest) -> DryRun:
+        """Collect one sample through a real connection, without storing a snapshot."""
+        require(self._authorizer, principal, Permission.TESTS_WRITE)
+        await self.ready()
+        write = QueryWrite(**request.model_dump(exclude={"connection_id", "max_items"}))
+        check = await self._check_query(write)
+        # A dry run of an existing version is fine: only "exists" stops a save, not a sample.
+        blocking = [e for e in check.errors if e.pointer != "/version"]
+        if blocking or check.item_schema is None:
+            return DryRun(check=check, error="fix the definition first")
+        connection = await self._connection(request.connection_id)
+        if connection.integration_id != write.integration_id or connection.state == "disabled":
+            return DryRun(
+                check=check,
+                error=f"{connection.name} is not an enabled {write.integration_id} connection",
+            )
+        package = self.package(write.integration_id)
+        query = {
+            "operation": write.operation,
+            "params": write.params,
+            "items": write.items,
+            "fields": write.fields,
+            "max_items": request.max_items,
+        }
+        try:
+            env = await self._credentials(connection, package)
+            report = await self._host.collect(
+                package, write.name, write.version, connection.config, env, query
+            )
+            _, schema_warnings = build_snapshot(
+                check.source, utc(self._clock()), True, list(report.items), check.item_schema
+            )
+        except IntegrationError as exc:
+            return DryRun(check=check, error=f"{exc.kind}: {exc.message}")
+        items = list(report.items)
+        warnings = [PreviewProblem(pointer="/fields", detail=w) for w in schema_warnings]
+        for key in write.fields:
+            if items and all(item.get(key) is None for item in items):
+                warnings.append(
+                    PreviewProblem(
+                        pointer=f"/fields/{key}",
+                        detail=f"{key} is empty in all {len(items)} items; check the path",
+                    )
+                )
+        return DryRun(check=check, items=items, count=len(items), warnings=warnings)
+
+    async def create_query(self, principal: Principal, write: QueryWrite) -> QueryDefinition:
+        """Save a validated definition. Executable on a schedule, so tests:define-run."""
+        require(self._authorizer, principal, Permission.TESTS_DEFINE_RUN)
+        await self.ready()
+        check = await self._check_query(write)
+        if not check.valid or check.item_schema is None:
+            conflict = any(e.pointer == "/version" for e in check.errors)
+            errors = [FieldError(e.detail, e.pointer) for e in check.errors]
+            if conflict and len(errors) == 1:
+                raise Conflict(errors[0].detail, slug="query-exists")
+            raise Invalid("the query source does not validate", errors=errors)
+        query = QueryDefinition(
+            id=ids.mint("query"),
+            integration_id=write.integration_id,
+            name=write.name,
+            version=write.version,
+            description=write.description,
+            operation=write.operation,
+            params=write.params,
+            items=write.items,
+            fields=write.fields,
+            item_schema=check.item_schema,
+            created=utc(self._clock()),
+            created_by_ref=principal.actor_id,
+        )
+        await self._store.put_query(query)
+        return query
+
+    async def list_queries(self, principal: Principal) -> list[QueryDefinition]:
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        return await self._store.list_queries()
+
+    async def get_query(self, principal: Principal, query_id: str) -> QueryDefinition:
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        for query in await self._store.list_queries():
+            if query.id == query_id:
+                return query
+        raise NotFound(f"no query {query_id}")
+
+    async def delete_query(self, principal: Principal, query_id: str) -> None:
+        require(self._authorizer, principal, Permission.TESTS_DEFINE_RUN)
+        query = await self.get_query(principal, query_id)
+        graph = await self._objects.store.graph()
+        readers = [
+            t.id
+            for t in graph.all(Test)
+            if t.run is not None and query.source in t.run.sources_read()
+        ]
+        if readers:
+            raise Conflict(
+                f"{query.source} is read by {', '.join(readers)}; revoke those tests first",
+                slug="query-in-use",
+            )
+        await self._store.delete_query(query_id)
+
     # --- rule preview -----------------------------------------------------------------------
 
     async def preview_rule(self, principal: Principal, request: RulePreviewRequest) -> RulePreview:
@@ -1077,16 +1382,13 @@ class IntegrationService:
             )
 
         source = rules.parse_reference(run.source or "")
-        package = self._packages.get(source.integration)
-        spec = package.manifest.resource(source.name, source.major) if package else None
-        if package is None or spec is None:
-            problem = PreviewProblem(
-                pointer="/run/source", detail=f"no installed integration emits {source}"
-            )
-            return RulePreview(outcome="invalid", summary=problem.detail, errors=[problem])
+        try:
+            package, schema, _ = await self.resolve(source)
+        except (Invalid, NotFound) as exc:
+            problem = PreviewProblem(pointer="/run/source", detail=exc.detail)
+            return RulePreview(outcome="invalid", summary=exc.detail, errors=[problem])
         warnings = [
-            PreviewProblem(pointer=p, detail=d)
-            for p, d in rules.unknown_fields(run, package.schema(source.name, source.major))
+            PreviewProblem(pointer=p, detail=d) for p, d in rules.unknown_fields(run, schema)
         ]
 
         graph = await self._objects.store.graph()
@@ -1113,13 +1415,29 @@ class IntegrationService:
         far_past = datetime(1970, 1, 1, tzinfo=UTC)
         at = utc(self._clock())
         chosen: list[tuple[Connection, Snapshot, dict[str, Any]]] = []
-        for connection in connections:
+        for connection in [] if request.items is not None else connections:
             snapshot = await self._store.latest_snapshot(connection.id, str(source), far_past, at)
             if snapshot is None:
                 continue
             content = await self._blobs.get(snapshot.uri)
             if content is not None and digest(content) == snapshot.digest:
                 chosen.append((connection, snapshot, json.loads(content)))
+        if request.items is not None:  # a dry run's sample, not stored snapshots
+            items = list(request.items)
+            out = rules.evaluate(run, items, params, at)
+            return RulePreview(
+                outcome=out.outcome,
+                summary=out.summary,
+                selected=out.selected,
+                total=len(items),
+                subjects=[
+                    {k: v for k, v in vars(s).items() if v is not None}
+                    for s in out.subjects[: request.limit]
+                ],
+                warnings=warnings,
+                params=params,
+                sample=items[:3],
+            )
         if not chosen:
             scope = "bound to that implementation" if impl else "for it"
             return RulePreview(
@@ -1290,6 +1608,22 @@ class IntegrationService:
         return integration_view(self.package(integration_id))
 
     async def _enable(self, manifest: Manifest) -> None:
+        taken = {
+            q.name for q in await self._store.list_queries() if q.integration_id == manifest.id
+        } & {r.name for r in manifest.resources}
+        if taken:
+            raise Conflict(
+                f"{manifest.id} {manifest.version} adds built-in resources named like query "
+                f"sources: {', '.join(sorted(taken))}",
+                slug="upgrade-breaks-tests",
+            )
+        if manifest.openapi is None and any(
+            q.integration_id == manifest.id for q in await self._store.list_queries()
+        ):
+            raise Conflict(
+                f"{manifest.id} {manifest.version} drops OpenAPI support that query sources use",
+                slug="upgrade-breaks-tests",
+            )
         broken = await self._dependents_missing(manifest)
         if broken:
             listing = "; ".join(f"{test} reads {ref}" for test, ref in broken)
@@ -1388,6 +1722,39 @@ class IntegrationService:
             "extensions": extensions,
         }
         return await self._objects.update(principal, SPECS["test"], test_id, patch, if_match)
+
+
+def _problem(problem: Any) -> "PreviewProblem":
+    return PreviewProblem(pointer=problem.pointer, detail=problem.detail)
+
+
+def _definition(query: QueryDefinition) -> dict[str, Any]:
+    return {
+        "source": query.source,
+        "operation": query.operation,
+        "params": dict(query.params),
+        "items": query.items,
+        "fields": dict(query.fields),
+    }
+
+
+def _operation_view(op: Any) -> OperationView:
+    return OperationView(
+        id=op.id,
+        method=op.method,
+        path=op.path,
+        summary=op.summary,
+        parameters=[
+            {
+                "name": name,
+                "in": p["in"],
+                "required": p["required"],
+                "type": p["schema"].get("type", "string"),
+                **({"description": p["description"][:200]} if p.get("description") else {}),
+            }
+            for name, p in op.parameters.items()
+        ],
+    )
 
 
 def rules_match(pattern: str, value: str) -> bool:

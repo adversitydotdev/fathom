@@ -110,7 +110,7 @@ Authors (people and agents, [Section 9](#9-drafting-with-an-assistant)) get erro
 | Step | Route | Needs the vendor | Checks |
 |---|---|---|---|
 | Static | `POST /queries/validate` | No | Section 5 rules; operation returns a list at `items`; parameter names and types against the description; every `fields` path exists in the item schema; `id` and `name` present; name and version free. Returns the derived item schema. |
-| Dry run | `POST /queries/dry-run` | Yes, one page | Collects the first page through a named connection without storing a snapshot; returns the projected items, the first raw item, and warnings: a field null in every item, a response that does not match the description. |
+| Dry run | `POST /queries/dry-run` | Yes, a sample | Collects up to `max_items` (default 50) through a named connection, fetching pages lazily, without storing a snapshot; returns the projected items and warnings: a field empty in every item, items that do not match the derived schema. |
 | Rule preview | `POST /rules/preview` | No | The existing preview, given the dry run's items inline instead of a stored snapshot. |
 
 Every problem is `{pointer, detail}` with pointers into the definition (`/operation`, `/params/filter`, `/fields/name`) or the rule (`/run/assert`), the shape the rule preview already uses.

@@ -125,9 +125,12 @@ class SubprocessHost:
         version: int,
         config: Mapping[str, str],
         env: Mapping[str, str],
+        query: Mapping[str, Any] | None = None,
     ) -> CollectReport:
         items: list[dict[str, Any]] = []
-        params = {"resource": resource, "version": version, "config": dict(config)}
+        params: dict[str, Any] = {"resource": resource, "version": version, "config": dict(config)}
+        if query is not None:  # a query source (RFC 0006)
+            params["query"] = dict(query)
         result = await self._call(package, "collect", params, env, COLLECT_TIMEOUT, items)
         complete = result.get("complete")
         if not isinstance(complete, bool):

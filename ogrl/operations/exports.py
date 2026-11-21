@@ -13,15 +13,18 @@ the repository.
 import asyncio
 import shutil
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+
+import yaml
 
 from ogrl.access import Authorizer, Permission, Principal, require
 from ogrl.errors import Conflict, FeatureDisabled
 from ogrl.kernel.models import Envelope
 from ogrl.kernel.timeutil import now, utc
+from ogrl.operations.connections import ConnectionStore, QueryDefinition
 from ogrl.operations.jobs import JobOutcome, JobService
 from ogrl.operations.records import PROVIDER_PREFIX, Job
 from ogrl.operations.sources import Git
@@ -39,8 +42,25 @@ class ExportSettings:
     organization_name: str = "Organization"
 
 
+QUERY_DIR = "ogrl-app/queries"
+
+
+def query_files(queries: Sequence[QueryDefinition]) -> dict[str, bytes]:
+    """Query source definitions as YAML beside the objects (RFC 0006 section 8)."""
+    return {
+        f"{QUERY_DIR}/{q.integration_id}/{q.name}@{q.version}.yaml": yaml.safe_dump(
+            q.model_dump(mode="json", exclude_none=True), sort_keys=True
+        ).encode()
+        for q in queries
+    }
+
+
 async def organization_snapshot(
-    store: ObjectStore, blobs: BlobStore, settings: ExportSettings, at: datetime
+    store: ObjectStore,
+    blobs: BlobStore,
+    settings: ExportSettings,
+    at: datetime,
+    queries: Sequence[QueryDefinition] = (),
 ) -> dict[str, bytes]:
     graph = await store.graph()
     organization: list[Envelope] = [
@@ -70,7 +90,8 @@ async def organization_snapshot(
         pin.model_dump(exclude_none=True) if pin else None,
         [p.model_dump(exclude_none=True, exclude={"name", "kind"}) for p in pins],
     )
-    return snapshot(body, sorted(organization, key=lambda o: o.id), providers, bodies)
+    files = snapshot(body, sorted(organization, key=lambda o: o.id), providers, bodies)
+    return {**files, **query_files(queries)}
 
 
 def write_tree(repo: Path, files: dict[str, bytes]) -> None:
@@ -97,7 +118,9 @@ class ExportService:
         git: Git,
         settings: ExportSettings,
         clock: Callable[[], datetime] = now,
+        connections: ConnectionStore | None = None,
     ) -> None:
+        self._connections = connections
         self._store = store
         self._blobs = blobs
         self._authorizer = authorizer
@@ -140,7 +163,10 @@ class ExportService:
             written = set((await self._store.get_meta(WRITTEN_KEY) or "").split())
             await self._check_diverged(repo)
             at = utc(self._clock())
-            files = await organization_snapshot(self._store, self._blobs, self._settings, at)
+            queries = await self._connections.list_queries() if self._connections else []
+            files = await organization_snapshot(
+                self._store, self._blobs, self._settings, at, queries
+            )
             await asyncio.to_thread(write_tree, repo, files)
             commit = await self._git.commit_all(repo, f"OGRL export {at.isoformat()}")
             if commit is None:

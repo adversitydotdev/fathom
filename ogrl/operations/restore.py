@@ -29,6 +29,8 @@ from ogrl.kernel import bundles, constraints, ids
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Envelope
 from ogrl.kernel.timeutil import now, utc
+from ogrl.operations.connections import ConnectionStore, QueryDefinition
+from ogrl.operations.exports import QUERY_DIR
 from ogrl.operations.jobs import JobOutcome, JobService
 from ogrl.operations.library import check_library
 from ogrl.operations.providers import check_projection
@@ -66,6 +68,7 @@ class Snapshot:
         self.organization = organization
         self.root = root
         self.providers = providers
+        self.queries: list[dict] = []  # query source definitions (RFC 0006 section 8)
 
 
 def read_tree(root: Path) -> Snapshot:
@@ -100,7 +103,11 @@ def read_tree(root: Path) -> Snapshot:
             except bundles.BundleError as exc:
                 raise Invalid(f"provider copy {bundle_id} is refused: {exc}") from exc
         providers[bundle_id] = objects
-    return Snapshot(manifest, organization, root, providers)
+    snapshot = Snapshot(manifest, organization, root, providers)
+    snapshot.queries = [
+        bundles.load_text(path.read_bytes()) for path in sorted((root / QUERY_DIR).glob("*/*.yaml"))
+    ]
+    return snapshot
 
 
 def read_exchange(content: bytes) -> Snapshot:
@@ -127,7 +134,9 @@ class RestoreService:
         fetcher: Fetcher,
         git: Git,
         clock: Callable[[], datetime] = now,
+        connections: ConnectionStore | None = None,
     ) -> None:
+        self._connections = connections
         self._store = store
         self._blobs = blobs
         self._authorizer = authorizer
@@ -225,6 +234,13 @@ class RestoreService:
                 provider_source(pin.id), objects, at, principal.actor_id, provider_pin=pin
             )
         await self._store.restore(organization, principal.actor_id, at)
+        restored_queries = 0
+        if self._connections is not None:
+            for body in snapshot.queries:
+                query = QueryDefinition.model_validate(body)
+                if query.source not in {q.source for q in await self._connections.list_queries()}:
+                    await self._connections.put_query(query)
+                    restored_queries += 1
 
         missing = await self._bytes(snapshot, organization)
         return JobOutcome(
@@ -233,6 +249,7 @@ class RestoreService:
                 "library": library_pin.model_dump(exclude_none=True) if library_pin else None,
                 "providers": [p.id for p, _ in provider_pins],
                 "missing_bytes": missing,
+                "queries": restored_queries,
             }
         )
 

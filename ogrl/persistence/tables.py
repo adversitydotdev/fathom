@@ -165,3 +165,15 @@ integration_installs = Table(
     Column("installed", DateTime(timezone=True), nullable=False),
     Column("body", JSONB, nullable=False),
 )
+
+# Query sources (RFC 0006): organization-defined resources. Immutable per version.
+queries = Table(
+    "queries",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("integration_id", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("version", Integer, nullable=False),
+    Column("body", JSONB, nullable=False),
+    Index("queries_source", "integration_id", "name", "version", unique=True),
+)

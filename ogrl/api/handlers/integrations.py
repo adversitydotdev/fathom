@@ -16,7 +16,9 @@ from ogrl.operations.integrations import (
     CollectionRequest,
     ConnectionPatch,
     ConnectionWrite,
+    DryRunRequest,
     InstallRequest,
+    QueryWrite,
     RulePreviewRequest,
     SecretWrite,
     TemplateEnable,
@@ -142,6 +144,42 @@ def register(registrar: Registrar, c: Container) -> None:
         return await s.preview_rule(principal, body)
 
     registrar.handle(i.PREVIEW_RULE, preview_rule)
+
+    async def search_operations(
+        id: str, principal: CurrentPrincipal, q: Annotated[str, Query()] = ""
+    ):
+        return {"data": await s.search_operations(principal, id, q)}
+
+    async def describe_operation(id: str, operation: str, principal: CurrentPrincipal):
+        return await s.describe_operation(principal, id, operation)
+
+    async def validate_query(body: QueryWrite, principal: CurrentPrincipal):
+        return await s.validate_query(principal, body)
+
+    async def dry_run_query(body: DryRunRequest, principal: CurrentPrincipal):
+        return await s.dry_run(principal, body)
+
+    async def list_queries(principal: CurrentPrincipal):
+        return {"data": await s.list_queries(principal)}
+
+    async def create_query(body: QueryWrite, principal: CurrentPrincipal):
+        return await s.create_query(principal, body)
+
+    async def get_query(id: str, principal: CurrentPrincipal):
+        return await s.get_query(principal, id)
+
+    async def delete_query(id: str, principal: CurrentPrincipal) -> Response:
+        await s.delete_query(principal, id)
+        return Response(status_code=204)
+
+    registrar.handle(i.SEARCH_OPERATIONS, search_operations)
+    registrar.handle(i.DESCRIBE_OPERATION, describe_operation)
+    registrar.handle(i.VALIDATE_QUERY, validate_query)
+    registrar.handle(i.DRY_RUN_QUERY, dry_run_query)
+    registrar.handle(i.LIST_QUERIES, list_queries)
+    registrar.handle(i.CREATE_QUERY, create_query)
+    registrar.handle(i.GET_QUERY, get_query)
+    registrar.handle(i.DELETE_QUERY, delete_query)
     registrar.handle(i.OAUTH_START, oauth_start)
     registrar.handle(i.OAUTH_CALLBACK, oauth_callback)
 

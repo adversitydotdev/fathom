@@ -69,6 +69,38 @@ class Snapshot(BaseModel):
     warnings: list[str] | None = None
 
 
+class QueryDefinition(BaseModel):
+    """An organization-defined resource over the vendor's OpenAPI description (RFC 0006)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    integration_id: str
+    name: str
+    version: int
+    description: str | None = None
+    operation: str
+    params: dict[str, str] = Field(default_factory=dict)
+    items: str = ""
+    fields: dict[str, str]
+    item_schema: dict[str, Any]  # derived from the description when saved
+    created: datetime
+    created_by_ref: str | None = None
+
+    @property
+    def source(self) -> str:
+        return f"{self.integration_id}/{self.name}@{self.version}"
+
+    def query(self) -> dict[str, Any]:
+        """What collect sends to the integration (RFC 0006 section 4)."""
+        return {
+            "operation": self.operation,
+            "params": dict(self.params),
+            "items": self.items,
+            "fields": dict(self.fields),
+        }
+
+
 class ConnectionStore(Protocol):
     async def get_connection(self, connection_id: str) -> Connection | None: ...
 
@@ -105,6 +137,16 @@ class ConnectionStore(Protocol):
     async def enable_install(self, integration_id: str, version: str) -> None:
         """Enable one version and disable the others of that integration, atomically."""
         ...
+
+    async def list_queries(self) -> list[QueryDefinition]:
+        """Ordered by integration, name, then version."""
+        ...
+
+    async def put_query(self, query: QueryDefinition) -> None:
+        """Raises Conflict when that integration, name, and version exist."""
+        ...
+
+    async def delete_query(self, query_id: str) -> None: ...
 
     async def latest_snapshot(
         self, connection_id: str, source: str, not_before: datetime, not_after: datetime

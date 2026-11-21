@@ -25,7 +25,13 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Envelope, parse
 from ogrl.kernel.timeutil import later_than, now
-from ogrl.operations.connections import Connection, InstallRecord, Snapshot, connection_body
+from ogrl.operations.connections import (
+    Connection,
+    InstallRecord,
+    QueryDefinition,
+    Snapshot,
+    connection_body,
+)
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -41,6 +47,7 @@ from ogrl.persistence.tables import (
     jobs,
     objects,
     provider_pins,
+    queries,
     revisions,
     settings,
     snapshots,
@@ -534,3 +541,31 @@ class PostgresConnections:
                     )
                     .values(enabled=enabled, body={**row.body, "enabled": enabled})
                 )
+
+    async def list_queries(self) -> list[QueryDefinition]:
+        query = select(queries.c.body).order_by(
+            queries.c.integration_id, queries.c.name, queries.c.version
+        )
+        async with self._engine.connect() as conn:
+            return [QueryDefinition.model_validate(r.body) for r in await conn.execute(query)]
+
+    async def put_query(self, query: QueryDefinition) -> None:
+        async with self._engine.begin() as conn:
+            inserted = await conn.execute(
+                insert(queries)
+                .values(
+                    id=query.id,
+                    integration_id=query.integration_id,
+                    name=query.name,
+                    version=query.version,
+                    body=query.model_dump(mode="json", exclude_none=True),
+                )
+                .on_conflict_do_nothing()
+                .returning(queries.c.id)
+            )
+            if inserted.first() is None:
+                raise Conflict(f"{query.source} already exists", slug="query-exists")
+
+    async def delete_query(self, query_id: str) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(queries.delete().where(queries.c.id == query_id))

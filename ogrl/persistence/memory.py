@@ -14,7 +14,7 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Control, Envelope, Origin
 from ogrl.kernel.timeutil import later_than, now
-from ogrl.operations.connections import Connection, InstallRecord, Snapshot
+from ogrl.operations.connections import Connection, InstallRecord, QueryDefinition, Snapshot
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -229,6 +229,7 @@ class MemoryConnections:
         self._connections: dict[str, Connection] = {}
         self._snapshots: dict[str, Snapshot] = {}
         self._installs: dict[tuple[str, str], InstallRecord] = {}
+        self._queries: dict[str, QueryDefinition] = {}
 
     async def get_connection(self, connection_id: str) -> Connection | None:
         return self._connections.get(connection_id)
@@ -289,3 +290,14 @@ class MemoryConnections:
         for key, record in self._installs.items():
             if key[0] == integration_id:
                 self._installs[key] = record.model_copy(update={"enabled": key[1] == version})
+
+    async def list_queries(self) -> list[QueryDefinition]:
+        return sorted(self._queries.values(), key=lambda q: (q.integration_id, q.name, q.version))
+
+    async def put_query(self, query: QueryDefinition) -> None:
+        if any(q.source == query.source for q in self._queries.values()):
+            raise Conflict(f"{query.source} already exists", slug="query-exists")
+        self._queries[query.id] = query
+
+    async def delete_query(self, query_id: str) -> None:
+        self._queries.pop(query_id, None)

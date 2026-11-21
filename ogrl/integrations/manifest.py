@@ -6,6 +6,7 @@ manifest and every schema; nothing here runs the package.
 """
 
 import hashlib
+import json
 import re
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -14,6 +15,7 @@ from typing import Any, Literal
 
 import yaml
 from jsonschema import Draft202012Validator
+from ogrl_integration.openapi import Description, Settings
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
 
 from ogrl.kernel import rules
@@ -119,6 +121,24 @@ class CheckSpec(_Model):
         return value
 
 
+class OpenApiBlock(_Model):
+    """Query source support (RFC 0006 section 4)."""
+
+    description: str
+    base_url: str
+    pagination: str = "link"
+    read_operations: list[str] = Field(default_factory=list)
+    authorization: str = ""
+
+    @field_validator("pagination")
+    @classmethod
+    def _pagination(cls, value: str) -> str:
+        kind = value.split(":", 1)[0]
+        if kind not in ("link", "next-url", "cursor", "none"):
+            raise ValueError("link, next-url:<path>, cursor:<path>:<param>, or none")
+        return value
+
+
 class Template(_Model):
     name: str
     fulfills_ref: str | None = None
@@ -139,6 +159,7 @@ class Manifest(_Model):
     resources: list[ResourceSpec] = Field(min_length=1)
     checks: list[CheckSpec] = Field(default_factory=list)
     templates: list[Template] = Field(default_factory=list)
+    openapi: OpenApiBlock | None = None
 
     @field_validator("id")
     @classmethod
@@ -203,6 +224,31 @@ class Package:
 
     def schema(self, name: str, version: int) -> dict[str, Any]:
         return self.schemas[(name, version)]
+
+    def openapi(self) -> "tuple[Settings, Description] | None":
+        """The vendor description and query settings, loaded once per package version."""
+        block = self.manifest.openapi
+        if block is None:
+            return None
+        key = (self.manifest.id, self.digest)
+        if key not in _DESCRIPTIONS:
+            raw = (
+                self.files.get(block.description)
+                if self.root is None
+                else (self.root / block.description).read_bytes()
+            )
+            if raw is None:
+                raise PackageError(f"the package has no {block.description}")
+            text = raw.decode()
+            document = (
+                json.loads(text) if block.description.endswith(".json") else yaml.safe_load(text)
+            )
+            settings = Settings.from_json(block.model_dump())
+            _DESCRIPTIONS[key] = (settings, Description(document))
+        return _DESCRIPTIONS[key]
+
+
+_DESCRIPTIONS: dict[tuple[str, str], Any] = {}
 
 
 def _unique(values: list[Any], what: str) -> None:

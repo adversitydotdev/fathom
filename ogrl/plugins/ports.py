@@ -167,6 +167,7 @@ class IntegrationHost(Protocol):
         version: int,
         config: Mapping[str, str],
         env: Mapping[str, str],
+        query: Mapping[str, Any] | None = None,
     ) -> CollectReport: ...
 
     async def check(

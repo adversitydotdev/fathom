@@ -5,10 +5,13 @@ from http import HTTPMethod, HTTPStatus
 from ogrl.access import Permission as P
 from ogrl.api.paths.endpoint import Endpoint
 from ogrl.kernel.models import Test
-from ogrl.operations.connections import Connection, InstallRecord, Snapshot
+from ogrl.operations.connections import Connection, InstallRecord, QueryDefinition, Snapshot
 from ogrl.operations.integrations import (
+    DryRun,
     IntegrationView,
     OAuthStart,
+    OperationView,
+    QueryCheck,
     RulePreview,
     TemplateUpdate,
 )
@@ -199,6 +202,79 @@ OAUTH_CALLBACK = Endpoint(
     tag="Connections",
     authenticated=False,
 )
+SEARCH_OPERATIONS = Endpoint(
+    id="searchOperations",
+    summary="Search an integration's read operations (query sources, RFC 0006).",
+    method=GET,
+    path="/integrations/{id}/operations",
+    tag="Queries",
+    permission=P.PROGRAMS_READ,
+    response=DataList[OperationView],
+)
+DESCRIBE_OPERATION = Endpoint(
+    id="describeOperation",
+    summary="Parameters and the flattened item schema of one operation.",
+    method=GET,
+    path="/integrations/{id}/operations/{operation}",
+    tag="Queries",
+    permission=P.PROGRAMS_READ,
+    response=OperationView,
+)
+VALIDATE_QUERY = Endpoint(
+    id="validateQuery",
+    summary="Statically validate a query source definition.",
+    method=POST,
+    path="/queries/validate",
+    tag="Queries",
+    permission=P.TESTS_WRITE,
+    response=QueryCheck,
+)
+DRY_RUN_QUERY = Endpoint(
+    id="dryRunQuery",
+    summary="Collect one sample of a query through a connection; nothing is stored.",
+    method=POST,
+    path="/queries/dry-run",
+    tag="Queries",
+    permission=P.TESTS_WRITE,
+    response=DryRun,
+)
+LIST_QUERIES = Endpoint(
+    id="listQueries",
+    summary="List query source definitions.",
+    method=GET,
+    path="/queries",
+    tag="Queries",
+    permission=P.PROGRAMS_READ,
+    response=DataList[QueryDefinition],
+)
+CREATE_QUERY = Endpoint(
+    id="createQuery",
+    summary="Save a query source definition (immutable per version).",
+    method=POST,
+    path="/queries",
+    tag="Queries",
+    permission=P.TESTS_DEFINE_RUN,
+    response=QueryDefinition,
+    success_status=HTTPStatus.CREATED,
+)
+GET_QUERY = Endpoint(
+    id="getQuery",
+    summary="Get one query source definition.",
+    method=GET,
+    path="/queries/{id}",
+    tag="Queries",
+    permission=P.PROGRAMS_READ,
+    response=QueryDefinition,
+)
+DELETE_QUERY = Endpoint(
+    id="deleteQuery",
+    summary="Delete a query source no test reads.",
+    method=DELETE,
+    path="/queries/{id}",
+    tag="Queries",
+    permission=P.TESTS_DEFINE_RUN,
+    success_status=HTTPStatus.NO_CONTENT,
+)
 PREVIEW_RULE = Endpoint(
     id="previewRule",
     summary="Try a rule against the latest snapshots without saving or recording anything.",
@@ -256,6 +332,14 @@ ALL = (
     OAUTH_START,
     OAUTH_CALLBACK,
     PREVIEW_RULE,
+    SEARCH_OPERATIONS,
+    DESCRIBE_OPERATION,
+    VALIDATE_QUERY,
+    DRY_RUN_QUERY,
+    LIST_QUERIES,
+    CREATE_QUERY,
+    GET_QUERY,
+    DELETE_QUERY,
     LIST_SNAPSHOTS,
     GET_SNAPSHOT,
     GET_SNAPSHOT_CONTENT,

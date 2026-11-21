@@ -193,8 +193,10 @@ def build(
         providers=ProviderService(store, authorizer, jobs, fetcher, plugins, clock),
         harness=harness,
         renders=RenderService(store, authorizer, jobs, plugins, clock),
-        exports=ExportService(store, blobs, authorizer, jobs, git, export, clock),
-        restore=RestoreService(store, blobs, authorizer, jobs, library_source, fetcher, git, clock),
+        exports=ExportService(store, blobs, authorizer, jobs, git, export, clock, connections),
+        restore=RestoreService(
+            store, blobs, authorizer, jobs, library_source, fetcher, git, clock, connections
+        ),
         integrations=integrations,
         scheduler=IntegrationScheduler(store, connections, integrations, harness, clock),
         plugins=plugins,
