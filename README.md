@@ -14,6 +14,7 @@ Language specifications live in the sibling `ogrl-rfcs` repository; application 
 - RFC 0002: Tooling and Sources of Truth (`ogrl-rfcs/rfcs/0002-tooling.md`)
 - [RFC 0003: Application Architecture](docs/rfcs/0003-application.md) (draft)
 - [RFC 0004: HTTP API](docs/rfcs/0004-http-api.md) (draft), contract in [api/openapi.yaml](api/openapi.yaml)
+- [RFC 0005: Integrations](docs/rfcs/0005-integrations.md) (draft)
 
 ## Estimated monthly cost
 

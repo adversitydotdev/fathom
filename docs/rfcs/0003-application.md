@@ -83,8 +83,8 @@ External capabilities plug into the core through four Python `Protocol` interfac
 |---|---|---|---|
 | **Importer** | Catalog or component-definition bytes | OGRL objects | In-process (NIST OSCAL catalogs first, OSCAL component definitions next). |
 | **Renderer** | Object graph + view name | Rendered files | In-process (Git snapshot and OSCAL 1.2.3 package from RFC 0002). |
-| **Runner** | `test`, `implementation`, and secret handle | `result` and `evidence` | `shell` runner in-process; custom organization runners as subprocesses. |
-| **Connector** | Collection job specification | `evidence` | Subprocess (when installed). |
+| **Runner** | `test`, `implementation`, and secret handle | `result` and `evidence` | `shell` and `rule` runners in-process; `integration` runner through the [RFC 0005](0005-integrations.md) protocol; custom organization runners as subprocesses. |
+| **Connector** | Connection and source | Snapshot | Installed integration package run through the [RFC 0005](0005-integrations.md) protocol. |
 
 The secret handle resolves only the variable names declared in `test.run.env`; secret values never appear inside test objects.
 
@@ -101,6 +101,8 @@ Organization-supplied runners and connectors run as standalone executables rathe
 `ogrl` spawns the executable, writes a JSON request containing RFC 0001 objects to `stdin`, and reads RFC 0001 JSON objects from `stdout`. Required secrets are injected exclusively via environment variables (the request payload carries variable names, never values). Every returned object passes through the exact same kernel validator used for files and HTTP writes.
 
 Plugins may be written in any language capable of speaking JSON over stdio. Any non-zero crash, timeout, or schema validation failure is captured as a `result` with `outcome: error` so the harness logs the failure and moves on cleanly to the next test.
+
+Integrations do not use this sketch. They speak the JSON-RPC protocol in [RFC 0005 section 7](0005-integrations.md#7-protocol), return data rather than OGRL objects, and leave every object to the harness.
 
 ## 7. Persistence
 

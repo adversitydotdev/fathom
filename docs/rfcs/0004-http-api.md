@@ -54,7 +54,7 @@ On the federal side, Paramify aligns closely: its *issues* map to risks/POA&M li
 
 **Read-only projections.** Library rows and imported provider rows cannot be mutated (`PATCH` returns `409 Conflict`). Organizations accept or reject library mappings via `mapping_review` and supply their half of shared controls by creating an organization `implementation` with `system_ref`.
 
-**Asynchronous jobs for long-running work.** Library pulls, provider imports, test runs, renders, Git exports, and restores return `202 Accepted` with a `job` resource that callers poll via `GET /jobs/{id}`. Completed jobs point to the resulting object ID or rendered artifact.
+**Asynchronous jobs for long-running work.** Library pulls, provider imports, test runs, renders, Git exports, restores, integration installs, and collections return `202 Accepted` with a `job` resource that callers poll via `GET /jobs/{id}`. Completed jobs point to the resulting object ID or rendered artifact.
 
 **Nested lists stay on their parent.** Milestones live on `risk`, parameters on `control`, and parts/objectives on `requirement`—callers patch the parent object rather than hitting sub-routes for individual list items. Entities with independent identities and lifecycles (`exception`, `finding`, `result`, `evidence`) are top-level collections.
 
@@ -93,7 +93,7 @@ Commercial GRC suites expose several adjacent domains that RFC 0001 deliberately
 | Vendor questionnaires, renewal calendars, sub-processor portals | Inherited controls are modeled via `subservice` parties, `component`s, and provider bundles; full TPRM is an explicit non-goal of RFC 0001. |
 | Public trust centers and security questionnaires | External marketing/sales workflows; any live program metrics they need already come from `GET /programs/{id}/status`. |
 | Jira / ServiceNow ticketing | Future connectors may read tickets or attach evidence from them, but tickets are not OGRL objects. |
-| Vendor-specific integration routes (`/integrations/aws`) | Connectors plug into the RFC 0003 connector port; `GET /connectors` lists installed connectors generically. |
+| Vendor-specific integration routes (`/integrations/aws`) | Every integration is reached through the generic `/integrations`, `/connections`, and `/snapshots` resources in [RFC 0005](0005-integrations.md#11-changes-to-rfc-0003-and-rfc-0004). |
 
 ## 6. Errors
 
