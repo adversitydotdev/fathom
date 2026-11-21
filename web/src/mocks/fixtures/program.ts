@@ -9,6 +9,7 @@
 import type {
   Baseline,
   Component,
+  Connection,
   ControlState,
   Control,
   Evidence,
@@ -16,6 +17,7 @@ import type {
   Finding,
   Framework,
   Implementation,
+  Integration,
   Job,
   LibraryPin,
   Mapping,
@@ -26,6 +28,7 @@ import type {
   ProviderPin,
   Result,
   Risk,
+  Snapshot,
   System,
   Test,
 } from "@/lib/api/types";
@@ -670,5 +673,131 @@ export const providers: ProviderPin[] = [
     version: "2026.09",
     digest: "sha-256:9c1b3d5e7f9a0b2c4d6e8f0a1b3c5d7e9f1a3b5c7d9e0f2a4b6c8d0e2f4a6b8c",
     kind: "oscal-component",
+  },
+];
+
+// Integrations (RFC 0005) --------------------------------------------------
+
+const OKTA = "dev.adversity.okta";
+const GITHUB = "dev.adversity.github";
+
+export const integrations: Integration[] = [
+  {
+    id: OKTA,
+    name: "Okta",
+    version: "1.4.0",
+    publisher: "adversity.dev",
+    description: "Workforce users, groups, and MFA factors from Okta.",
+    tier: "first-party",
+    digest: "7f3a9c1e5b2d8f0a4c6e8b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f1a",
+    runtime: "python",
+    egress: ["*.okta.com"],
+    config: [{ name: "domain", label: "Okta domain", pattern: "^[a-z0-9-]+\\.okta\\.com$", required: true }],
+    auth: [
+      { kind: "fields", label: "API token", supported: true, fields: [{ name: "OKTA_API_TOKEN", label: "Read-only API token", secret: true }] },
+      { kind: "oauth2", label: "OAuth application", supported: false, scopes: ["okta.users.read", "okta.groups.read"] },
+    ],
+    resources: [
+      { name: "users", version: 1, source: `${OKTA}/users@1` },
+      { name: "groups", version: 1, source: `${OKTA}/groups@1` },
+    ],
+    checks: [{ name: "admin-mfa-phishing-resistant", version: 1, check: `${OKTA}/admin-mfa-phishing-resistant@1`, sources: [`${OKTA}/users@1`, `${OKTA}/groups@1`] }],
+    templates: [
+      { name: "mfa-enforcement", fulfills_ref: "test--mfa-enforced", test_name: "Every active Okta user is enrolled in MFA", control_ref: "control--mfa-privileged", runner: "rule" },
+    ],
+  },
+  {
+    id: GITHUB,
+    name: "GitHub",
+    version: "0.9.2",
+    publisher: "adversity.dev",
+    description: "Repositories, branch rules, and organization members from GitHub.",
+    tier: "local",
+    digest: "c2e4a6b8d0f1a3c5e7b9d1f3a5c7e9b0d2f4a6c8e0b1d3f5a7c9e1b3d5f7a9c0",
+    runtime: "binary",
+    egress: ["api.github.com"],
+    config: [{ name: "organization", label: "GitHub organization", required: true }],
+    auth: [
+      { kind: "fields", label: "GitHub App", supported: true, fields: [{ name: "GITHUB_APP_ID", label: "App ID", secret: false }, { name: "GITHUB_APP_PRIVATE_KEY", label: "Private key", secret: true }] },
+    ],
+    resources: [
+      { name: "repositories", version: 1, source: `${GITHUB}/repositories@1` },
+      { name: "rulesets", version: 1, source: `${GITHUB}/rulesets@1` },
+    ],
+    checks: [{ name: "branch-protection", version: 1, check: `${GITHUB}/branch-protection@1`, sources: [`${GITHUB}/repositories@1`, `${GITHUB}/rulesets@1`] }],
+    templates: [
+      { name: "change-control", fulfills_ref: "test--change-review-enforced", test_name: "Production branches require review and passing checks", control_ref: "control--change-control", runner: "integration" },
+    ],
+  },
+];
+
+export const connections: Connection[] = [
+  {
+    id: "connection--okta-prod",
+    integration_id: OKTA,
+    name: "Okta production",
+    config: { domain: "acme.okta.com" },
+    auth_kind: "fields",
+    bindings: ["component--okta"],
+    state: "active",
+    identity: "acme.okta.com as svc-ogrl",
+    granted_scopes: ["okta.users.read", "okta.groups.read"],
+    last_validated: at(-1, "05:58:02Z"),
+    secrets_set: ["OKTA_API_TOKEN"],
+    created: at(-30),
+    modified: at(-1, "05:58:02Z"),
+    created_by_ref: "party--priya-shah",
+  },
+  {
+    id: "connection--github-acme",
+    integration_id: GITHUB,
+    name: "GitHub acme-eng",
+    config: { organization: "acme-eng" },
+    auth_kind: "fields",
+    bindings: ["system--acme-platform"],
+    state: "failing",
+    last_error: "permission_denied: the app cannot read repository rulesets",
+    secrets_set: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"],
+    created: at(-12),
+    modified: at(-2, "06:00:11Z"),
+    created_by_ref: "party--priya-shah",
+  },
+];
+
+export const snapshots: Snapshot[] = [
+  {
+    id: "snapshot--okta-users-latest",
+    connection_id: "connection--okta-prod",
+    source: `${OKTA}/users@1`,
+    collected: at(-1, "06:00:31Z"),
+    complete: true,
+    item_count: 418,
+    size: 184_220,
+    uri: "s3://acme-ogrl-evidence/snapshots/okta-users.json",
+    digest: "5d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f",
+    warnings: ["removed undeclared fields: credentials"],
+  },
+  {
+    id: "snapshot--okta-groups-latest",
+    connection_id: "connection--okta-prod",
+    source: `${OKTA}/groups@1`,
+    collected: at(-1, "06:00:44Z"),
+    complete: true,
+    item_count: 37,
+    size: 12_904,
+    uri: "s3://acme-ogrl-evidence/snapshots/okta-groups.json",
+    digest: "a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9e0b2d4f",
+  },
+  {
+    id: "snapshot--github-repos-partial",
+    connection_id: "connection--github-acme",
+    source: `${GITHUB}/repositories@1`,
+    collected: at(-2, "06:00:09Z"),
+    complete: false,
+    reason: "rate limited after page 3",
+    item_count: 300,
+    size: 96_512,
+    uri: "s3://acme-ogrl-evidence/snapshots/github-repos.json",
+    digest: "0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9",
   },
 ];

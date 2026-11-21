@@ -1,7 +1,7 @@
 # Program & organization views
 
-The 11 section views under `web/src/app/programs/[programId]/`:
-`requirements`, `tests`, `evidence`, `risks`, `exceptions`, `findings`, `policies`, `systems`, `parties`, `library`, `jobs`.
+The 12 section views under `web/src/app/programs/[programId]/`:
+`requirements`, `tests`, `evidence`, `risks`, `exceptions`, `findings`, `policies`, `systems`, `parties`, `integrations`, `library`, `jobs`.
 
 ## Sub-features
 
@@ -15,6 +15,7 @@ The 11 section views under `web/src/app/programs/[programId]/`:
 - policies: adopted/draft/retired policies (with `AgentMark` on agent-authored drafts) and linked procedures with owner, review dates, control links, plus `New policy`/`New procedure`, `Edit`, and `Revoke`.
 - systems: active system card (`function`, `boundary`, FIPS-199 CIA `information_types`, leveraged `parties`), components inventory, imported provider responsibility bundles (`GET /v1/providers`), plus `New system`, `Edit system`, `New program`, and component CRUD.
 - parties: organization directory (people, teams, roles, agents with `AgentMark`, organizations) with kind filter chips, ownership counts, plus `New party`, `Edit`, and `Revoke`.
+- integrations (RFC 0005): connections table (state badge `active`/`failing`/`pending`/`disabled`, vendor identity or `last_error`, bound components/systems, `Validate` and `Collect` jobs, `Disable`/`Enable` with `If-Match`, two-step `Remove`), `New connection` dialog (integration, name, manifest config fields, write-only password inputs for secrets via `PUT /v1/connections/{id}/secrets/{name}`, binding checkboxes), installed integration cards (tier badge, collected sources, test templates with `Enable` → `POST /v1/integrations/{id}/templates/{name}/enable`), and recent snapshots (complete/incomplete with reason, field-stripping warnings). Fixtures: `integrations`, `connections`, `snapshots` in `web/src/mocks/fixtures/program.ts` (`connection--okta-prod` active, `connection--github-acme` failing, one incomplete snapshot).
 - library: pinned `ogrl-library` version/commit (`GET /v1/library`), public catalog link, installed frameworks, standard vs. custom control counts, and `Pull revision` trigger (`POST /v1/library/pull`).
 - jobs: `Render OSCAL 1.2.3`, `Render Narrative SSP` (`POST /v1/programs/{id}/renders`), and `Run Git export` (`POST /v1/exports/git`) triggers, plus full job history table with duration and error details.
 
@@ -23,5 +24,6 @@ The 11 section views under `web/src/app/programs/[programId]/`:
 ```bash
 pnpm --dir web e2e program-views
 pnpm --dir web e2e crud
+pnpm --dir web e2e integrations
 pnpm --dir web e2e sweep
 ```

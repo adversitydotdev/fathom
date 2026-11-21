@@ -24,6 +24,9 @@ export type Procedure = S["Procedure"];
 export type Job = S["Job"];
 export type LibraryPin = S["LibraryPin"];
 export type ProviderPin = S["ProviderPin"];
+export type Integration = S["Integration"];
+export type Connection = S["Connection"];
+export type Snapshot = S["Snapshot"];
 
 export type ProgramSummary = S["ProgramSummary"];
 export type ProgramStatus = S["ProgramStatus"];

@@ -170,3 +170,9 @@ export const getParties = cache(async () => {
   const parties = await all((cursor) => unwrap(api.GET("/parties", { params: { query: { cursor, limit: 200 } } })));
   return new Map<string, Party>(parties.map((p) => [p.id, p]));
 });
+
+export const getIntegrations = cache(async () => (await unwrap(api.GET("/integrations"))).data);
+
+export const getConnections = cache(async () => (await unwrap(api.GET("/connections"))).data);
+
+export const getSnapshots = cache(async () => (await unwrap(api.GET("/snapshots", { params: { query: {} } }))).data);

@@ -25,6 +25,9 @@ function createDb() {
     jobs: [...f.jobs],
     libraryPin: { ...f.libraryPin },
     providers: [...f.providers],
+    integrations: [...f.integrations],
+    connections: [...f.connections],
+    snapshots: [...f.snapshots],
     controlStates: f.controlStates,
   };
 }

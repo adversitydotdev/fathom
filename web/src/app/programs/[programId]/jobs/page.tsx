@@ -18,7 +18,7 @@ const TYPE_LABELS: Record<Job["type"], string> = {
   render: "Document render",
   git_export: "Git export",
   restore: "Backup restore",
-  connector: "Connector sync",
+  collection: "Integration collection",
 };
 
 function JobStatusBadge({ status }: { status: Job["status"] }) {

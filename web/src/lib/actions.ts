@@ -92,6 +92,77 @@ export async function triggerLibraryPull(version: string): Promise<ActionState> 
   return { jobId: data.id };
 }
 
+// Integrations (RFC 0005) --------------------------------------------------
+
+export async function createConnection(
+  body: S["ConnectionWrite"],
+  secrets: Record<string, string>,
+): Promise<ActionState> {
+  const { data, error } = await api.POST("/connections", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't create connection.") };
+  for (const [name, value] of Object.entries(secrets)) {
+    if (!value) continue;
+    const res = await api.PUT("/connections/{id}/secrets/{name}", {
+      params: { path: { id: data.id, name } },
+      body: { value },
+    });
+    if (res.error) {
+      refresh();
+      return { id: data.id, error: formatError(res.error, `Couldn't store ${name}.`) };
+    }
+  }
+  refresh();
+  return { id: data.id };
+}
+
+export async function setConnectionState(
+  id: string,
+  ifMatch: string,
+  state: "disabled" | "pending",
+): Promise<ActionState> {
+  const { data, error } = await api.PATCH("/connections/{id}", {
+    params: { path: { id }, header: { "If-Match": ifMatch } },
+    body: { state },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't update connection.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function deleteConnection(id: string): Promise<ActionState> {
+  const { error, response } = await api.DELETE("/connections/{id}", { params: { path: { id } } });
+  if (error || !response.ok) return { error: formatError(error, "Couldn't remove connection.") };
+  refresh();
+  return { id };
+}
+
+export async function validateConnection(id: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/connections/{id}/validate", { params: { path: { id } } });
+  if (error || !data) return { error: formatError(error, "Couldn't queue validation.") };
+  refresh();
+  return { jobId: data.id };
+}
+
+export async function collectConnection(id: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/connections/{id}/collections", {
+    params: { path: { id } },
+    body: {},
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't queue collection.") };
+  refresh();
+  return { jobId: data.id };
+}
+
+export async function enableTemplate(integrationId: string, name: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations/{id}/templates/{name}/enable", {
+    params: { path: { id: integrationId, name } },
+    body: {},
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't enable template.") };
+  refresh();
+  return { id: data.id };
+}
+
 // Controls -----------------------------------------------------------------
 
 export async function createControl(body: S["ControlWrite"]): Promise<ActionState> {

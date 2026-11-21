@@ -1,6 +1,6 @@
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
 
-import type { Job } from "@/lib/api/types";
+import type { Connection, Job, Test } from "@/lib/api/types";
 
 import { db } from "./db";
 import { programStatus, programSummary, systemGaps } from "./kernel";
@@ -244,6 +244,119 @@ export const handlers = [
     const job: Job = { id: `job--${crypto.randomUUID()}`, type: "git_export", status: "queued", created: new Date().toISOString() };
     db.jobs.unshift(job);
     return HttpResponse.json(job, { status: 202 });
+  }),
+
+  // Integrations (RFC 0005)
+  http.get(`${V}/integrations`, () => HttpResponse.json({ data: db.integrations })),
+  http.get(`${V}/integrations/:id`, ({ params }) => {
+    const item = db.integrations.find((i) => i.id === params.id);
+    return item ? HttpResponse.json(item) : notFound();
+  }),
+  http.post(`${V}/integrations/:id/templates/:name/enable`, ({ params }) => {
+    const integration = db.integrations.find((i) => i.id === params.id);
+    const template = integration?.templates.find((t) => t.name === params.name);
+    if (!integration || !template) return notFound();
+    const now = new Date().toISOString();
+    const test: Test = {
+      type: "test",
+      id: `test--${crypto.randomUUID()}`,
+      spec_version: "0.1.0",
+      created: now,
+      modified: now,
+      name: template.test_name ?? template.name,
+      control_ref: template.control_ref ?? "",
+      method: "automated",
+      interval: "daily",
+      fulfills_ref: template.fulfills_ref,
+      run: { runner: template.runner ?? "rule" },
+      extensions: { "dev.ogrl.integration": { integration: integration.id, version: integration.version, template: template.name } },
+    };
+    db.tests.unshift(test);
+    return HttpResponse.json(test, { status: 201 });
+  }),
+  http.get(`${V}/connections`, () => HttpResponse.json({ data: [...db.connections].sort((a, b) => a.id.localeCompare(b.id)) })),
+  http.get(`${V}/connections/:id`, ({ params }) => {
+    const item = db.connections.find((c) => c.id === params.id);
+    return item ? HttpResponse.json(item) : notFound();
+  }),
+  http.post(`${V}/connections`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as Partial<Connection>;
+    const integration = db.integrations.find((i) => i.id === body.integration_id);
+    if (!integration) return problem(400, "bad-request", "integration_id must name an installed integration.");
+    if (!body.name?.trim()) return problem(400, "bad-request", "name is required.");
+    const now = new Date().toISOString();
+    const connection: Connection = {
+      id: body.id || `connection--${crypto.randomUUID()}`,
+      integration_id: integration.id,
+      name: body.name.trim(),
+      config: body.config ?? {},
+      auth_kind: body.auth_kind ?? "fields",
+      bindings: body.bindings ?? [],
+      state: "pending",
+      secrets_set: [],
+      created: now,
+      modified: now,
+    };
+    db.connections.push(connection);
+    return HttpResponse.json(connection, { status: 201 });
+  }),
+  http.patch(`${V}/connections/:id`, async ({ params, request }) => {
+    const idx = db.connections.findIndex((c) => c.id === params.id);
+    if (idx < 0) return notFound();
+    if (request.headers.get("If-Match") !== db.connections[idx].modified) {
+      return problem(412, "stale-write", "If-Match does not equal modified.");
+    }
+    const body = (await request.json().catch(() => ({}))) as Partial<Connection>;
+    const updated = { ...db.connections[idx], ...body, modified: new Date().toISOString() };
+    db.connections[idx] = updated;
+    return HttpResponse.json(updated);
+  }),
+  http.delete(`${V}/connections/:id`, ({ params }) => {
+    const idx = db.connections.findIndex((c) => c.id === params.id);
+    if (idx < 0) return notFound();
+    db.connections.splice(idx, 1);
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.put(`${V}/connections/:id/secrets/:name`, ({ params }) => {
+    const idx = db.connections.findIndex((c) => c.id === params.id);
+    if (idx < 0) return notFound();
+    const name = params.name as string;
+    const current = db.connections[idx];
+    const updated: Connection = {
+      ...current,
+      secrets_set: Array.from(new Set([...current.secrets_set, name])).sort(),
+      state: "pending",
+      identity: undefined,
+      modified: new Date().toISOString(),
+    };
+    db.connections[idx] = updated;
+    return HttpResponse.json(updated);
+  }),
+  http.post(`${V}/connections/:id/validate`, ({ params }) => {
+    if (!db.connections.some((c) => c.id === params.id)) return notFound();
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "collection", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+  http.post(`${V}/connections/:id/collections`, ({ params }) => {
+    const connection = db.connections.find((c) => c.id === params.id);
+    if (!connection) return notFound();
+    if (connection.state === "disabled") return problem(400, "bad-request", `${connection.id} is disabled`);
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "collection", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+  http.get(`${V}/snapshots`, ({ request }) => {
+    const sp = new URL(request.url).searchParams;
+    const out = db.snapshots
+      .filter((s) => !sp.get("connection_id") || s.connection_id === sp.get("connection_id"))
+      .filter((s) => !sp.get("source") || s.source === sp.get("source"))
+      .sort((a, b) => b.collected.localeCompare(a.collected));
+    return HttpResponse.json({ data: out });
+  }),
+  http.get(`${V}/snapshots/:id`, ({ params }) => {
+    const item = db.snapshots.find((s) => s.id === params.id);
+    return item ? HttpResponse.json(item) : notFound();
   }),
 
   list("/jobs", () => db.jobs, { type: eq("type"), status: eq("status") }),
