@@ -261,6 +261,21 @@ def test_save_collect_run_and_evidence(world):
     )
     assert (inline["outcome"], inline["snapshots"]) == ("pass", [])
 
+    draft = {**QUERY, "name": "draft-apps"}
+    sample = api.post(
+        "/queries/dry-run", {**draft, "connection_id": world["connection"]}, expect=200
+    )
+    before_saving = api.post(
+        "/rules/preview",
+        {
+            "run": {"source": f"{VENDOR}/draft-apps@1", "assert": "item.mfaa"},
+            "items": sample["items"],
+            "query": draft,
+        },
+        expect=200,
+    )
+    assert before_saving["warnings"][0]["detail"] == "item.mfaa: the resource has no field 'mfaa'"
+
     api._call("DELETE", f"/queries/{saved['id']}", 409)  # a test reads it
     api.revoke(f"/tests/{test['id']}", if_match=api.get(f"/tests/{test['id']}")["modified"])
     api._call("DELETE", f"/queries/{saved['id']}", 204)

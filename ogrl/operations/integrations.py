@@ -203,6 +203,7 @@ class RulePreviewRequest(BaseModel):
 
     run: dict[str, Any]
     items: list[dict[str, Any]] | None = None  # evaluate these (a dry run's) instead of snapshots
+    query: QueryWrite | None = None  # the unsaved definition those items came from
     control_ref: str | None = None
     implementation_id: str | None = None
     params: dict[str, str] | None = None
@@ -1385,8 +1386,18 @@ class IntegrationService:
         try:
             package, schema, _ = await self.resolve(source)
         except (Invalid, NotFound) as exc:
-            problem = PreviewProblem(pointer="/run/source", detail=exc.detail)
-            return RulePreview(outcome="invalid", summary=exc.detail, errors=[problem])
+            # A draft query source has no saved definition yet: preview its dry-run items
+            # against the schema its (unsaved) definition derives (RFC 0006 section 6).
+            draft = request.query
+            if request.items is None or draft is None:
+                problem = PreviewProblem(pointer="/run/source", detail=exc.detail)
+                return RulePreview(outcome="invalid", summary=exc.detail, errors=[problem])
+            check = await self._check_query(draft)
+            if check.source != str(source) or check.item_schema is None:
+                detail = f"the draft defines {check.source}, not {source}"
+                problem = PreviewProblem(pointer="/run/source", detail=detail)
+                return RulePreview(outcome="invalid", summary=detail, errors=[problem])
+            schema = check.item_schema
         warnings = [
             PreviewProblem(pointer=p, detail=d) for p, d in rules.unknown_fields(run, schema)
         ]
