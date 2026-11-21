@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from ogrl.kernel import ids
+from ogrl.kernel import ids, rules
 from ogrl.kernel.graph import Graph, objective_exists, part_ids
 from ogrl.kernel.models import (
     CONTRIBUTION,
@@ -32,6 +32,7 @@ from ogrl.kernel.models import (
     Program,
     Result,
     Risk,
+    Run,
     System,
     Test,
 )
@@ -229,8 +230,7 @@ def _test(c: _Checker, t: Test) -> None:
         return
     if t.method == "manual":
         c.fail("/run", "a manual test has no run block")
-    if t.run.runner == "shell" and not t.run.command:
-        c.fail("/run/command", "runner shell requires command")
+    _run_fields(c, t.run)
     try:
         timeout_seconds(t.run.timeout)
     except ValueError as exc:
@@ -242,6 +242,59 @@ def _test(c: _Checker, t: Test) -> None:
         path = PurePosixPath(item.path)
         if path.is_absolute() or ".." in path.parts or item.path.startswith("\\"):
             c.fail(f"/run/evidence/{index}/path", "a relative path with no ..")
+
+
+# Fields each runner reads. An unrecognized runner is preserved unchecked (RFC 0001 7.6).
+RUN_FIELDS: dict[str, frozenset[str]] = {
+    "shell": frozenset({"command", "timeout", "env", "evidence"}),
+    "rule": frozenset({"source", "select", "assert", "aggregate", "subject", "allow_empty"}),
+    "integration": frozenset({"check", "sources", "with", "timeout"}),
+}
+ALL_RUN_FIELDS = frozenset().union(*RUN_FIELDS.values())
+
+
+def _run_fields(c: _Checker, run: Run) -> None:
+    allowed = RUN_FIELDS.get(run.runner)
+    if allowed is None:
+        return
+    present = {k for k, v in run.model_dump(by_alias=True).items() if v is not None}
+    for name in sorted((present & ALL_RUN_FIELDS) - allowed):
+        c.fail(f"/run/{name}", f"runner {run.runner} does not take {name}")
+    if run.runner == "shell" and not run.command:
+        c.fail("/run/command", "runner shell requires command")
+    if run.runner == "rule":
+        if not run.source:
+            c.fail("/run/source", "runner rule requires source")
+        else:
+            try:
+                rules.parse_reference(run.source)
+            except ValueError as exc:
+                c.fail("/run/source", str(exc))
+        if run.assert_ is None and run.aggregate is None:
+            c.fail("/run/assert", "runner rule requires assert, aggregate, or both")
+        for name, message in rules.expression_errors(run):
+            c.fail(f"/run/{name}", message)
+    if run.runner == "integration":
+        check: rules.Reference | None = None
+        if not run.check:
+            c.fail("/run/check", "runner integration requires check")
+        else:
+            try:
+                check = rules.parse_reference(run.check)
+            except ValueError as exc:
+                c.fail("/run/check", str(exc))
+        if not run.sources:
+            c.fail("/run/sources", "runner integration requires at least one source")
+        for index, text in enumerate(run.sources or []):
+            try:
+                source = rules.parse_reference(text)
+            except ValueError as exc:
+                c.fail(f"/run/sources/{index}", str(exc))
+                continue
+            if check is not None and source.integration != check.integration:
+                c.fail(f"/run/sources/{index}", f"a source of {check.integration}, as the check")
+        if len(set(run.sources or [])) != len(run.sources or []):
+            c.fail("/run/sources", "each source is listed once")
 
 
 def _component(c: _Checker, obj: Component) -> None:

@@ -10,6 +10,7 @@ dependencies = [
     "asyncpg>=0.32.0",
     "authlib>=1.6.0",
     "boto3>=1.43.127",
+    "common-expression-language>=0.10,<0.11",
     "fastapi>=0.162.2",
     "httpx>=0.28.1",
     "ogrl-rs==0.1.0",

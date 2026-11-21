@@ -207,7 +207,7 @@ The application runs an integration process for each operation and talks to it w
 
 ## 8. Checks and templates
 
-**Rules** are evaluated in process by the `rule` runner, backed by a CEL implementation in [`ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) so the CLI and the server agree. Authors can test a rule against a saved snapshot without a server: `ogrl rule eval test.yaml --snapshot users.json`.
+**Rules** are evaluated in process by the `rule` runner (`ogrl/kernel/rules.py`). The first release uses [`common-expression-language`](https://pypi.org/project/common-expression-language/), Python bindings over the Rust `cel` crate. Evaluation moves into [`ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) on the same crate once the CLI gains `ogrl rule eval test.yaml --snapshot users.json`, so authors can test a rule against a saved snapshot without a server and the CLI and server agree.
 
 **Integration checks** run through the `check` operation. The harness resolves `run.check` to the enabled integration version and errors if that version does not provide the check at the requested major.
 
@@ -243,23 +243,28 @@ from ogrl_integration import Integration, Subject, fail, pass_
 
 app = Integration.from_manifest("manifest.yaml")
 
+
 @app.validate
 def validate(ctx):
     me = ctx.http.get(f"https://{ctx.config['domain']}/api/v1/users/me").json()
     return ctx.identity(f"{ctx.config['domain']} as {me['profile']['login']}")
+
 
 @app.resource("users", version=1)
 def users(ctx):
     for user in ctx.http.paginate(f"https://{ctx.config['domain']}/api/v1/users", link_header=True):
         yield {"id": user["id"], "name": user["profile"]["login"], "status": user["status"]}
 
+
 @app.check("admin-mfa-phishing-resistant", version=1)
 def admin_mfa(ctx, users, groups):
     admins = {m for g in groups if g["admin"] for m in g["members"]}
     weak = [u for u in users if u["id"] in admins and not u["phishing_resistant"]]
     if weak:
-        return fail(f"{len(weak)} admins lack phishing-resistant MFA",
-                    subjects=[Subject.account(u["name"], u["id"]) for u in weak])
+        return fail(
+            f"{len(weak)} admins lack phishing-resistant MFA",
+            subjects=[Subject.account(u["name"], u["id"]) for u in weak],
+        )
     return pass_(f"{len(admins)} admins use phishing-resistant MFA")
 ```
 
