@@ -1,4 +1,4 @@
-"""Computed views, content routes, providers, jobs, and connectors."""
+"""Computed views, content routes, providers, and jobs."""
 
 from http import HTTPMethod, HTTPStatus
 
@@ -217,26 +217,6 @@ GET_JOB_FILE = Endpoint(
     tag="Jobs",
     permission=P.PROGRAMS_READ,
 )
-LIST_CONNECTORS = Endpoint(
-    id="listConnectors",
-    summary="List connectors installed in this deployment.",
-    method=GET,
-    path="/connectors",
-    tag="Connectors",
-    permission=P.PROGRAMS_READ,
-    response=views.DataList[views.Connector],
-)
-RUN_CONNECTOR = Endpoint(
-    id="runConnector",
-    summary="Ask a connector to collect evidence.",
-    method=POST,
-    path="/connectors/{id}/jobs",
-    tag="Connectors",
-    permission=P.CONNECTORS_RUN,
-    response=Job,
-    success_status=ACCEPTED,
-)
-
 ALL = (
     GET_LIBRARY,
     PULL_LIBRARY,
@@ -260,6 +240,4 @@ ALL = (
     LIST_JOBS,
     GET_JOB,
     GET_JOB_FILE,
-    LIST_CONNECTORS,
-    RUN_CONNECTOR,
 )

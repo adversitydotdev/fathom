@@ -26,7 +26,6 @@ from ogrl.integrations.manifest import discover
 from ogrl.kernel.timeutil import now
 from ogrl.operations.auth import AuthService
 from ogrl.operations.connections import ConnectionStore
-from ogrl.operations.connectors import ConnectorService
 from ogrl.operations.content import ContentService
 from ogrl.operations.exports import ExportService, ExportSettings
 from ogrl.operations.harness import HarnessService
@@ -79,7 +78,6 @@ class Container:
     renders: RenderService
     exports: ExportService
     restore: RestoreService
-    connectors: ConnectorService
     integrations: IntegrationService
     plugins: Plugins = field(default_factory=Plugins)
     queue: JobQueue | None = None
@@ -178,7 +176,6 @@ def build(
         renders=RenderService(store, authorizer, jobs, plugins, clock),
         exports=ExportService(store, blobs, authorizer, jobs, git, export, clock),
         restore=RestoreService(store, blobs, authorizer, jobs, library_source, fetcher, git, clock),
-        connectors=ConnectorService(objects, blobs, authorizer, jobs, plugins, clock),
         integrations=integrations,
         plugins=plugins,
         queue=queue,

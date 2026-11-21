@@ -49,7 +49,9 @@ tags:
   - name: Mapping reviews
   - name: Providers
   - name: Jobs
-  - name: Connectors
+  - name: Integrations
+  - name: Connections
+  - name: Snapshots
 security:
   - bearerAuth: []
 paths:
@@ -2973,17 +2975,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
 
-  /connectors:
+  /integrations:
     get:
-      tags: [Connectors]
-      operationId: listConnectors
-      summary: List connectors installed in this deployment.
-      description: |
-        The registry is empty until a connector is installed beside the API.
-        This is not a catalog of cloud products. RFC 0003 defines the port.
+      tags: [Integrations]
+      operationId: listIntegrations
+      summary: List integrations installed in this deployment.
+      description: RFC 0005 section 3. The registry is empty until a package is installed beside the API.
       responses:
         "200":
-          description: The installed connectors.
+          description: The installed integrations.
           content:
             application/json:
               schema:
@@ -2993,32 +2993,304 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Connector"
+                      $ref: "#/components/schemas/Integration"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /connectors/{id}/jobs:
-    post:
-      tags: [Connectors]
-      operationId: runConnector
-      summary: Ask a connector to collect evidence.
+  /integrations/{id}:
+    get:
+      tags: [Integrations]
+      operationId: getIntegration
+      summary: Get one installed integration.
       parameters:
         - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The integration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Integration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/templates/{name}/enable:
+    post:
+      tags: [Integrations]
+      operationId: enableIntegrationTemplate
+      summary: Create an organization test from an integration's template.
+      description: |
+        RFC 0005 section 8. The test is an ordinary organization test that
+        records its origin under `extensions["dev.ogrl.integration"]`. Writing
+        a run block needs `tests:define-run`, and agents cannot.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateEnable"
+      responses:
+        "201":
+          description: The test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /connections:
+    get:
+      tags: [Connections]
+      operationId: listConnections
+      summary: List connections to vendor accounts.
+      responses:
+        "200":
+          description: The connections, ordered by id.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Connections]
+      operationId: createConnection
+      summary: Connect an installed integration to a vendor account.
+      description: RFC 0005 section 5. Set secrets next, then validate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionWrite"
+      responses:
+        "201":
+          description: The connection, in state `pending`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /connections/{id}:
+    get:
+      tags: [Connections]
+      operationId: getConnection
+      summary: Get one connection.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Connections]
+      operationId: updateConnection
+      summary: Rename, reconfigure, rebind, disable, or re-enable a connection.
+      description: "`state: disabled` stops collection; `state: pending` re-enables and asks for validation."
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionPatch"
+      responses:
+        "200":
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+    delete:
+      tags: [Connections]
+      operationId: deleteConnection
+      summary: Remove a connection and its secrets.
+      description: |
+        Connections are deployment configuration, not graph objects, so they
+        can be deleted. Results and evidence produced through the connection
+        stay.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /connections/{id}/secrets/{name}:
+    put:
+      tags: [Connections]
+      operationId: setConnectionSecret
+      summary: Write one secret value. Write-only; values are never returned.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: path
+          required: true
+          description: A secret field the connection's auth kind declares, such as `OKTA_API_TOKEN`.
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [value]
+              additionalProperties: false
               properties:
-                system_id:
+                value:
                   type: string
-                component_id:
-                  type: string
-                implementation_id:
-                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          description: The connection, back in state `pending` until validated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /connections/{id}/validate:
+    post:
+      tags: [Connections]
+      operationId: validateConnection
+      summary: Check the connection's credentials with the vendor. Returns a job.
+      parameters:
+        - $ref: "#/components/parameters/id"
       responses:
         "202":
           $ref: "#/components/responses/AcceptedJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /connections/{id}/collections:
+    post:
+      tags: [Connections]
+      operationId: collectConnection
+      summary: Collect snapshots now. Returns a job.
+      description: Omit `sources` to collect every resource the integration emits.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /snapshots:
+    get:
+      tags: [Snapshots]
+      operationId: listSnapshots
+      summary: List collected snapshots, newest first.
+      parameters:
+        - name: connection_id
+          in: query
+          schema:
+            type: string
+        - name: source
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The snapshots.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Snapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /snapshots/{id}:
+    get:
+      tags: [Snapshots]
+      operationId: getSnapshot
+      summary: Get one snapshot's metadata.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /snapshots/{id}/content:
+    get:
+      tags: [Snapshots]
+      operationId: getSnapshotContent
+      summary: Download the snapshot document (RFC 0001 section 7.6).
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The snapshot document.
+          content:
+            application/vnd.ogrl.snapshot+json:
+              schema:
+                type: object
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -3285,7 +3557,7 @@ components:
           description: The snapshot commit, when `url` is a git remote. Defaults to the head of the default branch.
     JobType:
       type: string
-      enum: [library_pull, provider_import, test_run, render, git_export, restore, connector]
+      enum: [library_pull, provider_import, test_run, render, git_export, restore, collection]
     JobStatus:
       type: string
       enum: [queued, running, succeeded, failed]
@@ -3325,16 +3597,266 @@ components:
             $ref: "#/components/schemas/Job"
         page:
           $ref: "#/components/schemas/Page"
-    Connector:
+    Integration:
       type: object
-      required: [id, name]
+      description: An installed integration package (RFC 0005 section 3).
+      required: [id, name, version, publisher, tier, digest, runtime, egress, config, auth, resources, checks, templates]
       properties:
         id:
           type: string
+          examples: [dev.adversity.okta]
         name:
+          type: string
+        version:
+          type: string
+        publisher:
           type: string
         description:
           type: string
+        tier:
+          type: string
+          enum: [first-party, verified, local]
+        digest:
+          type: string
+        runtime:
+          type: string
+          enum: [python, binary]
+        egress:
+          type: array
+          items:
+            type: string
+        config:
+          type: array
+          items:
+            type: object
+            required: [name, label, required]
+            properties:
+              name:
+                type: string
+              label:
+                type: string
+              pattern:
+                type: string
+              required:
+                type: boolean
+        auth:
+          type: array
+          items:
+            type: object
+            required: [kind, label, supported]
+            properties:
+              kind:
+                type: string
+                enum: [fields, oauth2, aws_role]
+              label:
+                type: string
+              supported:
+                type: boolean
+                description: False for auth kinds this server cannot run yet.
+              fields:
+                type: array
+                items:
+                  type: object
+                  required: [name, label]
+                  properties:
+                    name:
+                      type: string
+                    label:
+                      type: string
+                    secret:
+                      type: boolean
+              scopes:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        resources:
+          type: array
+          items:
+            type: object
+            required: [name, version, source]
+            properties:
+              name:
+                type: string
+              version:
+                type: integer
+              source:
+                type: string
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, version, check, sources]
+            properties:
+              name:
+                type: string
+              version:
+                type: integer
+              check:
+                type: string
+              sources:
+                type: array
+                items:
+                  type: string
+        templates:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:
+                type: string
+              fulfills_ref:
+                type: string
+              test_name:
+                type: string
+              control_ref:
+                type: string
+              runner:
+                type: string
+    TemplateEnable:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        system_refs:
+          type: array
+          items:
+            type: string
+    ConnectionState:
+      type: string
+      enum: [pending, active, failing, disabled]
+    Connection:
+      type: object
+      description: |
+        An installed integration linked to one vendor account (RFC 0005
+        section 5). Not an RFC 0001 object. Secret values are never returned;
+        `secrets_set` names the ones that have a value.
+      required: [id, integration_id, name, config, auth_kind, bindings, state, secrets_set, created, modified]
+      properties:
+        id:
+          type: string
+        integration_id:
+          type: string
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties:
+            type: string
+        auth_kind:
+          type: string
+        bindings:
+          type: array
+          description: Component and system ids this vendor account serves.
+          items:
+            type: string
+        state:
+          $ref: "#/components/schemas/ConnectionState"
+        identity:
+          type: string
+        granted_scopes:
+          type: array
+          items:
+            type: string
+        last_validated:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        secrets_set:
+          type: array
+          items:
+            type: string
+        created:
+          type: string
+          format: date-time
+        modified:
+          type: string
+          format: date-time
+        created_by_ref:
+          type: string
+    ConnectionWrite:
+      type: object
+      required: [integration_id, name, auth_kind]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        integration_id:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        config:
+          type: object
+          additionalProperties:
+            type: string
+        auth_kind:
+          type: string
+        bindings:
+          type: array
+          items:
+            type: string
+    ConnectionPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        config:
+          type: object
+          additionalProperties:
+            type: string
+        bindings:
+          type: array
+          items:
+            type: string
+        state:
+          type: string
+          enum: [disabled, pending]
+    CollectionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        sources:
+          type: array
+          items:
+            type: string
+    Snapshot:
+      type: object
+      description: One stored snapshot document (RFC 0001 section 7.6, RFC 0005 section 6).
+      required: [id, connection_id, source, collected, complete, item_count, size, uri, digest]
+      properties:
+        id:
+          type: string
+        connection_id:
+          type: string
+        source:
+          type: string
+        collected:
+          type: string
+          format: date-time
+        complete:
+          type: boolean
+        reason:
+          type: string
+        item_count:
+          type: integer
+        size:
+          type: integer
+        uri:
+          type: string
+        digest:
+          type: string
+        job_id:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
     RenderRequest:
       type: object
       required: [view]
@@ -3819,10 +4341,16 @@ components:
               $ref: "#/components/schemas/Run"
     Run:
       type: object
-      required: [runner, command]
+      description: |
+        RFC 0001 section 7.6. Which fields apply depends on `runner`: `shell`
+        takes command, timeout, env, and evidence; `rule` takes source,
+        select, assert, aggregate, subject, and allow_empty; `integration`
+        takes check, sources, with, and timeout.
+      required: [runner]
       properties:
         runner:
           type: string
+          examples: [shell, rule, integration]
         command:
           type: string
         timeout:
@@ -3843,6 +4371,34 @@ components:
                 type: string
               media_type:
                 type: string
+        source:
+          type: string
+          description: "`<integration>/<resource>@<major>`"
+          examples: [dev.adversity.okta/users@1]
+        select:
+          type: string
+          description: CEL over `item`.
+        assert:
+          type: string
+          description: CEL over `item`.
+        aggregate:
+          type: string
+          description: CEL over `items`.
+        subject:
+          type: string
+        allow_empty:
+          type: boolean
+        check:
+          type: string
+          examples: [dev.adversity.github/branch-protection@1]
+        sources:
+          type: array
+          items:
+            type: string
+        with:
+          type: object
+          additionalProperties:
+            type: string
     TestWrite:
       type: object
       required: [name, control_ref, method]

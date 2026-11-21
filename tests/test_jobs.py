@@ -483,8 +483,3 @@ def test_restore_refuses_a_broken_graph(make_app, tmp_path: Path):
     assert job["status"] == "failed"
     assert "program--com.acme.p/system_ref" in job["error"]["detail"]
     assert admin.get("/library") == {}  # a refused restore leaves the database empty
-
-
-def test_connectors_are_an_empty_registry(admin: Api):
-    assert admin.get("/connectors") == {"data": []}
-    admin.post("/connectors/aws/jobs", {}, expect=404)

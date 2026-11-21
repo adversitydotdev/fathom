@@ -43,3 +43,24 @@ def test_database_and_bucket_from_the_environment():
     assert isinstance(c.store, PostgresStore)
     assert c.store.engine.url.drivername == "postgresql+asyncpg"
     assert isinstance(c.blobs, S3Blobs)
+
+
+def test_local_integrations_need_an_explicit_allow(tmp_path):
+    from ogrl.adapters.secrets import FileVault
+    from tests.conftest import INTEGRATIONS_DIR
+
+    base = {"OGRL_INTEGRATIONS_DIR": str(INTEGRATIONS_DIR)}
+    assert build_from_env(base).plugins.integrations.names() == []
+    allowed = build_from_env(
+        {
+            **base,
+            "OGRL_ALLOW_LOCAL_INTEGRATIONS": "true",
+            "OGRL_SECRETS_FILE": str(tmp_path / "vault.json"),
+        }
+    )
+    assert allowed.plugins.integrations.names() == ["dev.ogrl.fake"]
+    vault = allowed.integrations._vault
+    assert isinstance(vault, FileVault)
+    vault.put("integrations/x/TOKEN", "v")
+    assert (tmp_path / "vault.json").stat().st_mode & 0o777 == 0o600
+    assert FileVault(tmp_path / "vault.json").get("integrations/x/TOKEN") == "v"

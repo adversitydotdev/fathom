@@ -26,6 +26,10 @@ OGRL_QUEUE_URL           Optional SQS queue URL for job worker wakeups.
 OGRL_SSM_PREFIX          AWS SSM Parameter Store prefix (e.g. `/ogrl/ogrl`) for harness secrets.
 OGRL_HARNESS_USER        Operating-system user the shell runner switches to.
 OGRL_HARNESS_<NAME>      The value of `run.env` name <NAME> for the harness.
+OGRL_INTEGRATIONS_DIR    Directory of unpacked integration packages (RFC 0005). Local tier:
+                            loaded only with OGRL_ALLOW_LOCAL_INTEGRATIONS=true.
+OGRL_SECRETS_FILE        JSON file for connection secrets when OGRL_SSM_PREFIX is unset.
+                            Unset with no SSM prefix: connection secrets are kept in memory.
 OTEL_EXPORTER_OTLP_ENDPOINT / LOGFIRE_TOKEN   Optional telemetry destinations (RFC 0003 §11).
 """
 
@@ -49,7 +53,7 @@ from ogrl.adapters.blobs import FileBlobs
 from ogrl.adapters.library import GitLibrary
 from ogrl.adapters.queue import JobQueue, SqsJobQueue
 from ogrl.adapters.s3 import S3Blobs
-from ogrl.adapters.secrets import EnvSecrets, SsmSecrets
+from ogrl.adapters.secrets import EnvSecrets, FileVault, MemoryVault, SsmSecrets, SsmVault
 from ogrl.agent.config import AgentConfig
 from ogrl.api.app import create_app
 from ogrl.auth import (
@@ -67,6 +71,7 @@ from ogrl.auth.store import (
     MemoryAuthStore,
     PostgresAuthStore,
 )
+from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.exports import ExportSettings
 from ogrl.operations.jobs import BackgroundExecutor, Executor, QueuedExecutor
 from ogrl.operations.library import LibraryPullRequest
@@ -75,9 +80,9 @@ from ogrl.operations.records import Job
 from ogrl.operations.renders import RenderRequest
 from ogrl.operations.restore import RestoreRequest
 from ogrl.operations.store import BlobStore, ObjectStore
-from ogrl.persistence.memory import MemoryBlobs, MemoryStore
-from ogrl.persistence.postgres import PostgresStore
-from ogrl.plugins.ports import Secrets
+from ogrl.persistence.memory import MemoryBlobs, MemoryConnections, MemoryStore
+from ogrl.persistence.postgres import PostgresConnections, PostgresStore
+from ogrl.plugins.ports import Secrets, SecretVault
 
 log = logging.getLogger("ogrl")
 ORGANIZATION = "organization"
@@ -178,15 +183,18 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
     database = database_url_from_env(env)
     store: ObjectStore
     auth_store: AuthStore
+    connections: ConnectionStore
     if database:
         pg = PostgresStore(database)
         telemetry.instrument_engine(pg.engine)
         store = pg
         auth_store = PostgresAuthStore(pg.engine)
+        connections = PostgresConnections(pg.engine)
     else:
         log.warning("OGRL_DATABASE_URL is unset; the organization database is in memory")
         store = MemoryStore()
         auth_store = MemoryAuthStore()
+        connections = MemoryConnections()
 
     bucket, blob_dir = env.get("OGRL_S3_BUCKET"), env.get("OGRL_BLOB_DIR")
     region = env.get("AWS_REGION") or env.get("AWS_DEFAULT_REGION") or None
@@ -221,6 +229,24 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         else EnvSecrets(env)
     )
 
+    vault: SecretVault
+    if ssm_prefix:
+        vault = SsmVault(ssm_prefix, region=region)
+    elif env.get("OGRL_SECRETS_FILE"):
+        vault = FileVault(env["OGRL_SECRETS_FILE"])
+    else:
+        vault = MemoryVault()
+
+    integrations_dir: Path | None = None
+    if env.get("OGRL_INTEGRATIONS_DIR"):
+        if env.get("OGRL_ALLOW_LOCAL_INTEGRATIONS", "false").lower() == "true":
+            integrations_dir = Path(env["OGRL_INTEGRATIONS_DIR"])
+        else:
+            log.warning(
+                "OGRL_INTEGRATIONS_DIR is set but local integrations are not allowed; "
+                "set OGRL_ALLOW_LOCAL_INTEGRATIONS=true to load them (RFC 0005 section 4)"
+            )
+
     admin_emails = frozenset(
         e.strip().lower()
         for e in env.get("OGRL_BOOTSTRAP_ADMIN_EMAILS", "").split(",")
@@ -241,6 +267,9 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         queue=queue,
         library_source=GitLibrary(repo) if repo else container.default_library_source(),
         secrets=secrets_port,
+        connections=connections,
+        vault=vault,
+        integrations_dir=integrations_dir,
         export=ExportSettings(remote=env.get("OGRL_EXPORT_REMOTE") or None),
         harness_user=env.get("OGRL_HARNESS_USER") or None,
         allowed_origins=allowed_origins,

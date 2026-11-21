@@ -2,7 +2,7 @@ from fastapi import APIRouter, FastAPI
 
 from ogrl import telemetry
 from ogrl.api import paths, problems
-from ogrl.api.handlers import agent, auth, meta, objects, views
+from ogrl.api.handlers import agent, auth, integrations, meta, objects, views
 from ogrl.api.paths.meta import Health
 from ogrl.api.registrar import Registrar
 from ogrl.container import Container
@@ -38,6 +38,7 @@ def create_app(container: Container) -> FastAPI:
     for collection in paths.collections.ALL_COLLECTIONS:
         objects.register_collection(registrar, container.objects, collection)
     views.register(registrar, container)
+    integrations.register(registrar, container)
 
     registrar.require_complete(paths.all_endpoints())
     app.include_router(router)  # after registration: include_router copies routes

@@ -968,8 +968,16 @@ Resources:
                   - ssm:GetParameters
                   - ssm:GetParametersByPath
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/*
+              # Integration connection secrets (RFC 0005 section 5): write-only from the API.
               - Effect: Allow
-                Action: kms:Decrypt
+                Action:
+                  - ssm:PutParameter
+                  - ssm:DeleteParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/harness/integrations/*
+              - Effect: Allow
+                Action:
+                  - kms:Decrypt
+                  - kms:Encrypt
                 Resource: "*"
                 Condition:
                   StringEquals:

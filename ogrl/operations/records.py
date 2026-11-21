@@ -43,7 +43,6 @@ JobType = Literal[
     "render",
     "git_export",
     "restore",
-    "connector",
     "collection",
 ]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]

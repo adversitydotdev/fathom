@@ -90,7 +90,6 @@ ROLES: tuple[RoleDefinition, ...] = (
                 P.PROVIDERS_IMPORT,
                 P.EXPORTS_RUN,
                 P.RESTORE_RUN,
-                P.CONNECTORS_RUN,
                 P.INTEGRATIONS_MANAGE,
                 P.MEMBERS_MANAGE,
             }

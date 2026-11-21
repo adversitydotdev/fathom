@@ -278,3 +278,71 @@ def test_build_snapshot_rejects_items_that_break_the_schema():
     assert warnings == []
     with pytest.raises(IntegrationError, match="item 0 at id"):
         build_snapshot(USERS, collected, True, [{"id": 1}], schema)
+
+
+# --- HTTP ------------------------------------------------------------------------------------
+
+
+def test_routes_end_to_end(world, client):
+    api = world["api"]
+    assert [i["id"] for i in api.get("/integrations")["data"]] == [FAKE]
+    assert api.get(f"/integrations/{FAKE}")["resources"][0]["source"] == USERS
+    api.get("/integrations/dev.ogrl.missing", expect=404)
+
+    connection = api.post(
+        "/connections",
+        {
+            "integration_id": FAKE,
+            "name": "Fake prod",
+            "config": {"dataset": "acme"},
+            "auth_kind": "fields",
+            "bindings": [world["component"]],
+        },
+    )
+    cid = connection["id"]
+    assert connection["state"] == "pending"
+    api._call("PUT", f"/connections/{cid}/secrets/FAKE_TOKEN", 200, json={"value": "s3cret"})
+    job = api.post(f"/connections/{cid}/validate", expect=202)
+    assert job["status"] == "succeeded", job
+    connection = api.get(f"/connections/{cid}")
+    assert (connection["state"], connection["secrets_set"]) == ("active", ["FAKE_TOKEN"])
+    assert "s3cret" not in str(connection)
+
+    job = api.post(f"/connections/{cid}/collections", {"sources": [USERS]}, expect=202)
+    assert job["status"] == "succeeded", job
+    (snapshot,) = api.get(f"/snapshots?connection_id={cid}")["data"]
+    assert api.get(f"/snapshots/{snapshot['id']}")["item_count"] == 3
+    content = api.get(f"/snapshots/{snapshot['id']}/content")
+    assert content.headers["content-type"] == "application/vnd.ogrl.snapshot+json"
+    assert json.loads(content.content)["source"] == USERS
+
+    api.post(f"/connections/{cid}/collections", {"sources": ["x.y/z@1"]}, expect=400)
+
+    test = api.post(f"/integrations/{FAKE}/templates/mfa-enforcement/enable", expect=201)
+    result = run_test(api, test["id"], world["impl"])
+    assert result["outcome"] == "fail"
+
+    patched = api.patch(
+        f"/connections/{cid}", {"state": "disabled"}, if_match=connection["modified"]
+    )
+    assert patched["state"] == "disabled"
+    api.patch(f"/connections/{cid}", {"name": "x"}, if_match=connection["modified"], expect=412)
+    api._call("DELETE", f"/connections/{cid}", 204)
+    api.get(f"/connections/{cid}", expect=404)
+
+
+def test_route_permissions(world, client):
+    viewer, contributor = Api(client, "viewer"), Api(client, "contributor")
+    body = {
+        "integration_id": FAKE,
+        "name": "x",
+        "config": {"dataset": "acme"},
+        "auth_kind": "fields",
+    }
+    viewer.post("/connections", body, expect=403)
+    contributor.post("/connections", body, expect=403)
+    cid = world["api"].post("/connections", body)["id"]
+    viewer.post(f"/connections/{cid}/collections", expect=403)
+    contributor.post(f"/connections/{cid}/validate", expect=202)
+    assert viewer.get("/connections")["data"][0]["id"] == cid
+    Api(client, "agent").post(f"/integrations/{FAKE}/templates/mfa-enforcement/enable", expect=403)

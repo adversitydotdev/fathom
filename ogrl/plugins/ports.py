@@ -1,11 +1,11 @@
-"""The four ports from RFC 0003 section 5.
+"""The ports from RFC 0003 section 5, and the integration host from RFC 0005.
 
 The kernel calls these; it does not implement them. Status, parameter
 resolution, and mapping semantics are deliberately not ports: a plugin that
 changed them would make two installations disagree about one bundle.
 """
 
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -115,22 +115,6 @@ class Runner(Protocol):
 
     async def run(self, request: RunRequest) -> RunReport:
         """A failure is a report with outcome error, never an exception."""
-        ...
-
-
-@dataclass(frozen=True)
-class CollectionRequest:
-    system_id: str | None
-    component_id: str | None
-    implementation: Implementation | None
-
-
-class Connector(Protocol):
-    name: str
-    description: str
-
-    def collect(self, request: CollectionRequest) -> AsyncIterator[CollectedFile]:
-        """Yields files that become `evidence`. Shipped as a subprocess speaking RFC 0001 JSON."""
         ...
 
 
