@@ -18,7 +18,7 @@ import re
 import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 from urllib.parse import urlencode, urlsplit
 
@@ -42,6 +42,7 @@ from ogrl.kernel.bundles import canonical_json, digest
 from ogrl.kernel.constraints import timeout_seconds
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Component, Implementation, Run, System, Test
+from ogrl.kernel.parameters import control_values
 from ogrl.kernel.timeutil import FRESHNESS_DAYS, format_timestamp, later_than, now, utc
 from ogrl.operations.catalog import PackageCatalog
 from ogrl.operations.connections import Connection, ConnectionStore, InstallRecord, Snapshot
@@ -137,6 +138,44 @@ class InstallRequest(BaseModel):
     enable: bool = True
 
 
+class RulePreviewRequest(BaseModel):
+    """A rule run block to try against the latest snapshots, before saving it as a test."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    run: dict[str, Any]
+    control_ref: str | None = None
+    implementation_id: str | None = None
+    params: dict[str, str] | None = None
+    limit: int = Field(default=50, ge=1, le=500)
+
+
+class PreviewSnapshot(BaseModel):
+    id: str
+    connection_id: str
+    connection_name: str
+    collected: datetime
+    item_count: int
+
+
+class PreviewProblem(BaseModel):
+    pointer: str
+    detail: str
+
+
+class RulePreview(BaseModel):
+    outcome: Literal["pass", "fail", "error", "invalid", "no-data"]
+    summary: str
+    selected: int = 0
+    total: int = 0
+    subjects: list[dict[str, str]] = Field(default_factory=list)
+    errors: list[PreviewProblem] = Field(default_factory=list)
+    warnings: list[PreviewProblem] = Field(default_factory=list)
+    snapshots: list[PreviewSnapshot] = Field(default_factory=list)
+    params: dict[str, str] = Field(default_factory=dict)
+    sample: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class TemplateUpdate(BaseModel):
     """A test created from a template whose integration now ships a different version of it."""
 
@@ -194,7 +233,12 @@ def integration_view(package: Package) -> IntegrationView:
             for a in m.auth
         ],
         resources=[
-            {"name": r.name, "version": r.version, "source": f"{m.id}/{r.name}@{r.version}"}
+            {
+                "name": r.name,
+                "version": r.version,
+                "source": f"{m.id}/{r.name}@{r.version}",
+                "fields": schema_fields(package.schema(r.name, r.version)),
+            }
             for r in m.resources
         ],
         checks=[
@@ -217,6 +261,27 @@ def integration_view(package: Package) -> IntegrationView:
             for t in m.templates
         ],
     )
+
+
+def schema_fields(schema: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """What a rule author can write after `item.`: each property, its type, its description."""
+    required = set(schema.get("required") or [])
+    out = []
+    for name, spec in (schema.get("properties") or {}).items():
+        kind = spec.get("type", "any")
+        kinds = kind if isinstance(kind, list) else [kind]
+        if spec.get("type") == "array" and isinstance(spec.get("items"), dict):
+            kinds = [f"array of {spec['items'].get('type', 'any')}"]
+        out.append(
+            {
+                "name": name,
+                "type": " or ".join(k for k in kinds if k != "null") or "null",
+                "nullable": "null" in kinds,
+                "required": name in required,
+                **({"description": spec["description"]} if spec.get("description") else {}),
+            }
+        )
+    return out
 
 
 def _major(manifest: Any, resource: str) -> int:
@@ -988,6 +1053,108 @@ class IntegrationService:
             observed,
             artifacts=artifacts,
             subjects=list(report.subjects),
+        )
+
+    # --- rule preview -----------------------------------------------------------------------
+
+    async def preview_rule(self, principal: Principal, request: RulePreviewRequest) -> RulePreview:
+        """Evaluate a rule over the latest complete snapshots, exactly as the rule runner would,
+        without collecting, without a freshness window, and without recording anything."""
+        require(self._authorizer, principal, Permission.TESTS_WRITE)
+        await self.ready()
+        try:
+            run = Run.model_validate({**request.run, "runner": "rule"})
+        except Exception as exc:  # pydantic.ValidationError
+            return RulePreview(
+                outcome="invalid",
+                summary="the run block is malformed",
+                errors=[PreviewProblem(pointer="/run", detail=str(exc).splitlines()[0])],
+            )
+        errors = [PreviewProblem(pointer=p, detail=d) for p, d in rules.rule_errors(run)]
+        if errors:
+            return RulePreview(
+                outcome="invalid", summary="the rule does not compile", errors=errors
+            )
+
+        source = rules.parse_reference(run.source or "")
+        package = self._packages.get(source.integration)
+        spec = package.manifest.resource(source.name, source.major) if package else None
+        if package is None or spec is None:
+            problem = PreviewProblem(
+                pointer="/run/source", detail=f"no installed integration emits {source}"
+            )
+            return RulePreview(outcome="invalid", summary=problem.detail, errors=[problem])
+        warnings = [
+            PreviewProblem(pointer=p, detail=d)
+            for p, d in rules.unknown_fields(run, package.schema(source.name, source.major))
+        ]
+
+        graph = await self._objects.store.graph()
+        params: dict[str, str] = {}
+        impl = None
+        if request.implementation_id:
+            impl = graph.typed(request.implementation_id, Implementation)
+            if impl is None:
+                raise NotFound(f"no implementation {request.implementation_id}")
+        control = graph.control(request.control_ref or (impl.control_ref if impl else None))
+        if control is not None:
+            params = {k: v for k, v in control_values(control, impl, {}).items() if v is not None}
+        params.update(request.params or {})
+
+        connections = [
+            c
+            for c in (
+                self.bound(impl, graph, await self._store.list_connections())
+                if impl
+                else await self._store.list_connections()
+            )
+            if c.integration_id == source.integration and c.state != "disabled"
+        ]
+        far_past = datetime(1970, 1, 1, tzinfo=UTC)
+        at = utc(self._clock())
+        chosen: list[tuple[Connection, Snapshot, dict[str, Any]]] = []
+        for connection in connections:
+            snapshot = await self._store.latest_snapshot(connection.id, str(source), far_past, at)
+            if snapshot is None:
+                continue
+            content = await self._blobs.get(snapshot.uri)
+            if content is not None and digest(content) == snapshot.digest:
+                chosen.append((connection, snapshot, json.loads(content)))
+        if not chosen:
+            scope = "bound to that implementation" if impl else "for it"
+            return RulePreview(
+                outcome="no-data",
+                summary=f"no complete snapshot of {source} from a connection {scope}; "
+                "collect one first",
+                warnings=warnings,
+                params=params,
+            )
+
+        items = [item for _, _, document in chosen for item in document.get("items", [])]
+        observed = min(snapshot.collected for _, snapshot, _ in chosen)
+        out = rules.evaluate(run, items, params, observed)
+        return RulePreview(
+            outcome=out.outcome,
+            summary=out.summary,
+            selected=out.selected,
+            total=len(items),
+            subjects=[
+                {k: v for k, v in vars(s).items() if v is not None}
+                for s in out.subjects[: request.limit]
+            ],
+            warnings=warnings,
+            snapshots=[
+                PreviewSnapshot(
+                    id=s.id,
+                    connection_id=c.id,
+                    connection_name=c.name,
+                    collected=s.collected,
+                    item_count=s.item_count,
+                )
+                for c, s, _ in chosen
+            ],
+            params=params,
+            sample=items[:3],
         )
 
     # --- archive installs and upgrades (RFC 0005 sections 4 and 8) --------------------------

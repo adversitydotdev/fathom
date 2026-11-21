@@ -215,7 +215,11 @@ def test_integrations_are_listed(world):
     views = run(c.integrations.list_integrations(ADMIN))
     assert [v.id for v in views] == [FAKE]
     view = views[0]
-    assert view.resources == [{"name": "users", "version": 1, "source": USERS}]
+    (users,) = view.resources
+    assert (users["name"], users["version"], users["source"]) == ("users", 1, USERS)
+    fields = {f["name"]: f for f in users["fields"]}
+    assert fields["mfa"] == {"name": "mfa", "type": "boolean", "nullable": False, "required": False}
+    assert fields["id"]["required"] is True
     assert view.checks[0]["check"] == "dev.ogrl.fake/admins-have-mfa@1"
     assert view.auth[0]["supported"] is True
 
@@ -630,3 +634,74 @@ def test_aws_role_connections_assume_with_the_external_id(world, assumer):
         expect=400,
     )
     assert bad["errors"][0]["pointer"] == "/config/aws_role_arn"
+
+
+# --- Rule preview -----------------------------------------------------------------------------
+
+
+def preview(api: Api, run: dict, **body) -> dict:
+    return api.post("/rules/preview", {"run": {"source": USERS, **run}, **body}, expect=200)
+
+
+def test_preview_evaluates_the_latest_snapshot_without_recording(world):
+    c, api = world["c"], world["api"]
+    connection = connect(c, world["component"])
+    assert preview(api, {"assert": "item.mfa"})["outcome"] == "no-data"  # nothing collected yet
+
+    run(c.integrations.collect(ADMIN, connection.id, CollectionRequest()))
+    results_before = len(api.get("/results")["data"])
+    out = preview(api, {"select": 'item.status == "ACTIVE"', "assert": "item.mfa"}, control_ref=C1)
+    assert (out["outcome"], out["summary"], out["selected"], out["total"]) == (
+        "fail",
+        "1 of 2 selected items pass",
+        2,
+        3,
+    )
+    assert out["subjects"] == [{"kind": "users", "name": "bob@acme.test", "external_id": "u2"}]
+    assert [s["connection_name"] for s in out["snapshots"]] == ["Fake prod"]
+    assert len(out["sample"]) == 3
+    assert len(api.get("/results")["data"]) == results_before  # a preview records nothing
+    assert len(run(c.integrations.list_snapshots(ADMIN, None, USERS))) == 1  # nor collects
+
+
+def test_preview_reports_errors_warnings_and_params(world):
+    c, api = world["c"], world["api"]
+    connection = connect(c, world["component"])
+    run(c.integrations.collect(ADMIN, connection.id, CollectionRequest()))
+
+    bad = preview(api, {"assert": "item.mfa ==", "select": "user.x"})
+    assert bad["outcome"] == "invalid"
+    assert {e["pointer"] for e in bad["errors"]} == {"/run/assert", "/run/select"}
+
+    typo = preview(api, {"assert": "item.mfaa"})
+    assert typo["warnings"] == [
+        {"pointer": "/run/assert", "detail": "item.mfaa: the resource has no field 'mfaa'"}
+    ]
+    assert typo["outcome"] == "error"  # and evaluation says why, naming the item
+    assert "no such key" in typo["summary"]
+
+    with_params = preview(
+        api,
+        {"assert": "params.window == '7 days'", "allow_empty": True},
+        params={"window": "7 days"},
+    )
+    assert (with_params["outcome"], with_params["params"]["window"]) == ("pass", "7 days")
+
+    unknown = preview(api, {"source": "dev.ogrl.nope/users@1", "assert": "true"})
+    assert unknown["errors"][0]["pointer"] == "/run/source"
+
+
+def test_preview_scopes_to_an_implementations_connections(world):
+    c, api = world["c"], world["api"]
+    other = api.post("/components", {"name": "Other IdP", "kind": "software"})
+    connection = connect(c, other["id"], dataset="secure", name="Elsewhere")
+    run(c.integrations.collect(ADMIN, connection.id, CollectionRequest()))
+    assert preview(api, {"assert": "item.mfa"})["outcome"] == "pass"  # every connection
+    scoped = preview(api, {"assert": "item.mfa"}, implementation_id=world["impl"])
+    assert scoped["outcome"] == "no-data"  # nothing bound to the program's system
+
+
+def test_preview_needs_test_authoring(world, client):
+    Api(client, "viewer").post(
+        "/rules/preview", {"run": {"source": USERS, "assert": "true"}}, expect=403
+    )

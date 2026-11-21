@@ -133,6 +133,47 @@ def expression_errors(run: Any) -> list[tuple[str, str]]:
     return errors
 
 
+def rule_errors(run: Any) -> list[tuple[str, str]]:
+    """(JSON pointer, message) for a `rule` run block: what a write refuses (RFC 0001 7.6)."""
+    errors: list[tuple[str, str]] = []
+    if not run.source:
+        errors.append(("/run/source", "runner rule requires source"))
+    else:
+        try:
+            parse_reference(run.source)
+        except ValueError as exc:
+            errors.append(("/run/source", str(exc)))
+    if run.assert_ is None and run.aggregate is None:
+        errors.append(("/run/assert", "runner rule requires assert, aggregate, or both"))
+    errors += [(f"/run/{name}", message) for name, message in expression_errors(run)]
+    return errors
+
+
+def unknown_fields(run: Any, schema: dict[str, Any]) -> list[tuple[str, str]]:
+    """Warnings for `item.<field>` (and macro variables' fields) the resource schema lacks.
+
+    Advisory: CEL cannot know an item's shape, so a misspelt field only fails at
+    evaluation. This catches it while the author is still writing the rule.
+    """
+    known = set((schema.get("properties") or {}).keys())
+    if not known:
+        return []
+    warnings = []
+    for name in FIELDS:
+        source = getattr(run, "assert_" if name == "assert" else name, None)
+        if not source:
+            continue
+        variables = {"item", *_BINDER.findall(source)}
+        pattern = re.compile(r"\b(" + "|".join(map(re.escape, variables)) + r")\.([A-Za-z_]\w*)")
+        for variable, key in pattern.findall(source):
+            if variable == "items" or key in known:
+                continue
+            warnings.append(
+                (f"/run/{name}", f"{variable}.{key}: the resource has no field {key!r}")
+            )
+    return list(dict.fromkeys(warnings))
+
+
 # --- Evaluation --------------------------------------------------------------------------------
 
 
@@ -148,6 +189,7 @@ class RuleOutcome:
     outcome: Literal["pass", "fail", "error"]
     summary: str
     subjects: list[RuleSubject] = field(default_factory=list)
+    selected: int = 0  # items `select` kept; 0 when evaluation stopped first
 
 
 class _RuleError(Exception):
@@ -275,4 +317,4 @@ def evaluate(
     if not aggregate_ok:
         summary += "; aggregate failed"
     outcome: Literal["pass", "fail"] = "pass" if failed == 0 and aggregate_ok else "fail"
-    return RuleOutcome(outcome, summary, subjects)
+    return RuleOutcome(outcome, summary, subjects, total)

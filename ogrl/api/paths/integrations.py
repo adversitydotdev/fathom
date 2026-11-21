@@ -6,7 +6,12 @@ from ogrl.access import Permission as P
 from ogrl.api.paths.endpoint import Endpoint
 from ogrl.kernel.models import Test
 from ogrl.operations.connections import Connection, InstallRecord, Snapshot
-from ogrl.operations.integrations import IntegrationView, OAuthStart, TemplateUpdate
+from ogrl.operations.integrations import (
+    IntegrationView,
+    OAuthStart,
+    RulePreview,
+    TemplateUpdate,
+)
 from ogrl.operations.records import Job
 from ogrl.operations.views import DataList
 
@@ -194,6 +199,15 @@ OAUTH_CALLBACK = Endpoint(
     tag="Connections",
     authenticated=False,
 )
+PREVIEW_RULE = Endpoint(
+    id="previewRule",
+    summary="Try a rule against the latest snapshots without saving or recording anything.",
+    method=POST,
+    path="/rules/preview",
+    tag="Tests",
+    permission=P.TESTS_WRITE,
+    response=RulePreview,
+)
 LIST_SNAPSHOTS = Endpoint(
     id="listSnapshots",
     summary="List collected snapshots, newest first.",
@@ -241,6 +255,7 @@ ALL = (
     COLLECT,
     OAUTH_START,
     OAUTH_CALLBACK,
+    PREVIEW_RULE,
     LIST_SNAPSHOTS,
     GET_SNAPSHOT,
     GET_SNAPSHOT_CONTENT,

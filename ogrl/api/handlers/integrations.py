@@ -17,6 +17,7 @@ from ogrl.operations.integrations import (
     ConnectionPatch,
     ConnectionWrite,
     InstallRequest,
+    RulePreviewRequest,
     SecretWrite,
     TemplateEnable,
 )
@@ -137,6 +138,10 @@ def register(registrar: Registrar, c: Container) -> None:
             )
         )
 
+    async def preview_rule(body: RulePreviewRequest, principal: CurrentPrincipal):
+        return await s.preview_rule(principal, body)
+
+    registrar.handle(i.PREVIEW_RULE, preview_rule)
     registrar.handle(i.OAUTH_START, oauth_start)
     registrar.handle(i.OAUTH_CALLBACK, oauth_callback)
 

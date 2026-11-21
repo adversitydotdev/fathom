@@ -3449,6 +3449,44 @@ paths:
               schema:
                 type: string
 
+  /rules/preview:
+    post:
+      tags: [Tests]
+      operationId: previewRule
+      summary: Try a rule against the latest snapshots without saving or recording anything.
+      description: |
+        Evaluates a `rule` run block (RFC 0001 section 7.6) over the latest
+        complete snapshot of its source from each connection: every connection
+        of the integration, or only those bound to `implementation_id`. Nothing
+        is collected, no freshness window applies, and no result or evidence
+        is written. `control_ref` (or the implementation's control) supplies
+        `params`; `params` in the body overrides them. Compile errors come back
+        as `outcome: invalid`; fields the resource schema lacks come back as
+        `warnings`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePreviewRequest"
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulePreview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The caller cannot author tests.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /snapshots:
     get:
       tags: [Snapshots]
@@ -3893,7 +3931,7 @@ components:
           type: array
           items:
             type: object
-            required: [name, version, source]
+            required: [name, version, source, fields]
             properties:
               name:
                 type: string
@@ -3901,6 +3939,11 @@ components:
                 type: integer
               source:
                 type: string
+              fields:
+                type: array
+                description: The item fields a rule can read as `item.<name>`, from the resource's schema.
+                items:
+                  $ref: "#/components/schemas/ResourceField"
         checks:
           type: array
           items:
@@ -3994,6 +4037,112 @@ components:
           type: string
           format: date-time
           description: The test's `modified`, for If-Match when applying.
+    ResourceField:
+      type: object
+      required: [name, type, nullable, required]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          examples: [string, boolean, integer, array of string]
+        nullable:
+          type: boolean
+        required:
+          type: boolean
+        description:
+          type: string
+    RulePreviewRequest:
+      type: object
+      required: [run]
+      additionalProperties: false
+      properties:
+        run:
+          type: object
+          description: The rule fields of a run block (`source`, `select`, `assert`, `aggregate`, `subject`, `allow_empty`). `runner` is implied.
+          additionalProperties: true
+        control_ref:
+          type: string
+        implementation_id:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 50
+          description: At most this many failing subjects are returned.
+    PreviewProblem:
+      type: object
+      required: [pointer, detail]
+      properties:
+        pointer:
+          type: string
+        detail:
+          type: string
+    RulePreview:
+      type: object
+      required: [outcome, summary, selected, total, subjects, errors, warnings, snapshots, params, sample]
+      properties:
+        outcome:
+          type: string
+          enum: [pass, fail, error, invalid, no-data]
+        summary:
+          type: string
+        selected:
+          type: integer
+        total:
+          type: integer
+        subjects:
+          type: array
+          items:
+            type: object
+            required: [kind, name]
+            properties:
+              kind:
+                type: string
+              name:
+                type: string
+              external_id:
+                type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        snapshots:
+          type: array
+          items:
+            type: object
+            required: [id, connection_id, connection_name, collected, item_count]
+            properties:
+              id:
+                type: string
+              connection_id:
+                type: string
+              connection_name:
+                type: string
+              collected:
+                type: string
+                format: date-time
+              item_count:
+                type: integer
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        sample:
+          type: array
+          description: Up to three items of the snapshot, to see real values while writing.
+          items:
+            type: object
+            additionalProperties: true
     TemplateEnable:
       type: object
       additionalProperties: false

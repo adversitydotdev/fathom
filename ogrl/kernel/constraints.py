@@ -263,17 +263,8 @@ def _run_fields(c: _Checker, run: Run) -> None:
     if run.runner == "shell" and not run.command:
         c.fail("/run/command", "runner shell requires command")
     if run.runner == "rule":
-        if not run.source:
-            c.fail("/run/source", "runner rule requires source")
-        else:
-            try:
-                rules.parse_reference(run.source)
-            except ValueError as exc:
-                c.fail("/run/source", str(exc))
-        if run.assert_ is None and run.aggregate is None:
-            c.fail("/run/assert", "runner rule requires assert, aggregate, or both")
-        for name, message in rules.expression_errors(run):
-            c.fail(f"/run/{name}", message)
+        for pointer, message in rules.rule_errors(run):
+            c.fail(pointer, message)
     if run.runner == "integration":
         check: rules.Reference | None = None
         if not run.check:
