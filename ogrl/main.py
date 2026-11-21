@@ -50,6 +50,7 @@ from ogrl.adapters.library import GitLibrary
 from ogrl.adapters.queue import JobQueue, SqsJobQueue
 from ogrl.adapters.s3 import S3Blobs
 from ogrl.adapters.secrets import EnvSecrets, SsmSecrets
+from ogrl.agent.config import AgentConfig
 from ogrl.api.app import create_app
 from ogrl.auth import (
     ApiTokenAuthenticator,
@@ -243,6 +244,7 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         export=ExportSettings(remote=env.get("OGRL_EXPORT_REMOTE") or None),
         harness_user=env.get("OGRL_HARNESS_USER") or None,
         allowed_origins=allowed_origins,
+        agent_config=AgentConfig.from_env(env),
     )
 
 

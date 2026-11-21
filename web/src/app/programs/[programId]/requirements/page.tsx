@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { Legend, SegmentBar, requirementSegments } from "@/components/status";
 import { PageTitle } from "@/components/typography";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -90,9 +91,16 @@ export default async function RequirementsPage({
         eyebrow={program.name}
         title="Requirements"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            {rows.length} in scope · at <span className="text-foreground">{isoDate(status.at)}</span>
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              {rows.length} in scope · at <span className="text-foreground">{isoDate(status.at)}</span>
+            </p>
+            <AskAgentButton
+              label="Propose crosswalk"
+              size="sm"
+              prompt={`Inspect unmapped requirements for program ${program.name} and propose draft crosswalk mappings to our controls for human review.`}
+            />
+          </div>
         }
       />
 

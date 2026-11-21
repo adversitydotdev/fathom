@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: E501
 """Idempotent local development seeder for the OGRL Docker Compose stack.
 
 Pulls `ogrl-library` v0.2.0 and populates a starter organization ("Acme Platform")
@@ -66,7 +67,9 @@ def upload_markdown(path: str, markdown: str, *, if_match: str) -> dict:
         raise RuntimeError(f"POST {path} -> HTTP {exc.code}: {detail}") from exc
 
 
-def create_adopted_doc(collection: str, payload: dict, body_md: str, adopted_date: str | None = None) -> str:
+def create_adopted_doc(
+    collection: str, payload: dict, body_md: str, adopted_date: str | None = None
+) -> str:
     draft = req("POST", f"/v1/{collection}", {**payload, "status": "draft"})
     uploaded = upload_markdown(
         f"/v1/{collection}/{draft['id']}/content",
@@ -134,7 +137,9 @@ def main() -> int:
     platform = req("POST", "/v1/parties", {"name": "Platform engineering", "kind": "team"})["id"]
     secops = req("POST", "/v1/parties", {"name": "Security operations", "kind": "team"})["id"]
     okta_org = req("POST", "/v1/parties", {"name": "Okta, Inc.", "kind": "organization"})["id"]
-    aws_org = req("POST", "/v1/parties", {"name": "Amazon Web Services", "kind": "organization"})["id"]
+    aws_org = req("POST", "/v1/parties", {"name": "Amazon Web Services", "kind": "organization"})[
+        "id"
+    ]
     req("POST", "/v1/parties", {"name": "Compliance agent", "kind": "role", "tags": ["agent"]})
 
     # Components & System
@@ -166,7 +171,11 @@ def main() -> int:
                 }
             ],
             "parties": [
-                {"party_ref": aws_org, "role": "subservice", "function": "Hosting and physical security"},
+                {
+                    "party_ref": aws_org,
+                    "role": "subservice",
+                    "function": "Hosting and physical security",
+                },
                 {"party_ref": okta_org, "role": "subservice", "function": "Workforce identity"},
                 {"party_ref": platform, "role": "operator"},
             ],
@@ -287,9 +296,7 @@ def main() -> int:
         ),
     ]
 
-    tests_by_id = {
-        t["id"]: t for t in req("GET", "/v1/tests?limit=200").get("data", [])
-    }
+    tests_by_id = {t["id"]: t for t in req("GET", "/v1/tests?limit=200").get("data", [])}
 
     impl_ids: dict[str, str] = {}
     for ctrl_id, status, resp, owner, narrative, params, outcome, test_id in impl_specs:

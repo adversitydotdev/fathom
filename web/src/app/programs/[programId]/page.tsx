@@ -17,6 +17,7 @@ import {
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { RecentActivity } from "@/components/spectrumui/recent-activity";
 import { Eyebrow, PageTitle } from "@/components/typography";
 import {
@@ -138,7 +139,13 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         <Card>
           <CardHeader>
             <CardTitle>Gaps</CardTitle>
-            <CardAction>
+            <CardAction className="flex items-center gap-3">
+              {programGaps.length > 0 && (
+                <AskAgentButton
+                  label="Analyze gaps"
+                  prompt={`Analyze the open control gaps for program ${program.name} (${program.id}) and suggest prioritized remediation steps or offer to draft planned implementations.`}
+                />
+              )}
               <Link href={`${base}/controls?state=gap${atParam ? `&at=${atParam}` : ""}`} className="text-xs text-muted-foreground hover:text-foreground">
                 View all
               </Link>

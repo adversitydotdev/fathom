@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CircleCheck, CircleDashed, CircleMinus } from "lucide-react";
 
+import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
 import { AgentMark } from "@/components/status";
 import { Eyebrow, PageTitle } from "@/components/typography";
@@ -57,6 +58,11 @@ export default async function PoliciesPage({
             <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
               {policies.length} policies · {procedures.length} procedures
             </p>
+            <AskAgentButton
+              label="Draft with AI"
+              size="sm"
+              prompt={`Inspect our controls and existing policies for program ${program.name} and draft a missing security policy in Markdown (status: draft) for human review.`}
+            />
             <PolicyCrudDialog parties={partyOptions} controls={controlOptions} />
             <ProcedureCrudDialog policies={policyOptions} parties={partyOptions} controls={controlOptions} />
           </div>

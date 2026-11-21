@@ -22,6 +22,11 @@ x-api-env: &api-env
   AWS_DEFAULT_REGION: us-east-1
   OGRL_API_TOKENS: '{"ogrl_pat_local_dev_admin":{"actor_id":"party--local-admin","roles":["administrator"],"kind":"person"}}'
   OGRL_ALLOWED_ORIGINS: http://localhost:3000
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  OGRL_AI_MODEL: ${OGRL_AI_MODEL:-}
+  OGRL_AI_BASE_URL: ${OGRL_AI_BASE_URL:-}
+  OGRL_AI_API_KEY: ${OGRL_AI_API_KEY:-}
 
 services:
   postgres:

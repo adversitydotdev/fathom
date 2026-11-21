@@ -28,4 +28,5 @@ A behavior-level inventory of the web UI. Agents use it to decide what to drive 
 - [controls-list](controls-list.md): controls table with state chips, family filter, search, sort, row navigation.
 - [control-detail](control-detail.md): statement and parameters, implementation, agent drafts, tests and Run, evidence validity, exceptions, mappings.
 - [program-views](program-views.md): requirements, tests, evidence, risks (5×5 matrix + register), exceptions, findings, policies & procedures, systems & provider bundles, parties, library pin & pull, jobs & OSCAL/SSP/Git export triggers.
+- [ai-assistant](ai-assistant.md): Pydantic AI assistant (Anthropic & OpenAI-compatible), SSE streaming drawer, contextual 1-click triggers, RFC 0003 §4 write gates, and 1-click `Accept draft`.
 - [api](api.md): the Python API and the mock `/v1` surface, driven with curl and pytest.

@@ -2,7 +2,7 @@ from fastapi import APIRouter, FastAPI
 
 from ogrl import telemetry
 from ogrl.api import paths, problems
-from ogrl.api.handlers import auth, meta, objects, views
+from ogrl.api.handlers import agent, auth, meta, objects, views
 from ogrl.api.paths.meta import Health
 from ogrl.api.registrar import Registrar
 from ogrl.container import Container
@@ -34,6 +34,7 @@ def create_app(container: Container) -> FastAPI:
 
     meta.register(registrar, container.version)
     auth.register(registrar, container.auth)
+    agent.register(registrar, container)
     for collection in paths.collections.ALL_COLLECTIONS:
         objects.register_collection(registrar, container.objects, collection)
     views.register(registrar, container)

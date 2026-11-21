@@ -1,10 +1,11 @@
 "use client";
 
-import { CheckCircle2, Pencil, Plus } from "lucide-react";
+import { Check, CheckCircle2, Pencil, Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 
 import { CrudDialog, Field, FormActions, FormError, RevokeButton, Select, Textarea } from "@/components/crud";
+import { LoadingButton } from "@/components/spectrumui/loading-button-dependencies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -489,5 +490,34 @@ export function CustomControlActions({
         }}
       />
     </div>
+  );
+}
+
+export function AcceptDraftButton({ id, modified }: { id: string; modified: string }) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string>();
+
+  return (
+    <span className="inline-flex items-center gap-2">
+      {error && <span className="text-xs text-gap-ink">{error}</span>}
+      <LoadingButton
+        type="button"
+        variant="outline"
+        size="sm"
+        className="h-7 gap-1 border-agent/40 px-2.5 text-xs hover:bg-agent/15"
+        loading={pending}
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            setError(undefined);
+            const res = await updateImplementation(id, modified, { status: "implemented" });
+            if (res.error) setError(res.error);
+          })
+        }
+      >
+        {!pending && <Check className="size-3 text-met" aria-hidden />}
+        Accept draft
+      </LoadingButton>
+    </span>
   );
 }

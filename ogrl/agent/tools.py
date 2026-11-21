@@ -197,7 +197,7 @@ def register_tools(agent: Agent[AgentDeps, str]) -> None:
         review_interval: str = "annual",
         control_refs: list[str] | None = None,
     ) -> dict[str, Any]:
-        """Create a `draft` policy and store its Markdown body in object storage for human review."""
+        """Create a `draft` policy and store its Markdown body in S3 for human review."""
         payload: dict[str, Any] = {
             "name": name,
             "status": "draft",

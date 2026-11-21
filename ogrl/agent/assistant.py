@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic_ai import Agent
 from pydantic_ai.messages import (
@@ -23,16 +23,18 @@ from pydantic_ai.models import KnownModelName, Model
 from ogrl.agent.config import AgentConfig
 from ogrl.agent.deps import DEFAULT_AGENT_ID, AgentDeps, agent_principal, ensure_agent_party
 from ogrl.agent.tools import register_tools
-from ogrl.container import Container
+
+if TYPE_CHECKING:
+    from ogrl.container import Container
 
 SYSTEM_PROMPT = (
     "You are the OGRL security program assistant operating under RFC 0003 section 4. "
-    "Read computed program status, control details, gaps, risks, and policies using your tools—never "
-    "recompute control state on your own. When asked to draft work, write real OGRL draft objects "
-    "(`implementation` with `status: planned`, `policy` with `status: draft`, `risk` with `status: open`, "
-    "or `mapping` with `review_status: draft`) so humans can review and attest them directly in the UI. "
-    "Be concise, cite exact control display IDs and requirement IDs, and never claim a control is met "
-    "or implemented on a human's behalf."
+    "Read computed program status, control details, gaps, risks, and policies using your tools—"
+    "never recompute control state on your own. When asked to draft work, write real OGRL draft "
+    "objects (`implementation` with `status: planned`, `policy` with `status: draft`, `risk` "
+    "with `status: open`, or `mapping` with `review_status: draft`) so humans can review and "
+    "attest them directly in the UI. Be concise, cite exact control display IDs and requirement "
+    "IDs, and never claim a control is met or implemented on a human's behalf."
 )
 
 
@@ -97,18 +99,20 @@ async def stream_agent_turn(
                 if Agent.is_model_request_node(node):
                     async with node.stream(run.ctx) as request_stream:
                         async for event in request_stream:
-                            if isinstance(event, PartStartEvent) and isinstance(
-                                event.part, TextPart
+                            if (
+                                isinstance(event, PartStartEvent)
+                                and isinstance(event.part, TextPart)
+                                and event.part.content
                             ):
-                                if event.part.content:
-                                    accumulated += event.part.content
-                                    yield {"type": "delta", "text": event.part.content}
-                            elif isinstance(event, PartDeltaEvent) and isinstance(
-                                event.delta, TextPartDelta
+                                accumulated += event.part.content
+                                yield {"type": "delta", "text": event.part.content}
+                            elif (
+                                isinstance(event, PartDeltaEvent)
+                                and isinstance(event.delta, TextPartDelta)
+                                and event.delta.content_delta
                             ):
-                                if event.delta.content_delta:
-                                    accumulated += event.delta.content_delta
-                                    yield {"type": "delta", "text": event.delta.content_delta}
+                                accumulated += event.delta.content_delta
+                                yield {"type": "delta", "text": event.delta.content_delta}
                 elif Agent.is_call_tools_node(node):
                     async with node.stream(run.ctx) as handle_stream:
                         async for event in handle_stream:
@@ -121,7 +125,7 @@ async def stream_agent_turn(
                             elif isinstance(event, FunctionToolResultEvent):
                                 yield {
                                     "type": "tool_result",
-                                    "name": event.result.tool_name,
+                                    "name": event.part.tool_name,
                                 }
                                 while emitted_drafts < len(deps.created_drafts):
                                     yield {"type": "draft", **deps.created_drafts[emitted_drafts]}

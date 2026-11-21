@@ -36,6 +36,7 @@ COPY --from=builder --chown=ogrl:ogrl /app/alembic.ini /app/alembic.ini
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
+    PYDANTIC_AI_NO_BANNER=1 \
     OGRL_BIND="0.0.0.0:8080"
 
 USER ogrl

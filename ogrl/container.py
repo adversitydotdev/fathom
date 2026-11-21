@@ -15,6 +15,7 @@ from ogrl.adapters.git import GitCli
 from ogrl.adapters.library import DirectoryLibrary, GitLibrary
 from ogrl.adapters.queue import JobQueue
 from ogrl.adapters.secrets import EnvSecrets
+from ogrl.agent.config import AgentConfig
 from ogrl.auth import Authenticator
 from ogrl.auth.oidc import IdentityProvider
 from ogrl.auth.store import AuthStore, MemoryAuthStore
@@ -78,6 +79,7 @@ class Container:
     plugins: Plugins = field(default_factory=Plugins)
     queue: JobQueue | None = None
     allowed_origins: tuple[str, ...] = ()
+    agent_config: AgentConfig = field(default_factory=AgentConfig)
 
 
 def build(
@@ -101,6 +103,7 @@ def build(
     export: ExportSettings | None = None,
     harness_user: str | None = None,
     allowed_origins: tuple[str, ...] = (),
+    agent_config: AgentConfig | None = None,
     clock: Callable[[], datetime] = now,
     version: str = "0.1.0",
 ) -> Container:
@@ -157,4 +160,5 @@ def build(
         plugins=plugins,
         queue=queue,
         allowed_origins=allowed_origins,
+        agent_config=agent_config or AgentConfig(),
     )

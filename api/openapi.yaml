@@ -3023,6 +3023,80 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /agent/status:
+    get:
+      tags: [Agent]
+      operationId: getAgentStatus
+      summary: Report whether an AI model is configured and which model/provider is active.
+      responses:
+        "200":
+          description: Agent configuration status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled, actor_id]
+                properties:
+                  enabled:
+                    type: boolean
+                  model:
+                    type: string
+                    nullable: true
+                  provider:
+                    type: string
+                    nullable: true
+                  actor_id:
+                    type: string
+                  hint:
+                    type: string
+                    nullable: true
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /agent/stream:
+    post:
+      tags: [Agent]
+      operationId: streamAgent
+      summary: Run one AI assistant turn as an SSE stream under RFC 0003 §4 write gates.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: string
+                history:
+                  type: array
+                  items:
+                    type: object
+                    required: [role, content]
+                    properties:
+                      role:
+                        type: string
+                      content:
+                        type: string
+                context:
+                  type: object
+                  properties:
+                    program_id:
+                      type: string
+                    system_id:
+                      type: string
+                    control_id:
+                      type: string
+                    route:
+                      type: string
+      responses:
+        "200":
+          description: Server-Sent Events stream of delta, tool_call, tool_result, draft, and done events.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
 components:
   securitySchemes:

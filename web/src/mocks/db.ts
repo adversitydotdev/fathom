@@ -1,32 +1,41 @@
 import * as f from "./fixtures/program";
 import { requirements } from "./fixtures/requirements";
 
+function createDb() {
+  return {
+    now: f.FIXTURE_NOW,
+    parties: [...f.parties],
+    components: [...f.components],
+    systems: [...f.systems],
+    frameworks: [...f.frameworks],
+    requirements: [...requirements],
+    controls: [...f.controls],
+    mappings: [...f.mappings],
+    baselines: [...f.baselines],
+    programs: [...f.programs],
+    implementations: [...f.implementations],
+    tests: [...f.tests],
+    results: [...f.results],
+    evidence: [...f.evidenceItems],
+    exceptions: [...f.exceptions],
+    findings: [...f.findings],
+    risks: [...f.risks],
+    policies: [...f.policies],
+    procedures: [...f.procedures],
+    jobs: [...f.jobs],
+    libraryPin: { ...f.libraryPin },
+    providers: [...f.providers],
+    controlStates: f.controlStates,
+  };
+}
+
+type MockDb = ReturnType<typeof createDb>;
+
+const g = globalThis as typeof globalThis & { __ogrlMockDb?: MockDb };
+
 /**
- * In-memory store behind the mock handlers. Module state, so it lives as long
- * as the server process. Writes mutate it; restart the dev server to reset.
+ * In-memory store behind the mock handlers, pinned to `globalThis` so route
+ * handlers (`/api/agent/stream`, `/v1/*`) and Server Components share one
+ * instance across Next.js bundle chunks.
  */
-export const db = {
-  now: f.FIXTURE_NOW,
-  parties: [...f.parties],
-  components: [...f.components],
-  systems: [...f.systems],
-  frameworks: [...f.frameworks],
-  requirements: [...requirements],
-  controls: [...f.controls],
-  mappings: [...f.mappings],
-  baselines: [...f.baselines],
-  programs: [...f.programs],
-  implementations: [...f.implementations],
-  tests: [...f.tests],
-  results: [...f.results],
-  evidence: [...f.evidenceItems],
-  exceptions: [...f.exceptions],
-  findings: [...f.findings],
-  risks: [...f.risks],
-  policies: [...f.policies],
-  procedures: [...f.procedures],
-  jobs: [...f.jobs],
-  libraryPin: { ...f.libraryPin },
-  providers: [...f.providers],
-  controlStates: f.controlStates,
-};
+export const db: MockDb = (g.__ogrlMockDb ??= createDb());

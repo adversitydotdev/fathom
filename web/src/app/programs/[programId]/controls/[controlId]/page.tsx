@@ -15,6 +15,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { cn } from "cn";
 
+import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { InlineCode } from "@/components/spectrumui/inline-code";
 import { ControlStateBadge } from "@/components/status";
 import { PageTitle } from "@/components/typography";
@@ -40,6 +41,7 @@ import {
 import { daysBetween, isoDate } from "@/lib/format";
 
 import {
+  AcceptDraftButton,
   CustomControlActions,
   ImplementationCrudButton,
   QuickAddEvidenceButton,
@@ -159,20 +161,32 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
               parties={parties}
               title="Implementation"
               action={
-                <ImplementationCrudButton
-                  systemId={system.id}
-                  controlId={control.id}
-                  parameters={control.parameters}
-                  parties={partyOptions}
-                  existing={systemImpl}
-                />
+                <div className="flex items-center gap-1.5">
+                  {systemImpl.status === "planned" && (
+                    <AskAgentButton
+                      label="Draft with AI"
+                      prompt={`Inspect control ${control.display_id ?? control.id} (${control.name}) on system ${system.id} and refine its planned implementation narrative and parameter values for human review.`}
+                    />
+                  )}
+                  <ImplementationCrudButton
+                    systemId={system.id}
+                    controlId={control.id}
+                    parameters={control.parameters}
+                    parties={partyOptions}
+                    existing={systemImpl}
+                  />
+                </div>
               }
             />
           ) : (
             <Card>
               <CardHeader>
                 <CardTitle>Implementation</CardTitle>
-                <CardAction>
+                <CardAction className="flex items-center gap-1.5">
+                  <AskAgentButton
+                    label="Draft with AI"
+                    prompt={`Inspect control ${control.display_id ?? control.id} (${control.name}) on system ${system.id} and draft a planned implementation narrative with suggested parameter values.`}
+                  />
                   <ImplementationCrudButton
                     systemId={system.id}
                     controlId={control.id}
@@ -182,7 +196,8 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
                 </CardAction>
               </CardHeader>
               <CardContent className="text-sm text-muted-foreground">
-                {system.name} has no implementation of this control yet. Add one to record narrative, owner, and parameters.
+                {system.name} has no implementation of this control yet. Add one manually or let AI draft a{" "}
+                <span className="font-mono text-xs">planned</span> narrative for your review.
               </CardContent>
             </Card>
           )}
@@ -377,12 +392,15 @@ function ImplementationCard({
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         {byAgent && (
-          <div className="flex items-start gap-2 rounded-xl border border-agent/25 bg-agent/8 px-3 py-2 text-xs">
-            <Sparkles className="mt-0.5 size-3.5 shrink-0 text-agent" aria-hidden />
-            <span>
-              Drafted by <span className="font-medium">{parties.get(impl.created_by_ref!)?.name}</span>. An agent can only write{" "}
-              <span className="font-mono">planned</span>; a person accepts the draft by editing it.
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-agent/25 bg-agent/8 px-3 py-2 text-xs">
+            <span className="flex items-start gap-2">
+              <Sparkles className="mt-0.5 size-3.5 shrink-0 text-agent" aria-hidden />
+              <span>
+                Drafted by <span className="font-medium">{parties.get(impl.created_by_ref!)?.name}</span>. An agent can only write{" "}
+                <span className="font-mono">planned</span>; a person accepts the draft by attesting or editing it.
+              </span>
             </span>
+            {impl.status === "planned" && <AcceptDraftButton id={impl.id} modified={impl.modified} />}
           </div>
         )}
         <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-y-1.5">

@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ogrl.access import ActorKind, Principal, Role
-from ogrl.container import Container
 from ogrl.operations import types as t
+
+if TYPE_CHECKING:
+    from ogrl.container import Container
 
 DEFAULT_AGENT_ID = "party--ogrl-agent"
 ORGANIZATION = "organization"

@@ -6,13 +6,22 @@ an implementation `implemented`, accepting a mapping review, recording findings 
 exceptions, defining a `test.run` block, or revoking any object.
 """
 
-from ogrl.agent.assistant import SYSTEM_PROMPT, build_agent, draft_gap_remediation
-from ogrl.agent.deps import AgentDeps, agent_principal
+from ogrl.agent.assistant import (
+    SYSTEM_PROMPT,
+    build_agent,
+    draft_gap_remediation,
+    stream_agent_turn,
+)
+from ogrl.agent.config import AgentConfig
+from ogrl.agent.deps import AgentDeps, agent_principal, ensure_agent_party
 
 __all__ = [
     "SYSTEM_PROMPT",
+    "AgentConfig",
     "AgentDeps",
     "agent_principal",
     "build_agent",
     "draft_gap_remediation",
+    "ensure_agent_party",
+    "stream_agent_turn",
 ]

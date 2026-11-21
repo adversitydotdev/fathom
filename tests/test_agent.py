@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
+from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCallPart
-from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.models.function import AgentInfo, DeltaToolCall, FunctionModel
 
 from ogrl import container
 from ogrl.access import ActorKind, Principal, Role
-from ogrl.agent import agent_principal, draft_gap_remediation
+from ogrl.agent import AgentConfig, agent_principal, draft_gap_remediation
+from ogrl.api.app import create_app
 from ogrl.errors import Forbidden
 from ogrl.kernel.models import parse
 from ogrl.operations import types as t
@@ -164,3 +167,104 @@ def test_agent_write_gates_block_privileged_actions():
             await c.objects.revoke(bot, t.IMPLEMENTATION, draft.id, draft.modified)
 
     asyncio.run(verify_blocks())
+
+
+def test_agent_config_env_detection():
+    empty = AgentConfig.from_env({})
+    assert not empty.enabled
+    assert empty.hint
+
+    anth = AgentConfig.from_env({"ANTHROPIC_API_KEY": "sk-ant-test"})
+    assert anth.enabled
+    assert anth.provider == "anthropic"
+    assert anth.model_name == "anthropic:claude-sonnet-4-5"
+
+    oai = AgentConfig.from_env({"OPENAI_API_KEY": "sk-test"})
+    assert oai.enabled
+    assert oai.provider == "openai"
+    assert oai.model_name == "openai:gpt-4o"
+
+    local = AgentConfig.from_env(
+        {"OGRL_AI_BASE_URL": "http://localhost:11434/v1", "OGRL_AI_MODEL": "openai:llama3.2"}
+    )
+    assert local.enabled
+    assert local.provider == "openai"
+
+
+def test_agent_http_status_and_sse_stream():
+    async def scripted_stream(messages: list[ModelMessage], info: AgentInfo):
+        del info
+        if len(messages) == 1:
+            yield {
+                0: DeltaToolCall(
+                    name="draft_implementation",
+                    json_args=json.dumps(
+                        {
+                            "system_ref": "system--com.acme.prod",
+                            "control_ref": C1,
+                            "narrative": "Streamed draft narrative for C1.",
+                        }
+                    ),
+                )
+            }
+        else:
+            yield "Created a planned "
+            yield "draft for review."
+
+    class _AdminAuth:
+        async def authenticate(self, credentials):
+            del credentials
+            return Principal(
+                "party--com.acme.admin",
+                "organization",
+                ActorKind.PERSON,
+                frozenset({Role.ADMINISTRATOR}),
+            )
+
+    lib = [parse(o) for o in library_objects()]
+    stamp = "2026-11-20T00:00:00Z"
+    org = [
+        parse(
+            {
+                "type": "system",
+                "id": "system--com.acme.prod",
+                "created": stamp,
+                "modified": stamp,
+                "name": "Prod",
+            }
+        ),
+    ]
+    c = container.build(
+        authenticator=_AdminAuth(),
+        store=MemoryStore(library=lib, organization=org),
+        agent_config=AgentConfig(model_override=FunctionModel(stream_function=scripted_stream)),
+    )
+    client = TestClient(create_app(c))
+    headers = {"Authorization": "Bearer any"}
+
+    status_res = client.get("/v1/agent/status", headers=headers)
+    assert status_res.status_code == 200
+    assert status_res.json()["enabled"] is True
+
+    stream_res = client.post(
+        "/v1/agent/stream",
+        headers=headers,
+        json={
+            "message": "Draft implementation for C1",
+            "context": {"system_id": "system--com.acme.prod"},
+        },
+    )
+    assert stream_res.status_code == 200
+    events = [
+        json.loads(line.removeprefix("data: "))
+        for line in stream_res.text.splitlines()
+        if line.startswith("data: ")
+    ]
+    types = [e["type"] for e in events]
+    assert "tool_call" in types
+    assert "draft" in types
+    assert "done" in types
+    done = next(e for e in events if e["type"] == "done")
+    assert "planned draft" in done["text"]
+    assert len(done["drafts"]) == 1
+    assert done["drafts"][0]["object_type"] == "implementation"
