@@ -85,6 +85,18 @@ def test_params_and_observed_drive_age_checks():
     assert [s.external_id for s in out.subjects] == ["k2"]
 
 
+def test_days_reads_prose_parameters():
+    block = run(**{"assert": "observed - timestamp(item.rotated) <= days(params.rotation_period)"})
+    items = [
+        {"id": "a", "rotated": "2026-10-01T00:00:00Z"},
+        {"id": "b", "rotated": "2026-01-01T00:00:00Z"},
+    ]
+    out = rules.evaluate(block, items, {"rotation_period": "90 days"}, OBSERVED)
+    assert [s.external_id for s in out.subjects] == ["b"]
+    bad = rules.evaluate(block, items, {"rotation_period": "quarterly"}, OBSERVED)
+    assert bad.outcome == "error" and "days()" in bad.summary
+
+
 def test_custom_subject():
     block = run(
         subject='{"kind": "account", "name": item.login, "external_id": item.id}',

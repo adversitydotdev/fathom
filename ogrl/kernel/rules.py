@@ -13,7 +13,7 @@ crate). RFC 0005 section 8 moves it into `ogrl-rs` once the CLI grows
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import cel
@@ -70,6 +70,17 @@ def _duplicates(values: list[Any]) -> list[Any]:
     return out
 
 
+_DAYS = re.compile(r"^\s*(\d+)\s*(?:days?)?\s*$", re.IGNORECASE)
+
+
+def _days(value: str) -> timedelta:
+    """`days("90 days")`: control parameters are prose, so rules can compare against them."""
+    match = _DAYS.match(value or "")
+    if match is None:
+        raise ValueError(f"days() expects a value such as '90 days', got {value!r}")
+    return timedelta(days=int(match[1]))
+
+
 def _lower_ascii(value: str) -> str:
     return "".join(chr(ord(c) + 32) if "A" <= c <= "Z" else c for c in value)
 
@@ -78,6 +89,7 @@ FUNCTIONS: dict[str, Callable[..., Any]] = {
     "distinct": _distinct,
     "duplicates": _duplicates,
     "lowerAscii": _lower_ascii,
+    "days": _days,
 }
 
 ITEM_VARIABLES = frozenset({"item", "snapshot", "params", "observed"})
