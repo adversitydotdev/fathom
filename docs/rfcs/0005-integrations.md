@@ -47,7 +47,7 @@ bin/linux-arm64/okta          # runtime: binary (one per platform)
 bin/linux-amd64/okta
 ```
 
-**Runtimes.** `python` packages carry pure-Python wheels (`py3-none-any`) and an entry point. The application installs them with `uv`, offline from the bundled wheels, into a virtual environment private to that integration version, using the interpreter already in the OGRL image. `binary` packages carry one static executable per platform; the production image is `linux/arm64` ([RFC 0003 section 9](0003-application.md#9-production-topology)) and local development commonly needs `darwin/arm64`. Any language that can emit a static binary can target `binary`, which is how the TypeScript SDK ([Section 10](#10-sdk-and-tooling)) ships.
+**Runtimes.** `python` packages carry pure-Python wheels (`py3-none-any`) under `wheels/` and an entry point (`module:callable`, such as `okta_integration:app.run`). The host runs the entry point with the interpreter already in the OGRL image and puts the package root and each wheel on `PYTHONPATH`; pure-Python wheels import straight from the zip, so nothing is installed. The SDK has no dependencies for this reason. Packages that need compiled dependencies use the `binary` runtime. `binary` packages carry one static executable per platform; the production image is `linux/arm64` ([RFC 0003 section 9](0003-application.md#9-production-topology)) and local development commonly needs `darwin/arm64`. Any language that can emit a static binary can target `binary`, which is how the TypeScript SDK ([Section 10](#10-sdk-and-tooling)) ships.
 
 **Manifest.**
 
@@ -60,7 +60,7 @@ publisher: adversity.dev
 description: Workforce users, groups, and MFA factors from Okta.
 runtime:
   kind: python
-  entrypoint: ogrl_okta:main
+  entrypoint: okta_integration:app.run
 egress:                          # recorded now, enforced later (Section 9)
   - "*.okta.com"
 config:
@@ -115,7 +115,7 @@ An integration may emit more than one major version of a resource during a trans
 
 ## 4. Installing and trust
 
-**Where packages live.** Fargate tasks have no persistent disk, so installing cannot mean unpacking into the container. An install records a row (`integration id`, `version`, archive digest, signature bundle, trust tier, installer, time, enabled) and copies the archive into the deployment's object storage under `integrations/<id>/<version>/<digest>.tar.gz`. Each process fetches an archive the first time it needs it, verifies the digest, and unpacks it into a local cache keyed by digest. A replaced task re-fetches on demand. Installs and upgrades run as jobs (`integration_install`).
+**Where packages live.** Fargate tasks have no persistent disk, so installing cannot mean unpacking into the container. An install records a row (`integration id`, `version`, archive digest, trust tier, installer, time, source, enabled) in `integration_installs` and copies the archive into the deployment's object storage under `integrations/<id>/<version>/<digest>.tar.gz`. Each process fetches an archive the first time it needs it, verifies the digest, and unpacks it into a local cache keyed by digest. A replaced task re-fetches on demand, and every process reads which version is enabled from the database before it uses a package, so the API and the job service agree. Installs run as jobs (`integration_install`). A version is immutable: installing the same version with different bytes is refused. Unpacking refuses absolute paths, `..`, links, and devices, and caps entries and size. Packages loaded from `OGRL_INTEGRATIONS_DIR` keep working beside installed ones; an archive cannot take over the id of a directory package.
 
 **One enabled version.** At most one version of an integration is enabled at a time. Every connection and check uses it. An upgrade that removes a resource major or a check major that an enabled test reads is refused until the tests are migrated ([Section 8](#8-checks-and-templates)).
 
@@ -125,7 +125,9 @@ An integration may emit more than one major version of a resource during a trans
 |---|---|---|
 | First-party | Sigstore signature from the `adversitydotdev` release workflow identity. | Any operator allowed to manage integrations. |
 | Verified | Sigstore signature from a publisher identity listed in the registry. | Same. |
-| Local | Unsigned, or signed by an identity the registry does not list. | Only when `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`; the UI marks every connection that uses it. |
+| Local | Unsigned, or signed by an identity the registry does not list. | Only when `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`; the UI marks every integration in this tier. |
+
+Until Sigstore verification ships with the registry (P2), every archive installs as `local`, so archive installs need `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A `digest` on the install request pins the exact bytes.
 
 **Registry.** `adversitydotdev/ogrl-integrations` is a Git repository of index files, one per integration, listing the publisher's signing identity and each version's archive URL and digest. The application reads a pinned revision of the index the same way it pins the library (RFC 0002 section 5). Operators can also install from an archive URL or upload; the tier rules still apply.
 
@@ -236,23 +238,25 @@ The test is then owned by the organization and can be edited like any other. Whe
 
 The protocol is the contract; the SDK is how most integrations get written. First-party integrations are built on it.
 
-**Python SDK (`ogrl-integration`).**
+**Python SDK (`ogrl-integration`, repository `adversitydotdev/ogrl-integration-sdk`).** Standard library only (see [Section 3](#3-integration-packages)). `Integration(id, version)` must equal the manifest; the conformance suite checks it.
 
 ```python
 from ogrl_integration import Integration, Subject, fail, pass_
 
-app = Integration.from_manifest("manifest.yaml")
+app = Integration("dev.adversity.okta", "1.4.0")
 
 
 @app.validate
 def validate(ctx):
-    me = ctx.http.get(f"https://{ctx.config['domain']}/api/v1/users/me").json()
+    auth = {"Authorization": f"SSWS {ctx.secret('OKTA_API_TOKEN')}"}
+    me = ctx.http.get(f"https://{ctx.config['domain']}/api/v1/users/me", headers=auth).json()
     return ctx.identity(f"{ctx.config['domain']} as {me['profile']['login']}")
 
 
 @app.resource("users", version=1)
 def users(ctx):
-    for user in ctx.http.paginate(f"https://{ctx.config['domain']}/api/v1/users", link_header=True):
+    auth = {"Authorization": f"SSWS {ctx.secret('OKTA_API_TOKEN')}"}
+    for user in ctx.http.paginate(f"https://{ctx.config['domain']}/api/v1/users", headers=auth):
         yield {"id": user["id"], "name": user["profile"]["login"], "status": user["status"]}
 
 
@@ -268,11 +272,11 @@ def admin_mfa(ctx, users, groups):
     return pass_(f"{len(admins)} admins use phishing-resistant MFA")
 ```
 
-It provides the stdio framing and lifecycle, manifest and schema validation at startup, an HTTP client that retries with backoff and honors `Retry-After`, pagination helpers (link header, cursor, offset), JSON Lines writing for `collect`, and typed errors that map to the protocol's error kinds.
+It provides the stdio framing and lifecycle, an HTTP client on `urllib` that retries with backoff and honors `Retry-After` and maps 401, 403, and 429 to the protocol's error kinds, pagination by `Link` header, body URL, or cursor, JSON Lines writing for `collect` (with `Incomplete`, or a rate limit after some items, marking the snapshot incomplete), and typed errors for the rest. Checks receive one keyword argument per resource they read, and no credentials or HTTP client.
 
 **Testing.** Repository rules forbid tests that call real vendors. The SDK test kit records vendor HTTP traffic once into scrubbed cassettes and replays them, and runs any operation through an in-memory harness, so an integration's tests run offline. A language-agnostic **conformance suite** drives any package through the protocol and checks lifecycle, error mapping, schema adherence, and the no-credentials-in-`check` rule; registry listing requires passing it.
 
-**CLI.** `ogrl-integration new` scaffolds a package, `run` executes one operation against a real account from the developer's machine, `test` runs the test kit and conformance suite, and `pack` builds and signs the archive.
+**CLI.** `ogrl-integration new` scaffolds a package with a replayable cassette and passing tests, `run` executes one operation from the developer's machine (optionally recording or replaying a cassette), `test` runs the conformance suite, and `pack` builds a deterministic archive that bundles the SDK wheel. Signing arrives with the registry.
 
 **TypeScript SDK.** The same surface, compiled to a `binary` runtime package. It follows the Python SDK once the protocol has shipped with real integrations.
 
@@ -285,8 +289,9 @@ It provides the stdio framing and lifecycle, manifest and schema validation at s
 | Route | Purpose |
 |---|---|
 | `GET /integrations`, `GET /integrations/{id}` | Installed integrations, enabled version, tier, resources, checks, templates. |
-| `POST /integrations` | Install from the registry, a URL, or an upload (job). |
-| `POST /integrations/{id}/versions` | Install and enable another version (job); refuses removals tests depend on. |
+| `POST /integrations`, `POST /integrations/archives` | Install from a URL or an upload (job); enables it unless `enable: false`. |
+| `GET /integrations/{id}/versions`, `POST /integrations/{id}/versions/{version}/enable` | Installed versions; enable one to upgrade or roll back. Refuses a version that drops a source or check major an enabled test reads. |
+| `GET /integrations/{id}/template-updates`, `POST /integrations/{id}/template-updates/{test_id}/apply` | Tests whose template changed in the enabled version, and accepting one (`If-Match`). |
 | `POST /integrations/{id}/templates/{name}/enable` | Create a test from a template. |
 | `GET /connections`, `POST /connections`, `GET /connections/{id}`, `PATCH /connections/{id}` | Connection CRUD (`If-Match` as elsewhere). |
 | `PUT /connections/{id}/secrets/{name}` | Write-only secret value. |
@@ -303,7 +308,7 @@ The Section 5 row on vendor-specific routes still holds: there are no `/integrat
 
 | Phase | Scope |
 |---|---|
-| P0 | RFC 0001 `rule` and `integration` runners; CEL in `ogrl-rs`; protocol version 1; installs (local tier and digest pinning); connections with `fields`, `oauth2`, and `aws_role`; collection and snapshots; templates; the API above; Integrations and Connections views; an SDK alpha and a fake integration with a local vendor emulator for the e2e suite. |
+| P0 | RFC 0001 `rule` and `integration` runners; CEL (through `common-expression-language` until `ogrl-rs` carries it); protocol version 1; archive installs (local tier and digest pinning), upgrades, rollbacks, and template updates; connections with `fields`, `oauth2`, and `aws_role`; collection and snapshots; templates; the API above; Integrations and Connections views; an SDK alpha and a fake integration with a local vendor emulator for the e2e suite. |
 | P1 | Python SDK and test kit release; conformance suite; first-party GitHub, AWS, and Okta integrations whose templates fulfill the library's automated tests. |
 | P2 | Registry, Sigstore verification, and first-party and verified tiers; install and upgrade UI with template diffs; Google Workspace and Entra ID; TypeScript SDK. |
 | P3 | Egress enforcement, event-driven collection, normalized sources. |

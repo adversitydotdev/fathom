@@ -12,6 +12,7 @@ from ogrl.plugins.ports import Importer, Renderer, Runner
 
 if TYPE_CHECKING:
     from ogrl.integrations.manifest import Package
+    from ogrl.operations.catalog import PackageCatalog
 
 
 class Registry[T]:
@@ -36,4 +37,7 @@ class Plugins:
     importers: Registry[Importer] = field(default_factory=lambda: Registry("importer"))
     renderers: Registry[Renderer] = field(default_factory=lambda: Registry("renderer"))
     runners: Registry[Runner] = field(default_factory=lambda: Registry("runner"))
-    integrations: "Registry[Package]" = field(default_factory=lambda: Registry("integration"))
+    # A PackageCatalog in the application; any Registry-shaped holder works in tests.
+    integrations: "Registry[Package] | PackageCatalog" = field(
+        default_factory=lambda: Registry("integration")
+    )

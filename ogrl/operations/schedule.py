@@ -95,6 +95,7 @@ class IntegrationScheduler:
 
     async def tick(self, principal: Principal) -> list[Job]:
         at = utc(self._clock())
+        await self._integrations.ready()
         graph = await self._store.graph()
         jobs = []
         for item in await self.due(graph, at):

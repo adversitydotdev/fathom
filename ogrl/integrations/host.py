@@ -161,7 +161,9 @@ class SubprocessHost:
         if runtime.kind == "python":
             module, _, function = runtime.entrypoint.partition(":")
             code = f"import {module} as m; m.{function or 'main'}()"
-            return [self._python, "-c", code], {"PYTHONPATH": str(root)}
+            # Pure-Python wheels under wheels/ (the SDK, for one) import straight from the zip.
+            wheels = sorted(str(w) for w in (root / "wheels").glob("*.whl"))
+            return [self._python, "-c", code], {"PYTHONPATH": os.pathsep.join([str(root), *wheels])}
         binary = root / "bin" / platform_tag() / runtime.entrypoint
         if not binary.is_file():
             raise IntegrationError("protocol", f"no {runtime.entrypoint} for {platform_tag()}")

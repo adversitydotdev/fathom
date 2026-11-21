@@ -16,9 +16,11 @@ import json
 import logging
 import re
 import secrets
+import tempfile
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import urlencode, urlsplit
 
@@ -27,17 +29,28 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ogrl.access import Authorizer, Permission, Principal, require
 from ogrl.errors import Conflict, FieldError, Invalid, NotFound, PreconditionFailed
-from ogrl.integrations.manifest import AwsRoleAuth, FieldsAuth, OAuth2Auth, Package
+from ogrl.integrations.archive import unpack
+from ogrl.integrations.manifest import (
+    AwsRoleAuth,
+    FieldsAuth,
+    Manifest,
+    OAuth2Auth,
+    Package,
+    PackageError,
+    load_package,
+)
 from ogrl.kernel import ids, rules
 from ogrl.kernel.bundles import canonical_json, digest
 from ogrl.kernel.constraints import timeout_seconds
 from ogrl.kernel.graph import Graph
-from ogrl.kernel.models import Component, Implementation, System, Test
+from ogrl.kernel.models import Component, Implementation, Run, System, Test
 from ogrl.kernel.timeutil import FRESHNESS_DAYS, format_timestamp, later_than, now, utc
-from ogrl.operations.connections import Connection, ConnectionStore, Snapshot
+from ogrl.operations.catalog import PackageCatalog
+from ogrl.operations.connections import Connection, ConnectionStore, InstallRecord, Snapshot
 from ogrl.operations.jobs import JobOutcome, JobService
 from ogrl.operations.objects import ObjectService
 from ogrl.operations.records import Job
+from ogrl.operations.sources import Fetcher
 from ogrl.operations.store import BlobStore
 from ogrl.operations.types import SPECS
 from ogrl.plugins import Registry
@@ -116,6 +129,26 @@ class TemplateEnable(BaseModel):
 
     id: str | None = None
     system_refs: list[str] | None = None
+
+
+class InstallRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str
+    digest: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    enable: bool = True
+
+
+class TemplateUpdate(BaseModel):
+    """A test created from a template whose integration now ships a different version of it."""
+
+    test_id: str
+    test_name: str
+    template: str
+    from_version: str | None = None
+    to_version: str
+    changes: list[str]
+    modified: datetime
 
 
 class OAuthStart(BaseModel):
@@ -270,14 +303,18 @@ class IntegrationService:
         connections: ConnectionStore,
         vault: SecretVault,
         host: IntegrationHost,
-        packages: Registry[Package],
+        packages: "Registry[Package] | PackageCatalog",
         clock: Callable[[], datetime] = now,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         reuse: timedelta = SNAPSHOT_REUSE,
         oauth: OAuthClient | None = None,
         assumer: RoleAssumer | None = None,
         public_url: str | None = None,
+        fetcher: Fetcher | None = None,
+        allow_local: bool = False,
     ) -> None:
+        self._fetcher = fetcher
+        self._allow_local = allow_local
         self._reuse = reuse
         self._oauth = oauth
         self._assumer = assumer
@@ -302,18 +339,26 @@ class IntegrationService:
             raise NotFound(f"no integration {integration_id} is installed")
         return package
 
+    async def ready(self) -> None:
+        """Load whatever versions another process enabled since we last looked."""
+        if isinstance(self._packages, PackageCatalog):
+            await self._packages.sync()
+
     async def list_integrations(self, principal: Principal) -> list[IntegrationView]:
         require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        await self.ready()
         return [integration_view(self.package(i)) for i in self._packages.names()]
 
     async def get_integration(self, principal: Principal, integration_id: str) -> IntegrationView:
         require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        await self.ready()
         return integration_view(self.package(integration_id))
 
     async def enable_template(
         self, principal: Principal, integration_id: str, name: str, request: TemplateEnable
     ) -> Any:
         """Create an organization test from a template (RFC 0005 section 8)."""
+        await self.ready()
         package = self.package(integration_id)
         template = package.manifest.template(name)
         if template is None:
@@ -391,6 +436,7 @@ class IntegrationService:
 
     async def create_connection(self, principal: Principal, write: ConnectionWrite) -> Connection:
         require(self._authorizer, principal, Permission.INTEGRATIONS_MANAGE)
+        await self.ready()
         package = self._packages.get(write.integration_id)
         if package is None:
             raise Invalid(errors=[FieldError("no such integration", "/integration_id")])
@@ -660,6 +706,7 @@ class IntegrationService:
 
     async def validate(self, principal: Principal, connection_id: str) -> Job:
         require(self._authorizer, principal, Permission.COLLECTIONS_RUN)
+        await self.ready()
         connection = await self._connection(connection_id)
         package = self.package(connection.integration_id)
 
@@ -694,6 +741,7 @@ class IntegrationService:
         connection = await self._connection(connection_id)
         if connection.state == "disabled":
             raise Invalid(f"{connection_id} is disabled")
+        await self.ready()
         package = self.package(connection.integration_id)
         manifest = package.manifest
         if request.sources is None:
@@ -881,6 +929,7 @@ class IntegrationService:
         self, test: Test, impl: Implementation, parameters: Mapping[str, str], graph: Graph
     ) -> RunReport:
         assert test.run is not None
+        await self.ready()
         at = utc(self._clock())
         try:
             chosen = await self.select(test, impl, graph, at)
@@ -942,6 +991,239 @@ class IntegrationService:
             artifacts=artifacts,
             subjects=list(report.subjects),
         )
+
+    # --- archive installs and upgrades (RFC 0005 sections 4 and 8) --------------------------
+
+    def _catalog(self) -> PackageCatalog:
+        if not isinstance(self._packages, PackageCatalog):
+            raise Invalid("this deployment installs integrations from a directory only")
+        return self._packages
+
+    async def list_versions(self, principal: Principal, integration_id: str) -> list[InstallRecord]:
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        records = [r for r in await self._store.list_installs() if r.id == integration_id]
+        if not records and self._packages.get(integration_id) is None:
+            raise NotFound(f"no integration {integration_id} is installed")
+        return records
+
+    async def install(
+        self,
+        principal: Principal,
+        request: InstallRequest | None = None,
+        upload: bytes | None = None,
+        expected: str | None = None,
+        enable: bool = True,
+    ) -> Job:
+        """Install an archive from a URL or an upload, as a job."""
+        require(self._authorizer, principal, Permission.INTEGRATIONS_MANAGE)
+        catalog = self._catalog()
+        if request is not None:
+            expected, enable = request.digest, request.enable
+        if upload is None and (request is None or self._fetcher is None):
+            raise Invalid("send an archive URL or upload one")
+
+        async def work(job: Job) -> JobOutcome:
+            content = upload
+            if content is None:
+                assert request is not None and self._fetcher is not None
+                try:
+                    content = await self._fetcher.fetch(request.url)
+                except ValueError as exc:
+                    raise Invalid(str(exc), slug="fetch-failed") from exc
+            sha = digest(content)
+            if expected and sha != expected:
+                raise Invalid(
+                    f"the archive digest is {sha}, not {expected}", slug="digest-mismatch"
+                )
+            with tempfile.TemporaryDirectory(prefix="ogrl-install-") as scratch:
+                try:
+                    root = await asyncio.to_thread(unpack, content, Path(scratch))
+                    package = await asyncio.to_thread(load_package, root)
+                except PackageError as exc:
+                    raise Invalid(str(exc), slug="bad-package") from exc
+            manifest = package.manifest
+            if not self._allow_local:
+                raise Invalid(
+                    "unsigned packages install only with OGRL_ALLOW_LOCAL_INTEGRATIONS=true; "
+                    "signature verification arrives with the registry (RFC 0005 section 4)",
+                    slug="untrusted-integration",
+                )
+            if catalog.is_static(manifest.id):
+                raise Conflict(
+                    f"{manifest.id} is loaded from OGRL_INTEGRATIONS_DIR", slug="static-integration"
+                )
+            existing = next(
+                (
+                    r
+                    for r in await self._store.list_installs()
+                    if (r.id, r.version) == (manifest.id, manifest.version)
+                ),
+                None,
+            )
+            if existing is not None and existing.digest != sha:
+                raise Conflict(
+                    f"{manifest.id} {manifest.version} is installed with other bytes; "
+                    "a version is immutable, so publish a new one",
+                    slug="version-immutable",
+                )
+            if existing is None:
+                uri = await self._blobs.put(
+                    f"integrations/{manifest.id}/{manifest.version}/{sha}.tar.gz",
+                    content,
+                    "application/gzip",
+                )
+                await self._store.put_install(
+                    InstallRecord(
+                        id=manifest.id,
+                        version=manifest.version,
+                        digest=sha,
+                        uri=uri,
+                        tier="local",
+                        installed=utc(self._clock()),
+                        installed_by=principal.actor_id,
+                        source=request.url if request else "upload",
+                    )
+                )
+            if enable:
+                await self._enable(manifest)
+            return JobOutcome(
+                report={
+                    "id": manifest.id,
+                    "version": manifest.version,
+                    "digest": sha,
+                    "enabled": enable,
+                }
+            )
+
+        return await self._jobs.submit(
+            principal,
+            "integration_install",
+            {"url": request.url if request else "upload", "digest": expected, "enable": enable},
+            work,
+        )
+
+    async def enable_version(
+        self, principal: Principal, integration_id: str, version: str
+    ) -> IntegrationView:
+        """Enable an installed version: an upgrade, or a rollback."""
+        require(self._authorizer, principal, Permission.INTEGRATIONS_MANAGE)
+        catalog = self._catalog()
+        record = next(
+            (
+                r
+                for r in await self._store.list_installs()
+                if (r.id, r.version) == (integration_id, version)
+            ),
+            None,
+        )
+        if record is None:
+            raise NotFound(f"{integration_id} {version} is not installed")
+        try:
+            package = await catalog.load(record)
+        except PackageError as exc:
+            raise Invalid(str(exc), slug="bad-package") from exc
+        await self._enable(package.manifest)
+        return integration_view(self.package(integration_id))
+
+    async def _enable(self, manifest: Manifest) -> None:
+        broken = await self._dependents_missing(manifest)
+        if broken:
+            listing = "; ".join(f"{test} reads {ref}" for test, ref in broken)
+            raise Conflict(
+                f"{manifest.id} {manifest.version} drops what enabled tests read: {listing}",
+                slug="upgrade-breaks-tests",
+            )
+        await self._store.enable_install(manifest.id, manifest.version)
+        await self.ready()
+
+    async def _dependents_missing(self, manifest: Manifest) -> list[tuple[str, str]]:
+        """Tests that read a source or check this version no longer provides (RFC 0005 s4)."""
+        graph = await self._objects.store.graph()
+        broken = []
+        for test in graph.all(Test):
+            if test.run is None:
+                continue
+            refs = [*test.run.sources_read(), *([test.run.check] if test.run.check else [])]
+            for text in refs:
+                try:
+                    ref = rules.parse_reference(text)
+                except ValueError:
+                    continue
+                if ref.integration != manifest.id:
+                    continue
+                is_check = text == test.run.check
+                found = (
+                    manifest.check(ref.name, ref.major)
+                    if is_check
+                    else manifest.resource(ref.name, ref.major)
+                )
+                if found is None:
+                    broken.append((test.id, text))
+        return broken
+
+    @staticmethod
+    def _proposed(template_test: Mapping[str, Any], fulfills_ref: str | None) -> dict[str, Any]:
+        proposed = {**template_test, "fulfills_ref": fulfills_ref}
+        if isinstance(proposed.get("run"), dict):
+            proposed["run"] = Run.model_validate(proposed["run"]).model_dump(
+                by_alias=True, exclude_none=True
+            )
+        return proposed
+
+    async def template_updates(
+        self, principal: Principal, integration_id: str
+    ) -> list[TemplateUpdate]:
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        await self.ready()
+        package = self.package(integration_id)
+        graph = await self._objects.store.graph()
+        out = []
+        for test in graph.all(Test):
+            origin = (test.extensions or {}).get("dev.ogrl.integration") or {}
+            if test.is_revoked or origin.get("integration") != integration_id:
+                continue
+            template = package.manifest.template(str(origin.get("template")))
+            if template is None or origin.get("version") == package.manifest.version:
+                continue
+            body = test.body()
+            proposed = self._proposed(template.test, template.fulfills_ref)
+            changes = sorted(k for k, v in proposed.items() if body.get(k) != v)
+            out.append(
+                TemplateUpdate(
+                    test_id=test.id,
+                    test_name=test.name,
+                    template=template.name,
+                    from_version=origin.get("version"),
+                    to_version=package.manifest.version,
+                    changes=changes,
+                    modified=test.modified,
+                )
+            )
+        return out
+
+    async def apply_template_update(
+        self, principal: Principal, integration_id: str, test_id: str, if_match: datetime
+    ) -> Any:
+        """Accept a template update: the test takes the new template's fields and version."""
+        updates = {u.test_id: u for u in await self.template_updates(principal, integration_id)}
+        update = updates.get(test_id)
+        if update is None:
+            raise NotFound(f"{test_id} has no pending update from {integration_id}")
+        package = self.package(integration_id)
+        template = package.manifest.template(update.template)
+        assert template is not None
+        row = await self._objects.store.get(test_id)
+        assert row is not None
+        extensions = dict(row.obj.extensions or {})
+        extensions["dev.ogrl.integration"] = {
+            **extensions.get("dev.ogrl.integration", {}),
+            "version": package.manifest.version,
+        }
+        patch = {
+            **self._proposed(template.test, template.fulfills_ref),
+            "extensions": extensions,
+        }
+        return await self._objects.update(principal, SPECS["test"], test_id, patch, if_match)
 
 
 def rules_match(pattern: str, value: str) -> bool:

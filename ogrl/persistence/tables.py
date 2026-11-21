@@ -155,3 +155,13 @@ snapshots = Table(
     Column("body", JSONB, nullable=False),
     Index("snapshots_connection_source_collected", "connection_id", "source", "collected"),
 )
+
+integration_installs = Table(
+    "integration_installs",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("version", Text, primary_key=True),
+    Column("enabled", Boolean, nullable=False, server_default="false"),
+    Column("installed", DateTime(timezone=True), nullable=False),
+    Column("body", JSONB, nullable=False),
+)

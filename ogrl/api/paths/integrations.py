@@ -5,8 +5,8 @@ from http import HTTPMethod, HTTPStatus
 from ogrl.access import Permission as P
 from ogrl.api.paths.endpoint import Endpoint
 from ogrl.kernel.models import Test
-from ogrl.operations.connections import Connection, Snapshot
-from ogrl.operations.integrations import IntegrationView, OAuthStart
+from ogrl.operations.connections import Connection, InstallRecord, Snapshot
+from ogrl.operations.integrations import IntegrationView, OAuthStart, TemplateUpdate
 from ogrl.operations.records import Job
 from ogrl.operations.views import DataList
 
@@ -45,6 +45,62 @@ ENABLE_TEMPLATE = Endpoint(
     permission=P.TESTS_DEFINE_RUN,
     response=Test,
     success_status=HTTPStatus.CREATED,
+)
+INSTALL_INTEGRATION = Endpoint(
+    id="installIntegration",
+    summary="Install an integration archive from a URL. Returns a job.",
+    method=POST,
+    path="/integrations",
+    tag="Integrations",
+    permission=P.INTEGRATIONS_MANAGE,
+    response=Job,
+    success_status=HTTPStatus.ACCEPTED,
+)
+UPLOAD_INTEGRATION = Endpoint(
+    id="uploadIntegration",
+    summary="Install an uploaded integration archive. Returns a job.",
+    method=POST,
+    path="/integrations/archives",
+    tag="Integrations",
+    permission=P.INTEGRATIONS_MANAGE,
+    response=Job,
+    success_status=HTTPStatus.ACCEPTED,
+)
+LIST_VERSIONS = Endpoint(
+    id="listIntegrationVersions",
+    summary="List the installed archive versions of an integration.",
+    method=GET,
+    path="/integrations/{id}/versions",
+    tag="Integrations",
+    permission=P.PROGRAMS_READ,
+    response=DataList[InstallRecord],
+)
+ENABLE_VERSION = Endpoint(
+    id="enableIntegrationVersion",
+    summary="Enable an installed version: an upgrade or a rollback.",
+    method=POST,
+    path="/integrations/{id}/versions/{version}/enable",
+    tag="Integrations",
+    permission=P.INTEGRATIONS_MANAGE,
+    response=IntegrationView,
+)
+LIST_TEMPLATE_UPDATES = Endpoint(
+    id="listTemplateUpdates",
+    summary="Tests whose template changed in the enabled version.",
+    method=GET,
+    path="/integrations/{id}/template-updates",
+    tag="Integrations",
+    permission=P.PROGRAMS_READ,
+    response=DataList[TemplateUpdate],
+)
+APPLY_TEMPLATE_UPDATE = Endpoint(
+    id="applyTemplateUpdate",
+    summary="Accept a template update for one test.",
+    method=POST,
+    path="/integrations/{id}/template-updates/{test_id}/apply",
+    tag="Integrations",
+    permission=P.TESTS_DEFINE_RUN,
+    response=Test,
 )
 LIST_CONNECTIONS = Endpoint(
     id="listConnections",
@@ -169,6 +225,12 @@ ALL = (
     LIST_INTEGRATIONS,
     GET_INTEGRATION,
     ENABLE_TEMPLATE,
+    INSTALL_INTEGRATION,
+    UPLOAD_INTEGRATION,
+    LIST_VERSIONS,
+    ENABLE_VERSION,
+    LIST_TEMPLATE_UPDATES,
+    APPLY_TEMPLATE_UPDATE,
     LIST_CONNECTIONS,
     CREATE_CONNECTION,
     GET_CONNECTION,

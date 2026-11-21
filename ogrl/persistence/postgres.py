@@ -25,7 +25,7 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Envelope, parse
 from ogrl.kernel.timeutil import later_than, now
-from ogrl.operations.connections import Connection, Snapshot, connection_body
+from ogrl.operations.connections import Connection, InstallRecord, Snapshot, connection_body
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -37,6 +37,7 @@ from ogrl.operations.records import (
 from ogrl.operations.store import ProjectionChange, Row
 from ogrl.persistence.tables import (
     connections,
+    integration_installs,
     jobs,
     objects,
     provider_pins,
@@ -485,3 +486,51 @@ class PostgresConnections:
         async with self._engine.connect() as conn:
             body = (await conn.execute(query)).scalar_one_or_none()
         return Snapshot.model_validate(body) if body else None
+
+    async def list_installs(self) -> list[InstallRecord]:
+        query = select(integration_installs.c.body).order_by(
+            integration_installs.c.id, integration_installs.c.installed
+        )
+        async with self._engine.connect() as conn:
+            return [InstallRecord.model_validate(r.body) for r in await conn.execute(query)]
+
+    async def put_install(self, record: InstallRecord) -> None:
+        async with self._engine.begin() as conn:
+            inserted = await conn.execute(
+                insert(integration_installs)
+                .values(
+                    id=record.id,
+                    version=record.version,
+                    enabled=record.enabled,
+                    installed=record.installed,
+                    body=record.model_dump(mode="json", exclude_none=True),
+                )
+                .on_conflict_do_nothing(index_elements=["id", "version"])
+                .returning(integration_installs.c.id)
+            )
+            if inserted.first() is None:
+                raise Conflict(f"{record.id} {record.version} is already installed")
+
+    async def enable_install(self, integration_id: str, version: str) -> None:
+        async with self._engine.begin() as conn:
+            rows = (
+                await conn.execute(
+                    select(integration_installs.c.version, integration_installs.c.body)
+                    .where(integration_installs.c.id == integration_id)
+                    .with_for_update()
+                )
+            ).all()
+            if version not in {r.version for r in rows}:
+                raise Conflict(f"{integration_id} {version} is not installed")
+            for row in rows:
+                enabled = row.version == version
+                await conn.execute(
+                    update(integration_installs)
+                    .where(
+                        and_(
+                            integration_installs.c.id == integration_id,
+                            integration_installs.c.version == row.version,
+                        )
+                    )
+                    .values(enabled=enabled, body={**row.body, "enabled": enabled})
+                )

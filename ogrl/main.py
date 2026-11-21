@@ -33,6 +33,7 @@ OGRL_HARNESS_USER        Operating-system user the shell runner switches to.
 OGRL_HARNESS_<NAME>      The value of `run.env` name <NAME> for the harness.
 OGRL_INTEGRATIONS_DIR    Directory of unpacked integration packages (RFC 0005). Local tier:
                             loaded only with OGRL_ALLOW_LOCAL_INTEGRATIONS=true.
+OGRL_INTEGRATION_CACHE   Where installed integration archives are unpacked. Default: a temp dir.
 OGRL_SECRETS_FILE        JSON file for connection secrets when OGRL_SSM_PREFIX is unset.
                             Unset with no SSM prefix: connection secrets are kept in memory.
 OTEL_EXPORTER_OTLP_ENDPOINT / LOGFIRE_TOKEN   Optional telemetry destinations (RFC 0003 §11).
@@ -81,7 +82,7 @@ from ogrl.auth.store import (
 from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.exports import ExportSettings
 from ogrl.operations.harness import RunRequest as HarnessRunRequest
-from ogrl.operations.integrations import CollectionRequest
+from ogrl.operations.integrations import CollectionRequest, InstallRequest
 from ogrl.operations.jobs import BackgroundExecutor, Executor, QueuedExecutor
 from ogrl.operations.library import LibraryPullRequest
 from ogrl.operations.providers import ProviderImportRequest
@@ -247,8 +248,9 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         vault = MemoryVault()
 
     integrations_dir: Path | None = None
+    allow_local = env.get("OGRL_ALLOW_LOCAL_INTEGRATIONS", "false").lower() == "true"
     if env.get("OGRL_INTEGRATIONS_DIR"):
-        if env.get("OGRL_ALLOW_LOCAL_INTEGRATIONS", "false").lower() == "true":
+        if allow_local:
             integrations_dir = Path(env["OGRL_INTEGRATIONS_DIR"])
         else:
             log.warning(
@@ -281,6 +283,10 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         integrations_dir=integrations_dir,
         role_assumer=StsRoleAssumer(region=region),
         public_url=env.get("OGRL_PUBLIC_URL") or None,
+        allow_local_integrations=allow_local,
+        integration_cache=Path(env["OGRL_INTEGRATION_CACHE"])
+        if env.get("OGRL_INTEGRATION_CACHE")
+        else None,
         snapshot_reuse=timedelta(seconds=float(env.get("OGRL_SNAPSHOT_REUSE", "3600"))),
         export=ExportSettings(remote=env.get("OGRL_EXPORT_REMOTE") or None),
         harness_user=env.get("OGRL_HARNESS_USER") or None,
@@ -343,6 +349,8 @@ async def dispatch_queued_job(c: container.Container, job: Job) -> None:
         await c.harness.run(
             principal, req.get("test_id", ""), HarnessRunRequest.model_validate(req)
         )
+    elif job.type == "integration_install" and req.get("url") not in (None, "upload"):
+        await c.integrations.install(principal, InstallRequest.model_validate(req))
     elif job.type == "collection" and req.get("validate"):
         await c.integrations.validate(principal, req.get("connection_id", ""))
     elif job.type == "collection":
@@ -389,7 +397,7 @@ def app_from_env() -> FastAPI:
         tasks: list[asyncio.Task[None]] = []
         if scheduler and c.exports is not None and os.environ.get("OGRL_EXPORT_REMOTE"):
             tasks.append(asyncio.create_task(export_schedule(c, interval)))
-        if scheduler and c.plugins.integrations.names():
+        if scheduler:
             tick = float(os.environ.get("OGRL_INTEGRATION_TICK", "300"))
             tasks.append(asyncio.create_task(integration_schedule(c, tick)))
         if process_mode == "jobs":

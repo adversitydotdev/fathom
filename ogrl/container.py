@@ -27,6 +27,7 @@ from ogrl.integrations.host import SubprocessHost
 from ogrl.integrations.manifest import discover
 from ogrl.kernel.timeutil import now
 from ogrl.operations.auth import AuthService
+from ogrl.operations.catalog import DEFAULT_CACHE, PackageCatalog
 from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.content import ContentService
 from ogrl.operations.exports import ExportService, ExportSettings
@@ -115,6 +116,8 @@ def build(
     oauth_client: OAuthClient | None = None,
     role_assumer: RoleAssumer | None = None,
     public_url: str | None = None,
+    allow_local_integrations: bool = False,
+    integration_cache: Path | None = None,
     export: ExportSettings | None = None,
     harness_user: str | None = None,
     allowed_origins: tuple[str, ...] = (),
@@ -134,7 +137,9 @@ def build(
     if features is None:
         features = StaticFeatures([Feature.GIT_EXPORT] if export.remote else [])
 
-    plugins = Plugins()
+    connections = connections or MemoryConnections()
+    catalog = PackageCatalog(connections, blobs, integration_cache or DEFAULT_CACHE)
+    plugins = Plugins(integrations=catalog)
     plugins.runners.register("shell", ShellRunner(secrets or EnvSecrets(), user=harness_user))
     plugins.importers.register("ogrl", OGRLBundleImporter())
     plugins.importers.register("oscal-component", OscalComponentImporter())
@@ -145,7 +150,6 @@ def build(
 
     objects = ObjectService(store, authorizer, clock)
     jobs = JobService(store, blobs, authorizer, executor or InlineExecutor(), clock)
-    connections = connections or MemoryConnections()
     integrations = IntegrationService(
         objects,
         blobs,
@@ -160,6 +164,8 @@ def build(
         oauth=oauth_client or HttpOAuthClient(),
         assumer=role_assumer or StsRoleAssumer(),
         public_url=public_url,
+        fetcher=fetcher,
+        allow_local=allow_local_integrations,
     )
     harness = HarnessService(objects, blobs, authorizer, jobs, plugins, clock, integrations)
     auth = AuthService(

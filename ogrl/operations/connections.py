@@ -12,6 +12,23 @@ from typing import Any, Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field
 
 ConnectionState = Literal["pending", "active", "failing", "disabled"]
+Tier = Literal["first-party", "verified", "local"]
+
+
+class InstallRecord(BaseModel):
+    """One installed archive version of an integration (RFC 0005 section 4)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    version: str
+    digest: str  # sha-256 of the archive bytes
+    uri: str  # where the archive lives in object storage
+    tier: Tier
+    enabled: bool = False
+    installed: datetime
+    installed_by: str | None = None
+    source: str | None = None  # the URL, or "upload"
 
 
 class Connection(BaseModel):
@@ -75,6 +92,18 @@ class ConnectionStore(Protocol):
         self, connection_id: str | None = None, source: str | None = None
     ) -> list[Snapshot]:
         """Newest first."""
+        ...
+
+    async def list_installs(self) -> list[InstallRecord]:
+        """Every installed version, ordered by id then installed time."""
+        ...
+
+    async def put_install(self, record: InstallRecord) -> None:
+        """Insert a version. Raises Conflict when that id and version already exist."""
+        ...
+
+    async def enable_install(self, integration_id: str, version: str) -> None:
+        """Enable one version and disable the others of that integration, atomically."""
         ...
 
     async def latest_snapshot(

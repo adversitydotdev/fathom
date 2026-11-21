@@ -3,7 +3,7 @@
 import html
 from typing import Annotated
 
-from fastapi import Body, Query, Response
+from fastapi import Body, File, Form, Query, Response, UploadFile
 from fastapi.responses import HTMLResponse
 
 from ogrl.api.handlers.objects import IfMatch
@@ -16,6 +16,7 @@ from ogrl.operations.integrations import (
     CollectionRequest,
     ConnectionPatch,
     ConnectionWrite,
+    InstallRequest,
     SecretWrite,
     TemplateEnable,
 )
@@ -46,6 +47,35 @@ def register(registrar: Registrar, c: Container) -> None:
     ):
         return await s.enable_template(principal, id, name, body or TemplateEnable())
 
+    async def install(body: InstallRequest, principal: CurrentPrincipal):
+        return await s.install(principal, body)
+
+    async def upload(
+        principal: CurrentPrincipal,
+        file: Annotated[UploadFile, File()],
+        digest: Annotated[str | None, Form()] = None,
+        enable: Annotated[bool, Form()] = True,
+    ):
+        return await s.install(principal, upload=await file.read(), expected=digest, enable=enable)
+
+    async def list_versions(id: str, principal: CurrentPrincipal):
+        return {"data": await s.list_versions(principal, id)}
+
+    async def enable_version(id: str, version: str, principal: CurrentPrincipal):
+        return await s.enable_version(principal, id, version)
+
+    async def template_updates(id: str, principal: CurrentPrincipal):
+        return {"data": await s.template_updates(principal, id)}
+
+    async def apply_update(id: str, test_id: str, if_match: IfMatch, principal: CurrentPrincipal):
+        return await s.apply_template_update(principal, id, test_id, if_match)
+
+    registrar.handle(i.INSTALL_INTEGRATION, install)
+    registrar.handle(i.UPLOAD_INTEGRATION, upload)
+    registrar.handle(i.LIST_VERSIONS, list_versions)
+    registrar.handle(i.ENABLE_VERSION, enable_version)
+    registrar.handle(i.LIST_TEMPLATE_UPDATES, template_updates)
+    registrar.handle(i.APPLY_TEMPLATE_UPDATE, apply_update)
     registrar.handle(i.LIST_INTEGRATIONS, list_integrations)
     registrar.handle(i.GET_INTEGRATION, get_integration)
     registrar.handle(i.ENABLE_TEMPLATE, enable_template)

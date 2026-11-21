@@ -2996,6 +2996,163 @@ paths:
                       $ref: "#/components/schemas/Integration"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Integrations]
+      operationId: installIntegration
+      summary: Install an integration archive from a URL. Returns a job.
+      description: |
+        RFC 0005 section 4. The archive is unpacked and validated, stored in
+        object storage, and (with `enable`, the default) enabled. Unsigned
+        archives install only with `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A
+        version is immutable: reinstalling it with other bytes is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /integrations/archives:
+    post:
+      tags: [Integrations]
+      operationId: uploadIntegration
+      summary: Install an uploaded integration archive. Returns a job.
+      description: RFC 0005 section 4. Same checks as `POST /integrations`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                digest:
+                  type: string
+                  pattern: "^[0-9a-f]{64}$"
+                enable:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /integrations/{id}/versions:
+    get:
+      tags: [Integrations]
+      operationId: listIntegrationVersions
+      summary: List the installed archive versions of an integration.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The versions, oldest first. At most one is enabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IntegrationInstall"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/versions/{version}/enable:
+    post:
+      tags: [Integrations]
+      operationId: enableIntegrationVersion
+      summary: "Enable an installed version: an upgrade or a rollback."
+      description: |
+        Refused with 409 `upgrade-breaks-tests` when an enabled test reads a
+        source or check major that version does not provide.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The integration, now at that version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Integration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /integrations/{id}/template-updates:
+    get:
+      tags: [Integrations]
+      operationId: listTemplateUpdates
+      summary: Tests whose template changed in the enabled version.
+      description: RFC 0005 section 8. A person accepts or skips each one.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The pending updates.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TemplateUpdate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/template-updates/{test_id}/apply:
+    post:
+      tags: [Integrations]
+      operationId: applyTemplateUpdate
+      summary: Accept a template update for one test.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: test_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The updated test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
   /integrations/{id}:
     get:
       tags: [Integrations]
@@ -3619,7 +3776,7 @@ components:
           description: The snapshot commit, when `url` is a git remote. Defaults to the head of the default branch.
     JobType:
       type: string
-      enum: [library_pull, provider_import, test_run, render, git_export, restore, collection]
+      enum: [library_pull, provider_import, test_run, render, git_export, restore, collection, integration_install]
     JobStatus:
       type: string
       enum: [queued, running, succeeded, failed]
@@ -3776,6 +3933,67 @@ components:
                 type: string
               runner:
                 type: string
+    InstallRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+        digest:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: The expected sha-256 of the archive. The install fails on a mismatch.
+        enable:
+          type: boolean
+          default: true
+    IntegrationInstall:
+      type: object
+      required: [id, version, digest, uri, tier, enabled, installed]
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        digest:
+          type: string
+        uri:
+          type: string
+        tier:
+          type: string
+          enum: [first-party, verified, local]
+        enabled:
+          type: boolean
+        installed:
+          type: string
+          format: date-time
+        installed_by:
+          type: string
+        source:
+          type: string
+    TemplateUpdate:
+      type: object
+      required: [test_id, test_name, template, to_version, changes, modified]
+      properties:
+        test_id:
+          type: string
+        test_name:
+          type: string
+        template:
+          type: string
+        from_version:
+          type: string
+        to_version:
+          type: string
+        changes:
+          type: array
+          description: Test fields the new template sets differently.
+          items:
+            type: string
+        modified:
+          type: string
+          format: date-time
+          description: The test's `modified`, for If-Match when applying.
     TemplateEnable:
       type: object
       additionalProperties: false

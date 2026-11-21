@@ -14,7 +14,7 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Control, Envelope, Origin
 from ogrl.kernel.timeutil import later_than, now
-from ogrl.operations.connections import Connection, Snapshot
+from ogrl.operations.connections import Connection, InstallRecord, Snapshot
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -228,6 +228,7 @@ class MemoryConnections:
     def __init__(self) -> None:
         self._connections: dict[str, Connection] = {}
         self._snapshots: dict[str, Snapshot] = {}
+        self._installs: dict[tuple[str, str], InstallRecord] = {}
 
     async def get_connection(self, connection_id: str) -> Connection | None:
         return self._connections.get(connection_id)
@@ -273,3 +274,18 @@ class MemoryConnections:
             if snapshot.complete and not_before <= snapshot.collected <= not_after:
                 return snapshot
         return None
+
+    async def list_installs(self) -> list[InstallRecord]:
+        return sorted(self._installs.values(), key=lambda r: (r.id, r.installed))
+
+    async def put_install(self, record: InstallRecord) -> None:
+        if (record.id, record.version) in self._installs:
+            raise Conflict(f"{record.id} {record.version} is already installed")
+        self._installs[(record.id, record.version)] = record
+
+    async def enable_install(self, integration_id: str, version: str) -> None:
+        if (integration_id, version) not in self._installs:
+            raise Conflict(f"{integration_id} {version} is not installed")
+        for key, record in self._installs.items():
+            if key[0] == integration_id:
+                self._installs[key] = record.model_copy(update={"enabled": key[1] == version})
