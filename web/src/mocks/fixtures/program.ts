@@ -695,7 +695,7 @@ export const integrations: Integration[] = [
     config: [{ name: "domain", label: "Okta domain", pattern: "^[a-z0-9-]+\\.okta\\.com$", required: true }],
     auth: [
       { kind: "fields", label: "API token", supported: true, fields: [{ name: "OKTA_API_TOKEN", label: "Read-only API token", secret: true }] },
-      { kind: "oauth2", label: "OAuth application", supported: false, scopes: ["okta.users.read", "okta.groups.read"] },
+      { kind: "oauth2", label: "OAuth application", supported: true, scopes: ["okta.users.read", "okta.groups.read"] },
     ],
     resources: [
       { name: "users", version: 1, source: `${OKTA}/users@1` },
@@ -731,6 +731,26 @@ export const integrations: Integration[] = [
   },
 ];
 
+integrations.push({
+  id: "dev.adversity.aws",
+  name: "AWS",
+  version: "1.1.0",
+  publisher: "adversity.dev",
+  description: "IAM users, roles, and account password policy from AWS, through a read-only role.",
+  tier: "first-party",
+  digest: "e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e6b8d1f3a5c7e9b0d2f4a6c8e1b3",
+  runtime: "python",
+  egress: ["*.amazonaws.com"],
+  config: [],
+  auth: [{ kind: "aws_role", label: "IAM role", supported: true }],
+  resources: [
+    { name: "iam-users", version: 1, source: "dev.adversity.aws/iam-users@1" },
+    { name: "password-policy", version: 1, source: "dev.adversity.aws/password-policy@1" },
+  ],
+  checks: [],
+  templates: [],
+});
+
 export const connections: Connection[] = [
   {
     id: "connection--okta-prod",
@@ -763,6 +783,23 @@ export const connections: Connection[] = [
     created_by_ref: "party--priya-shah",
   },
 ];
+
+connections.push({
+  id: "connection--aws-prod",
+  integration_id: "dev.adversity.aws",
+  name: "AWS production",
+  config: { aws_role_arn: "arn:aws:iam::447100000000:role/ogrl-readonly" },
+  auth_kind: "aws_role",
+  bindings: ["component--aws"],
+  state: "active",
+  identity: "arn:aws:sts::447100000000:assumed-role/ogrl-readonly",
+  last_validated: at(-1, "05:58:40Z"),
+  secrets_set: [],
+  external_id: "q8Jm2vT4xNcY7pLwR3eH9sKdF6bZ",
+  created: at(-30),
+  modified: at(-1, "05:58:40Z"),
+  created_by_ref: "party--priya-shah",
+});
 
 export const snapshots: Snapshot[] = [
   {

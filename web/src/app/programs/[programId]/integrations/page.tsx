@@ -84,8 +84,13 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
                         <td className="px-4 py-3">
                           <div className="font-medium">{c.name}</div>
                           <div className="font-mono text-[11px] text-muted-foreground">
-                            {integrationName.get(c.integration_id) ?? c.integration_id}
+                            {integrationName.get(c.integration_id) ?? c.integration_id} · {c.auth_kind}
                           </div>
+                          {c.external_id && (
+                            <div className="mt-1 max-w-56 font-mono text-[11px] break-all text-muted-foreground">
+                              External ID <span className="text-foreground select-all">{c.external_id}</span>
+                            </div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <StatusBadge tone={state.tone} icon={state.icon}>
@@ -106,7 +111,7 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
                             ? "—"
                             : c.bindings.map((b) => bindingName.get(b) ?? b).join(", ")}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        <td className="px-4 py-3 font-mono text-xs whitespace-nowrap text-muted-foreground">
                           {c.last_validated ? isoDate(c.last_validated) : "—"}
                         </td>
                         <td className="px-4 py-3">

@@ -294,6 +294,7 @@ export const handlers = [
       bindings: body.bindings ?? [],
       state: "pending",
       secrets_set: [],
+      ...(body.auth_kind === "aws_role" ? { external_id: `ext-${crypto.randomUUID().replaceAll("-", "")}` } : {}),
       created: now,
       modified: now,
     };
@@ -331,6 +332,20 @@ export const handlers = [
     };
     db.connections[idx] = updated;
     return HttpResponse.json(updated);
+  }),
+  http.post(`${V}/connections/:id/oauth/start`, ({ params }) => {
+    const connection = db.connections.find((c) => c.id === params.id);
+    if (!connection) return notFound();
+    if (connection.auth_kind !== "oauth2") return problem(400, "bad-request", `${connection.id} does not use oauth2`);
+    if (!connection.secrets_set.includes("OAUTH_CLIENT_ID")) {
+      return problem(400, "bad-request", "set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET first");
+    }
+    const domain = connection.config.domain ?? "vendor.example";
+    const query = new URLSearchParams({ response_type: "code", state: crypto.randomUUID(), code_challenge_method: "S256" });
+    return HttpResponse.json({
+      authorize_url: `https://${domain}/oauth2/v1/authorize?${query}`,
+      expires: new Date(Date.now() + 10 * 60_000).toISOString(),
+    });
   }),
   http.post(`${V}/connections/:id/validate`, ({ params }) => {
     if (!db.connections.some((c) => c.id === params.id)) return notFound();

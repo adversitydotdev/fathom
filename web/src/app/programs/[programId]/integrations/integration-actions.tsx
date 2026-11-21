@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, RefreshCw, ShieldCheck } from "lucide-react";
+import { KeyRound, Plus, RefreshCw, ShieldCheck } from "lucide-react";
 import { useState, useTransition } from "react";
 
 import { CrudDialog, Field, FormActions, FormError, RevokeButton, Select } from "@/components/crud";
@@ -13,6 +13,7 @@ import {
   deleteConnection,
   enableTemplate,
   setConnectionState,
+  startOAuth,
   validateConnection,
   type ActionState,
 } from "@/lib/actions";
@@ -30,13 +31,31 @@ export function ConnectionActions({ connection }: { connection: Connection }) {
     start(async () => setState({ ...(await action()), what }));
 
   return (
-    <div className="flex flex-wrap items-center justify-end gap-1">
+    <div className="flex items-center justify-end gap-1 whitespace-nowrap">
       {state.jobId && (
         <span className="font-mono text-xs text-met-ink" title={state.jobId}>
           {state.what} queued
         </span>
       )}
       {state.error && <span className="text-xs text-gap-ink">{state.error}</span>}
+      {connection.auth_kind === "oauth2" && (
+        <Button
+          variant="ghost"
+          size="xs"
+          disabled={pending || disabled}
+          aria-label={`Authorize ${connection.name}`}
+          onClick={() =>
+            start(async () => {
+              const res = await startOAuth(connection.id);
+              if (res.url) window.location.assign(res.url);
+              else setState({ error: res.error });
+            })
+          }
+        >
+          <KeyRound className="size-3.5" aria-hidden />
+          Authorize
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="xs"
@@ -115,6 +134,14 @@ export function NewConnectionDialog({ integrations, bindings }: { integrations: 
   const supported = integration?.auth.filter((a) => a.supported) ?? [];
   const [authKind, setAuthKind] = useState<string>(supported[0]?.kind ?? "");
   const auth = supported.find((a) => a.kind === authKind) ?? supported[0];
+  const secretFields =
+    auth?.kind === "oauth2"
+      ? [
+          { name: "OAUTH_CLIENT_ID", label: "OAuth client ID", secret: false },
+          { name: "OAUTH_CLIENT_SECRET", label: "OAuth client secret", secret: true },
+        ]
+      : (auth?.fields ?? []);
+  const [origin] = useState(() => (typeof window === "undefined" ? "" : window.location.origin));
   const [name, setName] = useState("");
   const [config, setConfig] = useState<Record<string, string>>({});
   const [secrets, setSecrets] = useState<Record<string, string>>({});
@@ -207,7 +234,14 @@ export function NewConnectionDialog({ integrations, bindings }: { integrations: 
         ))}
         {supported.length > 1 && (
           <Field label="Authentication" htmlFor="connection-auth">
-            <Select id="connection-auth" value={auth?.kind} onChange={(e) => setAuthKind(e.target.value)}>
+            <Select
+              id="connection-auth"
+              value={auth?.kind}
+              onChange={(e) => {
+                setAuthKind(e.target.value);
+                setSecrets({});
+              }}
+            >
               {supported.map((a) => (
                 <option key={a.kind} value={a.kind}>
                   {a.label}
@@ -219,7 +253,30 @@ export function NewConnectionDialog({ integrations, bindings }: { integrations: 
         {supported.length === 0 && (
           <FormError error="This server cannot run any of this integration's authentication methods yet." />
         )}
-        {auth?.fields?.map((f) => (
+        {auth?.kind === "oauth2" && (
+          <p className="rounded-xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+            Register <code className="font-mono text-foreground">{origin}/v1/oauth/callback</code> as the redirect
+            URI in your own {integration?.name} OAuth app. After saving, choose Authorize on the connection.
+          </p>
+        )}
+        {auth?.kind === "aws_role" && (
+          <>
+            <Field label="IAM role ARN" required htmlFor="config-aws_role_arn">
+              <Input
+                id="config-aws_role_arn"
+                value={config.aws_role_arn ?? ""}
+                onChange={(e) => setConfig({ ...config, aws_role_arn: e.target.value })}
+                placeholder="arn:aws:iam::123456789012:role/ogrl-readonly"
+                required
+              />
+            </Field>
+            <p className="rounded-xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+              Tag the role <code className="font-mono text-foreground">ogrl-integration=true</code> and trust the OGRL
+              task role. After saving, require the connection&apos;s external ID in the trust policy.
+            </p>
+          </>
+        )}
+        {secretFields.map((f) => (
           <Field key={f.name} label={f.label} required htmlFor={`secret-${f.name}`} hint={f.name}>
             <Input
               id={`secret-${f.name}`}

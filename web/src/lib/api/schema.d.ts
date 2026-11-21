@@ -1778,6 +1778,51 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/connections/{id}/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin bring-your-own OAuth: the vendor URL to send the operator to.
+         * @description RFC 0005 section 5. Needs `OGRL_PUBLIC_URL`, and the connection's
+         *     `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` secrets. The returned URL
+         *     carries a single-use `state` that expires after ten minutes, and a
+         *     PKCE challenge when the integration asks for one.
+         */
+        post: operations["startConnectionOAuth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The vendor's redirect after authorization.
+         * @description Public: the vendor redirects the browser here. The single-use `state`
+         *     names the connection. The code is exchanged for a refresh token, which
+         *     is stored as a secret and never returned.
+         */
+        get: operations["finishConnectionOAuth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/snapshots": {
         parameters: {
             query?: never;
@@ -2030,6 +2075,8 @@ export interface components {
             last_validated?: string;
             last_error?: string;
             secrets_set: string[];
+            /** @description For `aws_role`, the ExternalId the IAM role's trust policy must require. */
+            external_id?: string;
             /** Format: date-time */
             created: string;
             /** Format: date-time */
@@ -2054,6 +2101,12 @@ export interface components {
             bindings?: string[];
             /** @enum {string} */
             state?: "disabled" | "pending";
+        };
+        OAuthStart: {
+            /** Format: uri */
+            authorize_url: string;
+            /** Format: date-time */
+            expires: string;
         };
         CollectionRequest: {
             sources?: string[];
@@ -6592,6 +6645,64 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    startConnectionOAuth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where to send the operator. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    finishConnectionOAuth: {
+        parameters: {
+            query?: {
+                state?: string;
+                code?: string;
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page saying the connection is authorized. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description A page saying why authorization failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
         };
     };
     listSnapshots: {

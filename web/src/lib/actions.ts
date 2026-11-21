@@ -153,6 +153,12 @@ export async function collectConnection(id: string): Promise<ActionState> {
   return { jobId: data.id };
 }
 
+export async function startOAuth(id: string): Promise<{ url?: string; error?: string }> {
+  const { data, error } = await api.POST("/connections/{id}/oauth/start", { params: { path: { id } } });
+  if (error || !data) return { error: formatError(error, "Couldn't start authorization.") };
+  return { url: data.authorize_url };
+}
+
 export async function enableTemplate(integrationId: string, name: string): Promise<ActionState> {
   const { data, error } = await api.POST("/integrations/{id}/templates/{name}/enable", {
     params: { path: { id: integrationId, name } },
