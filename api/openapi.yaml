@@ -3230,6 +3230,68 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /connections/{id}/oauth/start:
+    post:
+      tags: [Connections]
+      operationId: startConnectionOAuth
+      summary: "Begin bring-your-own OAuth: the vendor URL to send the operator to."
+      description: |
+        RFC 0005 section 5. Needs `OGRL_PUBLIC_URL`, and the connection's
+        `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` secrets. The returned URL
+        carries a single-use `state` that expires after ten minutes, and a
+        PKCE challenge when the integration asks for one.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: Where to send the operator.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthStart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /oauth/callback:
+    get:
+      tags: [Connections]
+      operationId: finishConnectionOAuth
+      summary: The vendor's redirect after authorization.
+      description: |
+        Public: the vendor redirects the browser here. The single-use `state`
+        names the connection. The code is exchanged for a refresh token, which
+        is stored as a secret and never returned.
+      security: []
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page saying the connection is authorized.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: A page saying why authorization failed.
+          content:
+            text/html:
+              schema:
+                type: string
+
   /snapshots:
     get:
       tags: [Snapshots]
@@ -3769,6 +3831,9 @@ components:
           type: array
           items:
             type: string
+        external_id:
+          type: string
+          description: For `aws_role`, the ExternalId the IAM role's trust policy must require.
         created:
           type: string
           format: date-time
@@ -3817,6 +3882,16 @@ components:
         state:
           type: string
           enum: [disabled, pending]
+    OAuthStart:
+      type: object
+      required: [authorize_url, expires]
+      properties:
+        authorize_url:
+          type: string
+          format: uri
+        expires:
+          type: string
+          format: date-time
     CollectionRequest:
       type: object
       additionalProperties: false

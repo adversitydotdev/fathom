@@ -6,7 +6,7 @@ from ogrl.access import Permission as P
 from ogrl.api.paths.endpoint import Endpoint
 from ogrl.kernel.models import Test
 from ogrl.operations.connections import Connection, Snapshot
-from ogrl.operations.integrations import IntegrationView
+from ogrl.operations.integrations import IntegrationView, OAuthStart
 from ogrl.operations.records import Job
 from ogrl.operations.views import DataList
 
@@ -121,6 +121,23 @@ COLLECT = Endpoint(
     response=Job,
     success_status=HTTPStatus.ACCEPTED,
 )
+OAUTH_START = Endpoint(
+    id="startConnectionOAuth",
+    summary="Begin bring-your-own OAuth: the vendor URL to send the operator to.",
+    method=POST,
+    path="/connections/{id}/oauth/start",
+    tag="Connections",
+    permission=P.INTEGRATIONS_MANAGE,
+    response=OAuthStart,
+)
+OAUTH_CALLBACK = Endpoint(
+    id="finishConnectionOAuth",
+    summary="The vendor's redirect after authorization. Public; protected by single-use state.",
+    method=GET,
+    path="/oauth/callback",
+    tag="Connections",
+    authenticated=False,
+)
 LIST_SNAPSHOTS = Endpoint(
     id="listSnapshots",
     summary="List collected snapshots, newest first.",
@@ -160,6 +177,8 @@ ALL = (
     SET_SECRET,
     VALIDATE_CONNECTION,
     COLLECT,
+    OAUTH_START,
+    OAUTH_CALLBACK,
     LIST_SNAPSHOTS,
     GET_SNAPSHOT,
     GET_SNAPSHOT_CONTENT,

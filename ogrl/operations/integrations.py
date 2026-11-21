@@ -10,20 +10,24 @@
 """
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import re
+import secrets
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Literal
+from urllib.parse import urlencode, urlsplit
 
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict, Field
 
 from ogrl.access import Authorizer, Permission, Principal, require
 from ogrl.errors import Conflict, FieldError, Invalid, NotFound, PreconditionFailed
-from ogrl.integrations.manifest import FieldsAuth, Package
+from ogrl.integrations.manifest import AwsRoleAuth, FieldsAuth, OAuth2Auth, Package
 from ogrl.kernel import ids, rules
 from ogrl.kernel.bundles import canonical_json, digest
 from ogrl.kernel.constraints import timeout_seconds
@@ -40,6 +44,8 @@ from ogrl.plugins import Registry
 from ogrl.plugins.ports import (
     IntegrationError,
     IntegrationHost,
+    OAuthClient,
+    RoleAssumer,
     RunReport,
     SecretVault,
     StoredArtifact,
@@ -47,7 +53,14 @@ from ogrl.plugins.ports import (
 
 log = logging.getLogger(__name__)
 
-SUPPORTED_AUTH = frozenset({"fields"})  # oauth2 and aws_role arrive with RFC 0005 phase P0b
+SUPPORTED_AUTH = frozenset({"fields", "oauth2", "aws_role"})
+OAUTH_CLIENT_ID = "OAUTH_CLIENT_ID"
+OAUTH_CLIENT_SECRET = "OAUTH_CLIENT_SECRET"
+OAUTH_REFRESH_TOKEN = "OAUTH_REFRESH_TOKEN"  # written only by the callback
+OAUTH_STATE_TTL = timedelta(minutes=10)
+AWS_ROLE_ARN = "aws_role_arn"  # the config key an aws_role connection carries
+ROLE_ARN = re.compile(r"^arn:aws[a-z-]*:iam::\d{12}:role/[\w+=,.@/-]+$")
+LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
 RATE_LIMIT_RETRIES = 3
 SNAPSHOT_REUSE = timedelta(hours=1)  # RFC 0005 section 6: OGRL_SNAPSHOT_REUSE
 RETRY_CAP_SECONDS = 60
@@ -103,6 +116,16 @@ class TemplateEnable(BaseModel):
 
     id: str | None = None
     system_refs: list[str] | None = None
+
+
+class OAuthStart(BaseModel):
+    authorize_url: str
+    expires: datetime
+
+
+def _state_key(state: str) -> str:
+    """Pending OAuth state is stored under its hash, never as the value itself."""
+    return "oauth-state:" + hashlib.sha256(state.encode()).hexdigest()
 
 
 class IntegrationView(BaseModel):
@@ -251,8 +274,14 @@ class IntegrationService:
         clock: Callable[[], datetime] = now,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         reuse: timedelta = SNAPSHOT_REUSE,
+        oauth: OAuthClient | None = None,
+        assumer: RoleAssumer | None = None,
+        public_url: str | None = None,
     ) -> None:
         self._reuse = reuse
+        self._oauth = oauth
+        self._assumer = assumer
+        self._public_url = public_url.rstrip("/") if public_url else None
         self._objects = objects
         self._blobs = blobs
         self._authorizer = authorizer
@@ -320,10 +349,21 @@ class IntegrationService:
             raise NotFound(f"no connection {connection_id}")
         return connection
 
-    def _check_config(self, package: Package, config: Mapping[str, str]) -> list[FieldError]:
+    def _check_config(
+        self, package: Package, config: Mapping[str, str], auth_kind: str
+    ) -> list[FieldError]:
         errors = []
         declared = {c.name: c for c in package.manifest.config}
-        for key in sorted(set(config) - set(declared)):
+        if auth_kind == "aws_role":
+            arn = config.get(AWS_ROLE_ARN, "")
+            if not ROLE_ARN.match(arn):
+                errors.append(
+                    FieldError(
+                        "an IAM role ARN is required for aws_role", f"/config/{AWS_ROLE_ARN}"
+                    )
+                )
+        extra = set(config) - set(declared) - ({AWS_ROLE_ARN} if auth_kind == "aws_role" else set())
+        for key in sorted(extra):
             errors.append(FieldError(f"{package.id} has no config {key}", f"/config/{key}"))
         for field in declared.values():
             value = config.get(field.name)
@@ -354,7 +394,7 @@ class IntegrationService:
         package = self._packages.get(write.integration_id)
         if package is None:
             raise Invalid(errors=[FieldError("no such integration", "/integration_id")])
-        errors = self._check_config(package, write.config)
+        errors = self._check_config(package, write.config, write.auth_kind)
         if package.manifest.auth_kind(write.auth_kind) is None:
             errors.append(FieldError(f"{package.id} offers no {write.auth_kind}", "/auth_kind"))
         elif write.auth_kind not in SUPPORTED_AUTH:
@@ -377,6 +417,7 @@ class IntegrationService:
             config=write.config,
             auth_kind=write.auth_kind,
             bindings=write.bindings,
+            external_id=secrets.token_urlsafe(24) if write.auth_kind == "aws_role" else None,
             created=stamp,
             modified=stamp,
             created_by_ref=principal.actor_id,
@@ -399,7 +440,8 @@ class IntegrationService:
         changes = patch.model_dump(exclude_unset=True, exclude_none=True)
         errors: list[FieldError] = []
         if "config" in changes:
-            errors += self._check_config(self.package(old.integration_id), changes["config"])
+            package = self.package(old.integration_id)
+            errors += self._check_config(package, changes["config"], old.auth_kind)
         if "bindings" in changes:
             errors += await self._check_bindings(changes["bindings"])
         if errors:
@@ -423,28 +465,196 @@ class IntegrationService:
         require(self._authorizer, principal, Permission.INTEGRATIONS_MANAGE)
         connection = await self._connection(connection_id)
         auth = self.package(connection.integration_id).manifest.auth_kind(connection.auth_kind)
-        names = [f.name for f in auth.fields] if isinstance(auth, FieldsAuth) else []
+        names = (
+            [f.name for f in auth.fields]
+            if isinstance(auth, FieldsAuth)
+            else [OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET]
+            if isinstance(auth, OAuth2Auth)
+            else []
+        )
         if name not in names:
             raise NotFound(f"{connection.auth_kind} has no secret {name}")
         await asyncio.to_thread(self._vault.put, secret_name(connection_id, name), write.value)
         secrets = sorted({*connection.secrets_set, name})
         return await self._save(connection, secrets_set=secrets, state="pending", identity=None)
 
-    def _credentials(self, connection: Connection, package: Package) -> dict[str, str]:
+    async def _secret(self, connection_id: str, name: str) -> str | None:
+        return await asyncio.to_thread(self._vault.get, secret_name(connection_id, name))
+
+    async def _credentials(self, connection: Connection, package: Package) -> dict[str, str]:
+        """The environment one validate or collect operation gets (RFC 0005 section 7)."""
         auth = package.manifest.auth_kind(connection.auth_kind)
-        if not isinstance(auth, FieldsAuth):
-            raise IntegrationError("invalid_config", f"{connection.auth_kind} is not supported yet")
         env = {"OGRL_CONNECTION_ID": connection.id}
-        missing = []
-        for field in auth.fields:
-            value = self._vault.get(secret_name(connection.id, field.name))
-            if value is None:
-                missing.append(field.name)
-            else:
-                env[field.name] = value
-        if missing:
-            raise IntegrationError("invalid_config", f"no value set for {', '.join(missing)}")
-        return env
+        if isinstance(auth, FieldsAuth):
+            missing = []
+            for field in auth.fields:
+                value = await self._secret(connection.id, field.name)
+                if value is None:
+                    missing.append(field.name)
+                else:
+                    env[field.name] = value
+            if missing:
+                raise IntegrationError("invalid_config", f"no value set for {', '.join(missing)}")
+            return env
+        if isinstance(auth, OAuth2Auth):
+            env["OGRL_ACCESS_TOKEN"] = await self._access_token(connection, auth)
+            return env
+        if isinstance(auth, AwsRoleAuth):
+            if self._assumer is None:
+                raise IntegrationError("invalid_config", "this server has no STS client")
+            arn = connection.config.get(AWS_ROLE_ARN, "")
+            session = f"ogrl-{connection.id.rsplit('--', 1)[-1][:40]}"
+            env.update(await self._assumer.assume(arn, connection.external_id or "", session))
+            return env
+        raise IntegrationError("invalid_config", f"{connection.auth_kind} is not supported")
+
+    # --- bring-your-own OAuth ------------------------------------------------------------------
+
+    def _redirect_uri(self) -> str:
+        if not self._public_url:
+            raise Invalid(
+                "OAuth needs a stable origin: set OGRL_PUBLIC_URL (RFC 0005 section 5)",
+                slug="oauth-needs-public-url",
+            )
+        return f"{self._public_url}/v1/oauth/callback"
+
+    @staticmethod
+    def _vendor_url(template: str, config: Mapping[str, str]) -> str:
+        try:
+            url = template.format_map(dict(config))
+        except (KeyError, ValueError) as exc:
+            raise IntegrationError("invalid_config", f"{template} needs config {exc}") from exc
+        parts = urlsplit(url)
+        if parts.scheme != "https" and not (
+            parts.scheme == "http" and parts.hostname in LOCAL_HOSTS
+        ):
+            raise IntegrationError("invalid_config", f"{url} is not an https URL")
+        return url
+
+    def _oauth_auth(self, connection: Connection) -> OAuth2Auth:
+        auth = self.package(connection.integration_id).manifest.auth_kind(connection.auth_kind)
+        if not isinstance(auth, OAuth2Auth):
+            raise Invalid(f"{connection.id} does not use oauth2")
+        if self._oauth is None:
+            raise Invalid("this server has no OAuth client")
+        return auth
+
+    async def _access_token(self, connection: Connection, auth: OAuth2Auth) -> str:
+        assert self._oauth is not None
+        client_id = await self._secret(connection.id, OAUTH_CLIENT_ID)
+        client_secret = await self._secret(connection.id, OAUTH_CLIENT_SECRET)
+        refresh = await self._secret(connection.id, OAUTH_REFRESH_TOKEN)
+        if not client_id or not client_secret:
+            raise IntegrationError("invalid_config", "set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET")
+        if not refresh:
+            raise IntegrationError("invalid_config", "authorize the connection with the vendor")
+        body = await self._oauth.token(
+            self._vendor_url(auth.token_url, connection.config),
+            {
+                "grant_type": "refresh_token",
+                "refresh_token": refresh,
+                "client_id": client_id,
+                "client_secret": client_secret,
+            },
+        )
+        token = body.get("access_token")
+        if not isinstance(token, str) or not token:
+            raise IntegrationError("auth_failed", "the token endpoint returned no access_token")
+        rotated = body.get("refresh_token")
+        if isinstance(rotated, str) and rotated and rotated != refresh:
+            await asyncio.to_thread(
+                self._vault.put, secret_name(connection.id, OAUTH_REFRESH_TOKEN), rotated
+            )
+        return token
+
+    async def oauth_start(self, principal: Principal, connection_id: str) -> "OAuthStart":
+        """Step 1 of RFC 0005 section 5: the vendor URL to send the operator to."""
+        require(self._authorizer, principal, Permission.INTEGRATIONS_MANAGE)
+        connection = await self._connection(connection_id)
+        auth = self._oauth_auth(connection)
+        redirect_uri = self._redirect_uri()
+        client_id = await self._secret(connection.id, OAUTH_CLIENT_ID)
+        if not client_id:
+            raise Invalid(f"set {OAUTH_CLIENT_ID} and {OAUTH_CLIENT_SECRET} first")
+        try:
+            authorize = self._vendor_url(auth.authorize_url, connection.config)
+        except IntegrationError as exc:
+            raise Invalid(exc.message) from exc
+        state = secrets.token_urlsafe(32)
+        verifier = secrets.token_urlsafe(64)
+        expires = utc(self._clock()) + OAUTH_STATE_TTL
+        pending = {
+            "connection_id": connection.id,
+            "actor": principal.actor_id,
+            "verifier": verifier if auth.pkce else None,
+            "expires": format_timestamp(expires),
+        }
+        await self._objects.store.set_meta(_state_key(state), json.dumps(pending))
+        query = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "state": state,
+            **({"scope": " ".join(auth.scopes)} if auth.scopes else {}),
+        }
+        if auth.pkce:
+            challenge = hashlib.sha256(verifier.encode()).digest()
+            query["code_challenge"] = base64.urlsafe_b64encode(challenge).rstrip(b"=").decode()
+            query["code_challenge_method"] = "S256"
+        separator = "&" if urlsplit(authorize).query else "?"
+        return OAuthStart(authorize_url=authorize + separator + urlencode(query), expires=expires)
+
+    async def oauth_callback(
+        self, state: str | None, code: str | None, error: str | None
+    ) -> Connection:
+        """Steps 2 and 3: verify state, exchange the code, keep the refresh token."""
+        if not state:
+            raise Invalid("the callback carries no state", slug="oauth-state")
+        key = _state_key(state)
+        raw = await self._objects.store.get_meta(key)
+        if raw is None:
+            raise Invalid("this authorization is unknown or was already used", slug="oauth-state")
+        await self._objects.store.set_meta(key, None)  # single use, before anything can fail
+        pending = json.loads(raw)
+        if utc(datetime.fromisoformat(pending["expires"].replace("Z", "+00:00"))) < utc(
+            self._clock()
+        ):
+            raise Invalid("this authorization expired; start again", slug="oauth-state")
+        connection = await self._connection(pending["connection_id"])
+        if error:
+            raise Invalid(f"the vendor refused: {error}", slug="oauth-denied")
+        if not code:
+            raise Invalid("the callback carries no code", slug="oauth-state")
+        auth = self._oauth_auth(connection)
+        assert self._oauth is not None
+        form = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": self._redirect_uri(),
+            "client_id": await self._secret(connection.id, OAUTH_CLIENT_ID) or "",
+            "client_secret": await self._secret(connection.id, OAUTH_CLIENT_SECRET) or "",
+        }
+        if pending.get("verifier"):
+            form["code_verifier"] = pending["verifier"]
+        try:
+            body = await self._oauth.token(
+                self._vendor_url(auth.token_url, connection.config), form
+            )
+        except IntegrationError as exc:
+            await self._save(connection, state="failing", last_error=f"{exc.kind}: {exc.message}")
+            raise Invalid(exc.message, slug=f"integration-{exc.kind}") from exc
+        refresh = body.get("refresh_token")
+        if not isinstance(refresh, str) or not refresh:
+            message = "the vendor issued no refresh token; request offline access in its app"
+            await self._save(connection, state="failing", last_error=f"auth_failed: {message}")
+            raise Invalid(message, slug="integration-auth_failed")
+        await asyncio.to_thread(
+            self._vault.put, secret_name(connection.id, OAUTH_REFRESH_TOKEN), refresh
+        )
+        secrets_set = sorted({*connection.secrets_set, OAUTH_REFRESH_TOKEN})
+        return await self._save(
+            connection, secrets_set=secrets_set, state="pending", identity=None, last_error=None
+        )
 
     # --- validation and collection -------------------------------------------------------------
 
@@ -456,7 +666,7 @@ class IntegrationService:
         async def work(job: Job) -> JobOutcome:
             current = await self._connection(connection_id)
             try:
-                env = await asyncio.to_thread(self._credentials, current, package)
+                env = await self._credentials(current, package)
                 report = await self._host.validate(package, current.config, env)
             except IntegrationError as exc:
                 await self._save(current, state="failing", last_error=f"{exc.kind}: {exc}")
@@ -529,7 +739,7 @@ class IntegrationService:
             if spec is None:
                 raise Invalid(f"{package.id} {package.manifest.version} does not emit {source}")
             try:
-                env = await asyncio.to_thread(self._credentials, connection, package)
+                env = await self._credentials(connection, package)
                 report = await self._collect_with_retries(package, source, connection, env)
                 collected = utc(self._clock())
                 content, warnings = build_snapshot(

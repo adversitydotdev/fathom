@@ -29,6 +29,7 @@ class Connection(BaseModel):
     last_validated: datetime | None = None
     last_error: str | None = None
     secrets_set: list[str] = Field(default_factory=list)  # names only, never values
+    external_id: str | None = None  # aws_role: the ExternalId the role's trust policy requires
     created: datetime
     modified: datetime
     created_by_ref: str | None = None

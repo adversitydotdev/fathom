@@ -193,3 +193,19 @@ class SecretVault(Protocol):
     def put(self, name: str, value: str) -> None: ...
 
     def delete(self, name: str) -> None: ...
+
+
+class OAuthClient(Protocol):
+    """Talks to a vendor's OAuth token endpoint (RFC 0005 section 5)."""
+
+    async def token(self, token_url: str, form: Mapping[str, str]) -> Mapping[str, Any]:
+        """POST a form to the token endpoint. Raises IntegrationError("auth_failed", ...)."""
+        ...
+
+
+class RoleAssumer(Protocol):
+    """Assumes an organization's read-only IAM role for one operation (RFC 0005 section 5)."""
+
+    async def assume(self, role_arn: str, external_id: str, session_name: str) -> Mapping[str, str]:
+        """Returns AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN."""
+        ...

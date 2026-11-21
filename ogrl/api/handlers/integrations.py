@@ -1,13 +1,16 @@
 """Handlers for integrations, connections, and snapshots (RFC 0005)."""
 
+import html
 from typing import Annotated
 
 from fastapi import Body, Query, Response
+from fastapi.responses import HTMLResponse
 
 from ogrl.api.handlers.objects import IfMatch
 from ogrl.api.paths import integrations as i
 from ogrl.api.registrar import CurrentPrincipal, Registrar
 from ogrl.container import Container
+from ogrl.errors import OGRLError
 from ogrl.kernel.rules import SNAPSHOT_MEDIA_TYPE
 from ogrl.operations.integrations import (
     CollectionRequest,
@@ -16,6 +19,14 @@ from ogrl.operations.integrations import (
     SecretWrite,
     TemplateEnable,
 )
+
+
+def _page(title: str, message: str) -> str:
+    return (
+        "<!doctype html><meta charset=utf-8><title>OGRL</title>"
+        f"<main style='font:16px system-ui;margin:4rem auto;max-width:32rem'>"
+        f"<h1>{html.escape(title)}</h1><p>{html.escape(message)}</p></main>"
+    )
 
 
 def register(registrar: Registrar, c: Container) -> None:
@@ -78,6 +89,26 @@ def register(registrar: Registrar, c: Container) -> None:
     registrar.handle(i.SET_SECRET, set_secret)
     registrar.handle(i.VALIDATE_CONNECTION, validate_connection)
     registrar.handle(i.COLLECT, collect)
+
+    async def oauth_start(id: str, principal: CurrentPrincipal):
+        return await s.oauth_start(principal, id)
+
+    async def oauth_callback(
+        state: str | None = None, code: str | None = None, error: str | None = None
+    ) -> HTMLResponse:
+        try:
+            connection = await s.oauth_callback(state, code, error)
+        except OGRLError as exc:
+            return HTMLResponse(_page("Authorization failed", exc.detail), status_code=400)
+        return HTMLResponse(
+            _page(
+                "Connected",
+                f"{connection.name} is authorized. Validate it in OGRL; you can close this tab.",
+            )
+        )
+
+    registrar.handle(i.OAUTH_START, oauth_start)
+    registrar.handle(i.OAUTH_CALLBACK, oauth_callback)
 
     async def list_snapshots(
         principal: CurrentPrincipal,

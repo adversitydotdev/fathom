@@ -24,6 +24,8 @@ OGRL_RUN_SCHEDULER       `true` runs the export schedule in this process (RFC 00
 OGRL_EXPORT_INTERVAL     Seconds between scheduled exports. Default 86400.
 OGRL_INTEGRATION_TICK    Seconds between scheduled integration test runs (RFC 0005 section 6).
                             Default 300. Runs where OGRL_RUN_SCHEDULER=true.
+OGRL_PUBLIC_URL          The deployment's stable origin, such as https://grc.acme.com. OAuth
+                            connections need it for /v1/oauth/callback (RFC 0005 section 5).
 OGRL_SNAPSHOT_REUSE      Seconds a snapshot may be reused before a run collects again. Default 3600.
 OGRL_QUEUE_URL           Optional SQS queue URL for job worker wakeups.
 OGRL_SSM_PREFIX          AWS SSM Parameter Store prefix (e.g. `/ogrl/ogrl`) for harness secrets.
@@ -58,6 +60,7 @@ from ogrl.adapters.library import GitLibrary
 from ogrl.adapters.queue import JobQueue, SqsJobQueue
 from ogrl.adapters.s3 import S3Blobs
 from ogrl.adapters.secrets import EnvSecrets, FileVault, MemoryVault, SsmSecrets, SsmVault
+from ogrl.adapters.sts import StsRoleAssumer
 from ogrl.agent.config import AgentConfig
 from ogrl.api.app import create_app
 from ogrl.auth import (
@@ -276,6 +279,8 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         connections=connections,
         vault=vault,
         integrations_dir=integrations_dir,
+        role_assumer=StsRoleAssumer(region=region),
+        public_url=env.get("OGRL_PUBLIC_URL") or None,
         snapshot_reuse=timedelta(seconds=float(env.get("OGRL_SNAPSHOT_REUSE", "3600"))),
         export=ExportSettings(remote=env.get("OGRL_EXPORT_REMOTE") or None),
         harness_user=env.get("OGRL_HARNESS_USER") or None,

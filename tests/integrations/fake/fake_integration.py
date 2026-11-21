@@ -58,7 +58,12 @@ def handle(request):
 
     config = params.get("config") or {}
     mode = config.get("mode", "")
-    if os.environ.get("FAKE_TOKEN") != "s3cret" or mode == "auth_failed":
+    authorized = (
+        os.environ.get("FAKE_TOKEN") == "s3cret"
+        or os.environ.get("OGRL_ACCESS_TOKEN", "").startswith("access-")
+        or os.environ.get("AWS_SESSION_TOKEN") == "fake-session"
+    )
+    if not authorized or mode == "auth_failed":
         return fail(rid, "auth_failed", "the token was rejected")
     if mode == "rate_limited":
         return fail(rid, "rate_limited", "slow down", retry_after=1)

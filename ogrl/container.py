@@ -13,8 +13,10 @@ from ogrl.access import Authorizer, Role, StaticPolicy
 from ogrl.adapters.fetch import UrlFetcher
 from ogrl.adapters.git import GitCli
 from ogrl.adapters.library import DirectoryLibrary, GitLibrary
+from ogrl.adapters.oauth import HttpOAuthClient
 from ogrl.adapters.queue import JobQueue
 from ogrl.adapters.secrets import EnvSecrets, MemoryVault
+from ogrl.adapters.sts import StsRoleAssumer
 from ogrl.agent.config import AgentConfig
 from ogrl.auth import Authenticator
 from ogrl.auth.oidc import IdentityProvider
@@ -42,7 +44,7 @@ from ogrl.operations.status import StatusService
 from ogrl.operations.store import BlobStore, ObjectStore
 from ogrl.persistence.memory import MemoryBlobs, MemoryConnections, MemoryStore
 from ogrl.plugins import Plugins
-from ogrl.plugins.ports import IntegrationHost, Secrets, SecretVault
+from ogrl.plugins.ports import IntegrationHost, OAuthClient, RoleAssumer, Secrets, SecretVault
 from ogrl.renderer import OscalRenderer, SspRenderer
 from ogrl.runner import ShellRunner
 
@@ -110,6 +112,9 @@ def build(
     integration_host: IntegrationHost | None = None,
     integrations_dir: Path | None = None,
     snapshot_reuse: timedelta = SNAPSHOT_REUSE,
+    oauth_client: OAuthClient | None = None,
+    role_assumer: RoleAssumer | None = None,
+    public_url: str | None = None,
     export: ExportSettings | None = None,
     harness_user: str | None = None,
     allowed_origins: tuple[str, ...] = (),
@@ -152,6 +157,9 @@ def build(
         plugins.integrations,
         clock,
         reuse=snapshot_reuse,
+        oauth=oauth_client or HttpOAuthClient(),
+        assumer=role_assumer or StsRoleAssumer(),
+        public_url=public_url,
     )
     harness = HarnessService(objects, blobs, authorizer, jobs, plugins, clock, integrations)
     auth = AuthService(

@@ -36,6 +36,7 @@ Metadata:
           default: Name, mail, and the load balancer
         Parameters:
           - DomainName
+          - PublicUrl
           - HostedZoneId
           - EnableLoadBalancer
           - CertificateArn
@@ -147,6 +148,11 @@ Parameters:
     Default: ""
     AllowedPattern: "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$"
     Description: Domain for the SES identity, and for the alias record when a hosted zone and load balancer are set. Leave empty to skip mail.
+  PublicUrl:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$"
+    Description: The stable https origin users reach OGRL at. OAuth integration connections need it for their callback (RFC 0005 section 5). Leave empty until a domain or load balancer gives the deployment a stable name.
   HostedZoneId:
     Type: String
     Default: ""
@@ -968,6 +974,13 @@ Resources:
                   - ssm:GetParameters
                   - ssm:GetParametersByPath
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ogrl/${AWS::StackName}/*
+              # aws_role connections (RFC 0005 section 5): only roles the organization tagged.
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: "*"
+                Condition:
+                  StringEquals:
+                    aws:ResourceTag/ogrl-integration: "true"
               # Integration connection secrets (RFC 0005 section 5): write-only from the API.
               - Effect: Allow
                 Action:
@@ -1090,6 +1103,8 @@ Resources:
               Value: !Ref Bucket
             - Name: OGRL_SSM_PREFIX
               Value: !Sub /ogrl/${AWS::StackName}
+            - Name: OGRL_PUBLIC_URL
+              Value: !Ref PublicUrl
             - Name: OGRL_QUEUE_URL
               Value: !If [QueueOn, !Ref JobQueue, ""]
           Secrets:
@@ -1163,6 +1178,8 @@ Resources:
               Value: !Ref Bucket
             - Name: OGRL_SSM_PREFIX
               Value: !Sub /ogrl/${AWS::StackName}
+            - Name: OGRL_PUBLIC_URL
+              Value: !Ref PublicUrl
             - Name: OGRL_QUEUE_URL
               Value: !If [QueueOn, !Ref JobQueue, ""]
           Secrets:

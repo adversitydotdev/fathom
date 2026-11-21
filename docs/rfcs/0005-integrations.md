@@ -161,15 +161,15 @@ Binding the "Corporate IdP" component to an Okta connection therefore covers eve
 |---|---|
 | `fields` | The operator enters each declared field. Covers API tokens, service-account keys, and GitHub App IDs with private keys (the integration mints installation tokens itself). |
 | `oauth2` | Bring-your-own OAuth application, below. |
-| `aws_role` | The operator creates a read-only IAM role in the target account trusting the OGRL task role, with an external ID the application generates per connection. The harness calls `sts:AssumeRole` before each operation and passes short-lived credentials to the integration. The task role gains `sts:AssumeRole` on roles tagged `ogrl-integration=true`. |
+| `aws_role` | The connection's config carries `aws_role_arn`. The operator creates a read-only IAM role in the target account, tagged `ogrl-integration=true`, trusting the OGRL task role and requiring the external ID the application generates per connection (returned as `external_id`). The harness calls `sts:AssumeRole` before each operation and passes short-lived credentials to the integration. The task role has `sts:AssumeRole` only on roles with that tag. |
 
-**Bring-your-own OAuth.** Each organization registers its own OAuth application with the vendor. The connection form shows the vendor's setup steps from the integration's documentation and the deployment's single callback URL, `${OGRL_PUBLIC_URL}/v1/oauth/callback`. The operator enters the client ID and secret, which are stored like any other secret, then starts the flow:
+**Bring-your-own OAuth.** Each organization registers its own OAuth application with the vendor. The connection form shows the vendor's setup steps from the integration's documentation and the deployment's single callback URL, `${OGRL_PUBLIC_URL}/v1/oauth/callback`. The operator enters the client ID and secret as the secrets `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET`, then starts the flow:
 
-1. `GET /v1/connections/{id}/oauth/start` builds the authorize URL with the manifest's scopes, a PKCE verifier when `pkce: true`, and a `state` value that is signed, single-use, expires after ten minutes, and is tied to the operator's session and the connection.
+1. `POST /v1/connections/{id}/oauth/start` returns the authorize URL with the manifest's scopes, a PKCE challenge when `pkce: true`, and a random `state`. The server keeps only a hash of `state`, bound to the connection and the person who started the flow; it is single-use and expires after ten minutes. (The web UI calls the API with a bearer token from the server, so the state is not tied to a browser cookie.)
 2. The vendor redirects to `/v1/oauth/callback`. The application verifies `state`, exchanges the code, and stores the refresh token as a secret.
 3. Before each operation the harness refreshes the access token and passes it to the integration as `OGRL_ACCESS_TOKEN`. Integrations never see the client secret or refresh token.
 
-OAuth requires a stable origin. The default topology has no load balancer and a task's public address changes when it is replaced, so the application refuses to start an OAuth flow unless `OGRL_PUBLIC_URL` is set. Operators set it after configuring a domain or enabling `EnableLoadBalancer`. Integrations should offer a non-OAuth `auth` entry where the vendor supports one, since those work on the default topology.
+OAuth requires a stable origin. The default topology has no load balancer and a task's public address changes when it is replaced, so the application refuses to start an OAuth flow unless `OGRL_PUBLIC_URL` is set (the `PublicUrl` template parameter). Operators set it after configuring a domain or enabling `EnableLoadBalancer`. Integrations should offer a non-OAuth `auth` entry where the vendor supports one, since those work on the default topology.
 
 ## 6. Collection
 
@@ -291,7 +291,7 @@ It provides the stdio framing and lifecycle, manifest and schema validation at s
 | `GET /connections`, `POST /connections`, `GET /connections/{id}`, `PATCH /connections/{id}` | Connection CRUD (`If-Match` as elsewhere). |
 | `PUT /connections/{id}/secrets/{name}` | Write-only secret value. |
 | `POST /connections/{id}/validate` | Run `connection.validate` (job). |
-| `GET /connections/{id}/oauth/start`, `GET /oauth/callback` | Bring-your-own OAuth. |
+| `POST /connections/{id}/oauth/start`, `GET /oauth/callback` | Bring-your-own OAuth. |
 | `POST /connections/{id}/collections` | Collect one or more sources now (job). |
 | `GET /snapshots`, `GET /snapshots/{id}`, `GET /snapshots/{id}/content` | Snapshot metadata and bytes, filterable by connection and source. |
 
