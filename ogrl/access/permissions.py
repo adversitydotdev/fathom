@@ -53,4 +53,7 @@ class Permission(StrEnum):
     EXPORTS_RUN = "exports:run", "Write the git snapshot"
     RESTORE_RUN = "restore:run", "Restore a snapshot into an empty database"
     CONNECTORS_RUN = "connectors:run", "Start connector jobs"
+    # Connections hold vendor credentials (RFC 0005 section 5).
+    INTEGRATIONS_MANAGE = "integrations:manage", "Manage integrations, connections, and credentials"
+    COLLECTIONS_RUN = "collections:run", "Validate connections and collect snapshots"
     MEMBERS_MANAGE = "members:manage", "Manage people, agents, and their roles"

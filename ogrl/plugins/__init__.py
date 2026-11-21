@@ -5,8 +5,12 @@ their adapter is an ordinary `Runner` or `Connector` registered here.
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from ogrl.plugins.ports import Connector, Importer, Renderer, Runner
+
+if TYPE_CHECKING:
+    from ogrl.integrations.manifest import Package
 
 
 class Registry[T]:
@@ -32,3 +36,4 @@ class Plugins:
     renderers: Registry[Renderer] = field(default_factory=lambda: Registry("renderer"))
     runners: Registry[Runner] = field(default_factory=lambda: Registry("runner"))
     connectors: Registry[Connector] = field(default_factory=lambda: Registry("connector"))
+    integrations: "Registry[Package]" = field(default_factory=lambda: Registry("integration"))

@@ -14,19 +14,23 @@ from ogrl.adapters.fetch import UrlFetcher
 from ogrl.adapters.git import GitCli
 from ogrl.adapters.library import DirectoryLibrary, GitLibrary
 from ogrl.adapters.queue import JobQueue
-from ogrl.adapters.secrets import EnvSecrets
+from ogrl.adapters.secrets import EnvSecrets, MemoryVault
 from ogrl.agent.config import AgentConfig
 from ogrl.auth import Authenticator
 from ogrl.auth.oidc import IdentityProvider
 from ogrl.auth.store import AuthStore, MemoryAuthStore
 from ogrl.features import Feature, FeatureEvaluator, StaticFeatures
 from ogrl.importer import OGRLBundleImporter, OscalComponentImporter
+from ogrl.integrations.host import SubprocessHost
+from ogrl.integrations.manifest import discover
 from ogrl.kernel.timeutil import now
 from ogrl.operations.auth import AuthService
+from ogrl.operations.connections import ConnectionStore
 from ogrl.operations.connectors import ConnectorService
 from ogrl.operations.content import ContentService
 from ogrl.operations.exports import ExportService, ExportSettings
 from ogrl.operations.harness import HarnessService
+from ogrl.operations.integrations import IntegrationService
 from ogrl.operations.jobs import Executor, InlineExecutor, JobService
 from ogrl.operations.library import LibraryService
 from ogrl.operations.objects import ObjectService
@@ -36,9 +40,9 @@ from ogrl.operations.restore import RestoreService
 from ogrl.operations.sources import Fetcher, Git, LibrarySource
 from ogrl.operations.status import StatusService
 from ogrl.operations.store import BlobStore, ObjectStore
-from ogrl.persistence.memory import MemoryBlobs, MemoryStore
+from ogrl.persistence.memory import MemoryBlobs, MemoryConnections, MemoryStore
 from ogrl.plugins import Plugins
-from ogrl.plugins.ports import Secrets
+from ogrl.plugins.ports import IntegrationHost, Secrets, SecretVault
 from ogrl.renderer import OscalRenderer, SspRenderer
 from ogrl.runner import ShellRunner
 
@@ -76,6 +80,7 @@ class Container:
     exports: ExportService
     restore: RestoreService
     connectors: ConnectorService
+    integrations: IntegrationService
     plugins: Plugins = field(default_factory=Plugins)
     queue: JobQueue | None = None
     allowed_origins: tuple[str, ...] = ()
@@ -100,6 +105,10 @@ def build(
     fetcher: Fetcher | None = None,
     git: Git | None = None,
     secrets: Secrets | None = None,
+    connections: ConnectionStore | None = None,
+    vault: SecretVault | None = None,
+    integration_host: IntegrationHost | None = None,
+    integrations_dir: Path | None = None,
     export: ExportSettings | None = None,
     harness_user: str | None = None,
     allowed_origins: tuple[str, ...] = (),
@@ -125,9 +134,22 @@ def build(
     plugins.importers.register("oscal-component", OscalComponentImporter())
     plugins.renderers.register("ssp", SspRenderer())
     plugins.renderers.register("oscal", OscalRenderer())
+    for package in discover(integrations_dir) if integrations_dir else []:
+        plugins.integrations.register(package.id, package)
 
     objects = ObjectService(store, authorizer, clock)
     jobs = JobService(store, blobs, authorizer, executor or InlineExecutor(), clock)
+    integrations = IntegrationService(
+        objects,
+        blobs,
+        authorizer,
+        jobs,
+        connections or MemoryConnections(),
+        vault or MemoryVault(),
+        integration_host or SubprocessHost(user=harness_user),
+        plugins.integrations,
+        clock,
+    )
     auth = AuthService(
         store,
         auth_store,
@@ -152,11 +174,12 @@ def build(
         jobs=jobs,
         library=LibraryService(store, authorizer, jobs, library_source, clock),
         providers=ProviderService(store, authorizer, jobs, fetcher, plugins, clock),
-        harness=HarnessService(objects, blobs, authorizer, jobs, plugins, clock),
+        harness=HarnessService(objects, blobs, authorizer, jobs, plugins, clock, integrations),
         renders=RenderService(store, authorizer, jobs, plugins, clock),
         exports=ExportService(store, blobs, authorizer, jobs, git, export, clock),
         restore=RestoreService(store, blobs, authorizer, jobs, library_source, fetcher, git, clock),
         connectors=ConnectorService(objects, blobs, authorizer, jobs, plugins, clock),
+        integrations=integrations,
         plugins=plugins,
         queue=queue,
         allowed_origins=allowed_origins,

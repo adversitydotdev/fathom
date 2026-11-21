@@ -131,3 +131,27 @@ auth_tokens = Table(
     Column("last_used_at", DateTime(timezone=True)),
     Index("auth_tokens_actor", "actor_id"),
 )
+
+# --- Integrations (RFC 0005): connections and snapshot rows. Not RFC 0001 objects. ---
+
+connections = Table(
+    "connections",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("integration_id", Text, nullable=False),
+    Column("modified", DateTime(timezone=True), nullable=False),
+    Column("body", JSONB, nullable=False),
+    Index("connections_integration", "integration_id"),
+)
+
+snapshots = Table(
+    "snapshots",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("connection_id", Text, nullable=False),
+    Column("source", Text, nullable=False),
+    Column("collected", DateTime(timezone=True), nullable=False),
+    Column("complete", Boolean, nullable=False),
+    Column("body", JSONB, nullable=False),
+    Index("snapshots_connection_source_collected", "connection_id", "source", "collected"),
+)

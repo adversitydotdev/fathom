@@ -14,6 +14,7 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Control, Envelope, Origin
 from ogrl.kernel.timeutil import later_than, now
+from ogrl.operations.connections import Connection, Snapshot
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -219,3 +220,56 @@ class MemoryBlobs:
 
     async def get(self, uri: str) -> bytes | None:
         return self._blobs.get(uri)
+
+
+class MemoryConnections:
+    """Connections and snapshot rows (RFC 0005) for tests and local runs."""
+
+    def __init__(self) -> None:
+        self._connections: dict[str, Connection] = {}
+        self._snapshots: dict[str, Snapshot] = {}
+
+    async def get_connection(self, connection_id: str) -> Connection | None:
+        return self._connections.get(connection_id)
+
+    async def list_connections(self) -> list[Connection]:
+        return [self._connections[k] for k in sorted(self._connections)]
+
+    async def insert_connection(self, connection: Connection) -> None:
+        if connection.id in self._connections:
+            raise Conflict(f"{connection.id} already exists")
+        self._connections[connection.id] = connection
+
+    async def replace_connection(self, connection: Connection, expected_modified: datetime) -> None:
+        current = self._connections.get(connection.id)
+        if current is None or current.modified != expected_modified:
+            raise PreconditionFailed(f"{connection.id} changed since {expected_modified}")
+        self._connections[connection.id] = connection
+
+    async def delete_connection(self, connection_id: str) -> None:
+        self._connections.pop(connection_id, None)
+
+    async def insert_snapshot(self, snapshot: Snapshot) -> None:
+        self._snapshots[snapshot.id] = snapshot
+
+    async def get_snapshot(self, snapshot_id: str) -> Snapshot | None:
+        return self._snapshots.get(snapshot_id)
+
+    async def list_snapshots(
+        self, connection_id: str | None = None, source: str | None = None
+    ) -> list[Snapshot]:
+        found = [
+            s
+            for s in self._snapshots.values()
+            if (connection_id is None or s.connection_id == connection_id)
+            and (source is None or s.source == source)
+        ]
+        return sorted(found, key=lambda s: (s.collected, s.id), reverse=True)
+
+    async def latest_snapshot(
+        self, connection_id: str, source: str, not_before: datetime, not_after: datetime
+    ) -> Snapshot | None:
+        for snapshot in await self.list_snapshots(connection_id, source):
+            if snapshot.complete and not_before <= snapshot.collected <= not_after:
+                return snapshot
+        return None

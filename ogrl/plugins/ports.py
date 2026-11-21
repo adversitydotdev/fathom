@@ -195,3 +195,17 @@ class IntegrationHost(Protocol):
         snapshots: Mapping[str, bytes],
         time_limit: int,
     ) -> CheckReport: ...
+
+
+class SecretVault(Protocol):
+    """Writable secrets for integration connections (RFC 0005 section 5).
+
+    Names look like `integrations/<connection id>/<NAME>`. Values never reach
+    the database, an API response, or a log line.
+    """
+
+    def get(self, name: str) -> str | None: ...
+
+    def put(self, name: str, value: str) -> None: ...
+
+    def delete(self, name: str) -> None: ...

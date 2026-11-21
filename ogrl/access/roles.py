@@ -60,6 +60,7 @@ ROLES: tuple[RoleDefinition, ...] = (
                 P.CONTROLS_REVOKE,
                 P.IMPLEMENTATIONS_ATTEST,
                 P.TESTS_DEFINE_RUN,
+                P.COLLECTIONS_RUN,
                 P.SYSTEMS_WRITE,
                 P.OBJECTS_REVOKE,
             }
@@ -90,6 +91,7 @@ ROLES: tuple[RoleDefinition, ...] = (
                 P.EXPORTS_RUN,
                 P.RESTORE_RUN,
                 P.CONNECTORS_RUN,
+                P.INTEGRATIONS_MANAGE,
                 P.MEMBERS_MANAGE,
             }
         ),

@@ -1,0 +1,280 @@
+"""Connections, collection, and snapshot runs through the services (RFC 0005, RFC 0001 7.6).
+
+The fake integration in tests/integrations/fake stands in for a vendor.
+"""
+
+import asyncio
+import json
+from datetime import UTC, datetime
+
+import pytest
+
+from ogrl.errors import Invalid, NotFound, PreconditionFailed
+from ogrl.operations.integrations import (
+    CollectionRequest,
+    ConnectionPatch,
+    ConnectionWrite,
+    SecretWrite,
+    TemplateEnable,
+    build_snapshot,
+)
+from ogrl.plugins.ports import IntegrationError
+from tests.conftest import C1, LIB_TEST, PRINCIPALS, Api
+
+FAKE = "dev.ogrl.fake"
+USERS = "dev.ogrl.fake/users@1"
+ADMIN = PRINCIPALS["administrator"]
+
+
+def run(coro):
+    return asyncio.run(coro)
+
+
+@pytest.fixture
+def world(app, program, pulled: Api):
+    """A component in the program's system, and an implementation of C1 on the system."""
+    _, c = app
+    component = pulled.post("/components", {"name": "Corporate IdP", "kind": "software"})
+    system = pulled.get(f"/systems/{program['system']}")
+    pulled.patch(
+        f"/systems/{program['system']}",
+        {"component_refs": [component["id"]]},
+        if_match=system["modified"],
+    )
+    impl = pulled.post(
+        "/implementations",
+        {
+            "system_ref": program["system"],
+            "control_ref": C1,
+            "status": "implemented",
+            "responsibility": "customer",
+        },
+    )
+    return {"c": c, "api": pulled, "component": component["id"], "impl": impl["id"], **program}
+
+
+def connect(c, component: str, dataset: str = "acme", mode: str | None = None, name="Fake prod"):
+    config = {"dataset": dataset, **({"mode": mode} if mode else {})}
+    connection = run(
+        c.integrations.create_connection(
+            ADMIN,
+            ConnectionWrite(
+                integration_id=FAKE,
+                name=name,
+                config=config,
+                auth_kind="fields",
+                bindings=[component],
+            ),
+        )
+    )
+    return run(
+        c.integrations.put_secret(ADMIN, connection.id, "FAKE_TOKEN", SecretWrite(value="s3cret"))
+    )
+
+
+def rule_test(api: Api, **run_fields) -> dict:
+    return api.post(
+        "/tests",
+        {
+            "name": "Active users have MFA",
+            "control_ref": C1,
+            "fulfills_ref": LIB_TEST,
+            "method": "automated",
+            "interval": "daily",
+            "run": {
+                "runner": "rule",
+                "source": USERS,
+                "select": 'item.status == "ACTIVE"',
+                "assert": "item.mfa",
+                **run_fields,
+            },
+        },
+    )
+
+
+def run_test(api: Api, test_id: str, impl: str) -> dict:
+    job = api.post(f"/tests/{test_id}/runs", {"implementation_id": impl}, expect=202)
+    assert job["status"] == "succeeded", job
+    return api.get(f"/results/{job['result_id']}")
+
+
+def test_integrations_are_listed(world):
+    c = world["c"]
+    views = run(c.integrations.list_integrations(ADMIN))
+    assert [v.id for v in views] == [FAKE]
+    view = views[0]
+    assert view.resources == [{"name": "users", "version": 1, "source": USERS}]
+    assert view.checks[0]["check"] == "dev.ogrl.fake/admins-have-mfa@1"
+    assert view.auth[0]["supported"] is True
+
+
+def test_connection_lifecycle(world):
+    c = world["c"]
+    connection = connect(c, world["component"])
+    assert (connection.state, connection.secrets_set) == ("pending", ["FAKE_TOKEN"])
+    assert "s3cret" not in connection.model_dump_json()
+
+    job = run(c.integrations.validate(ADMIN, connection.id))
+    assert job.status == "succeeded", job
+    connection = run(c.integrations.get_connection(ADMIN, connection.id))
+    assert (connection.state, connection.identity) == ("active", "acme as svc-ogrl")
+
+    renamed = run(
+        c.integrations.update_connection(
+            ADMIN, connection.id, ConnectionPatch(name="Fake"), connection.modified
+        )
+    )
+    assert renamed.name == "Fake"
+    with pytest.raises(PreconditionFailed):
+        run(
+            c.integrations.update_connection(
+                ADMIN, connection.id, ConnectionPatch(name="x"), connection.modified
+            )
+        )
+    run(c.integrations.delete_connection(ADMIN, connection.id))
+    with pytest.raises(NotFound):
+        run(c.integrations.get_connection(ADMIN, connection.id))
+
+
+def test_connection_refusals(world):
+    c = world["c"]
+    with pytest.raises(Invalid) as caught:
+        run(
+            c.integrations.create_connection(
+                ADMIN,
+                ConnectionWrite(
+                    integration_id=FAKE,
+                    name="bad",
+                    config={"dataset": "Not Valid", "extra": "x"},
+                    auth_kind="oauth2",
+                    bindings=[C1],
+                ),
+            )
+        )
+    pointers = {e.pointer for e in caught.value.errors}
+    assert pointers == {"/config/dataset", "/config/extra", "/auth_kind", "/bindings/0"}
+    connection = connect(c, world["component"])
+    with pytest.raises(NotFound):
+        run(c.integrations.put_secret(ADMIN, connection.id, "OTHER", SecretWrite(value="x")))
+
+
+def test_failed_validation_marks_the_connection(world):
+    c = world["c"]
+    connection = connect(c, world["component"], mode="auth_failed")
+    job = run(c.integrations.validate(ADMIN, connection.id))
+    assert job.status == "failed"
+    assert "auth_failed" in job.error.detail
+    connection = run(c.integrations.get_connection(ADMIN, connection.id))
+    assert connection.state == "failing"
+    assert connection.last_error.startswith("auth_failed")
+
+
+def test_collection_stores_a_snapshot(world):
+    c = world["c"]
+    connection = connect(c, world["component"], mode="extra_fields")
+    job = run(c.integrations.collect(ADMIN, connection.id, CollectionRequest()))
+    assert job.status == "succeeded", job
+    (snapshot,) = run(c.integrations.list_snapshots(ADMIN, connection.id, None))
+    assert (snapshot.source, snapshot.complete, snapshot.item_count) == (USERS, True, 3)
+    assert snapshot.warnings == ["removed undeclared fields: password_hash"]
+    document = json.loads(run(c.integrations.snapshot_content(ADMIN, snapshot.id)))
+    assert document["source"] == USERS
+    assert all("password_hash" not in item for item in document["items"])
+
+
+def test_rule_run_records_result_subjects_and_snapshot_evidence(world):
+    c, api = world["c"], world["api"]
+    connect(c, world["component"])
+    test = rule_test(api)
+    result = run_test(api, test["id"], world["impl"])
+    assert (result["outcome"], result["summary"]) == ("fail", "1 of 2 selected items pass")
+    assert result["subjects"] == [{"kind": "users", "name": "bob@acme.test", "external_id": "u2"}]
+    (evidence_id,) = result["evidence_refs"]
+    evidence = api.get(f"/evidence/{evidence_id}")
+    assert evidence["resource"]["media_type"] == "application/vnd.ogrl.snapshot+json"
+    assert evidence["collected"] == result["observed"]
+    (snapshot,) = run(c.integrations.list_snapshots(ADMIN, None, USERS))
+    assert evidence["resource"]["digest"]["value"] == snapshot.digest
+
+    # A second run reuses the fresh snapshot instead of collecting again.
+    run_test(api, test["id"], world["impl"])
+    assert len(run(c.integrations.list_snapshots(ADMIN, None, USERS))) == 1
+
+
+def test_two_connections_concatenate_in_id_order(world):
+    c, api = world["c"], world["api"]
+    connect(c, world["component"], dataset="acme", name="a")
+    connect(c, world["component"], dataset="secure", name="b")
+    result = run_test(api, rule_test(api)["id"], world["impl"])
+    assert result["summary"] == "2 of 3 selected items pass"
+    assert len(result["evidence_refs"]) == 2
+
+
+def test_selection_errors(world):
+    c, api = world["c"], world["api"]
+    test = rule_test(api)
+    result = run_test(api, test["id"], world["impl"])
+    assert result["outcome"] == "error"
+    assert result["summary"].startswith("no connection of dev.ogrl.fake is bound to")
+
+    connect(c, world["component"], mode="incomplete")
+    result = run_test(api, test["id"], world["impl"])
+    assert result["outcome"] == "error"
+    assert "incomplete: rate limited after page 1" in result["summary"]
+
+
+def test_integration_check_run(world):
+    c, api = world["c"], world["api"]
+    connect(c, world["component"])
+    test = api.post(
+        "/tests",
+        {
+            "name": "Admins have MFA",
+            "control_ref": C1,
+            "method": "automated",
+            "interval": "daily",
+            "run": {
+                "runner": "integration",
+                "check": "dev.ogrl.fake/admins-have-mfa@1",
+                "sources": [USERS],
+            },
+        },
+    )
+    result = run_test(api, test["id"], world["impl"])
+    assert (result["outcome"], result["summary"]) == ("fail", "1 admins without MFA")
+    assert result["subjects"] == [
+        {"kind": "account", "name": "carol@acme.test", "external_id": "u3"}
+    ]
+
+
+def test_template_creates_an_organization_test(world):
+    c = world["c"]
+    test = run(c.integrations.enable_template(ADMIN, FAKE, "mfa-enforcement", TemplateEnable()))
+    assert test.fulfills_ref == LIB_TEST
+    assert test.run.runner == "rule"
+    assert test.created_by_ref == ADMIN.actor_id
+    assert test.extensions["dev.ogrl.integration"]["template"] == "mfa-enforcement"
+
+
+def test_rate_limits_are_retried(world, monkeypatch):
+    c = world["c"]
+    slept: list[float] = []
+
+    async def sleep(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr(c.integrations, "_sleep", sleep)
+    connection = connect(c, world["component"], mode="rate_limited")
+    job = run(c.integrations.collect(ADMIN, connection.id, CollectionRequest()))
+    assert job.status == "failed"
+    assert slept == [1, 1, 1]
+
+
+def test_build_snapshot_rejects_items_that_break_the_schema():
+    schema = {"type": "object", "required": ["id"], "properties": {"id": {"type": "string"}}}
+    collected = datetime(2026, 11, 21, tzinfo=UTC)
+    content, warnings = build_snapshot(USERS, collected, True, [{"id": "a"}], schema)
+    assert json.loads(content)["collected"] == "2026-11-21T00:00:00Z"
+    assert warnings == []
+    with pytest.raises(IntegrationError, match="item 0 at id"):
+        build_snapshot(USERS, collected, True, [{"id": 1}], schema)

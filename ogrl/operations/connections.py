@@ -1,0 +1,87 @@
+"""Connections and snapshots: records the application keeps beside the objects (RFC 0005).
+
+Neither is an RFC 0001 object. A connection is deployment configuration (an
+installed integration, its non-secret config, which auth kind it uses, and the
+components and systems it is bound to). A snapshot row describes one stored
+snapshot document; the bytes live in object storage.
+"""
+
+from datetime import datetime
+from typing import Any, Literal, Protocol
+
+from pydantic import BaseModel, ConfigDict, Field
+
+ConnectionState = Literal["pending", "active", "failing", "disabled"]
+
+
+class Connection(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    integration_id: str
+    name: str
+    config: dict[str, str] = Field(default_factory=dict)
+    auth_kind: str
+    bindings: list[str] = Field(default_factory=list)
+    state: ConnectionState = "pending"
+    identity: str | None = None
+    granted_scopes: list[str] | None = None
+    last_validated: datetime | None = None
+    last_error: str | None = None
+    secrets_set: list[str] = Field(default_factory=list)  # names only, never values
+    created: datetime
+    modified: datetime
+    created_by_ref: str | None = None
+
+
+class Snapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    connection_id: str
+    source: str
+    collected: datetime
+    complete: bool
+    reason: str | None = None
+    item_count: int
+    size: int
+    uri: str
+    digest: str
+    job_id: str | None = None
+    warnings: list[str] | None = None
+
+
+class ConnectionStore(Protocol):
+    async def get_connection(self, connection_id: str) -> Connection | None: ...
+
+    async def list_connections(self) -> list[Connection]:
+        """Ordered by id, which is also the binding order RFC 0001 7.6 concatenates by."""
+        ...
+
+    async def insert_connection(self, connection: Connection) -> None: ...
+
+    async def replace_connection(self, connection: Connection, expected_modified: datetime) -> None:
+        """Compare-and-set on `modified`. Raises PreconditionFailed when stale."""
+        ...
+
+    async def delete_connection(self, connection_id: str) -> None: ...
+
+    async def insert_snapshot(self, snapshot: Snapshot) -> None: ...
+
+    async def get_snapshot(self, snapshot_id: str) -> Snapshot | None: ...
+
+    async def list_snapshots(
+        self, connection_id: str | None = None, source: str | None = None
+    ) -> list[Snapshot]:
+        """Newest first."""
+        ...
+
+    async def latest_snapshot(
+        self, connection_id: str, source: str, not_before: datetime, not_after: datetime
+    ) -> Snapshot | None:
+        """The latest complete snapshot with `not_before <= collected <= not_after`."""
+        ...
+
+
+def connection_body(connection: Connection) -> dict[str, Any]:
+    return connection.model_dump(mode="json", exclude_none=True)
