@@ -4234,7 +4234,9 @@ components:
           type: string
         operation:
           type: string
-          description: An operationId in the integration's bundled OpenAPI description.
+          description: >
+            An operationId in the integration's bundled OpenAPI description (RFC 0006), or
+            `<service>.<Operation>` in its Smithy models (RFC 0007).
         params:
           type: object
           additionalProperties:
@@ -4247,6 +4249,17 @@ components:
           description: Output field to the dotted path it reads in each item. Must include id and name.
           additionalProperties:
             type: string
+        regions:
+          description: >
+            Smithy query sources (RFC 0007) over regional services: region codes, or "*" for
+            the connection's `regions` config. Each item gains `region`.
+          oneOf:
+            - type: array
+              items:
+                type: string
+                pattern: "^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$"
+            - type: string
+              enum: ["*"]
     DryRunRequest:
       allOf:
         - $ref: "#/components/schemas/QueryWrite"
@@ -4328,6 +4341,17 @@ components:
           type: object
           additionalProperties:
             type: string
+        regions:
+          description: >
+            Smithy query sources (RFC 0007) over regional services: region codes, or "*" for
+            the connection's `regions` config. Each item gains `region`.
+          oneOf:
+            - type: array
+              items:
+                type: string
+                pattern: "^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$"
+            - type: string
+              enum: ["*"]
         item_schema:
           type: object
           additionalProperties: true
@@ -4348,6 +4372,20 @@ components:
           type: string
         summary:
           type: string
+        protocol:
+          type: string
+          description: Smithy operations only, the AWS wire protocol (such as ec2Query).
+        regional:
+          type: boolean
+          description: Smithy operations only, whether the service is collected once per region.
+        queryable:
+          type: boolean
+          description: Whether a query source can use this operation; `reason` says why not.
+        reason:
+          type: string
+        items:
+          type: string
+          description: Where the list is in the response, when described.
         parameters:
           type: array
           items:
@@ -4358,7 +4396,10 @@ components:
                 type: string
               in:
                 type: string
-                enum: [path, query]
+                description: >
+                  OpenAPI: path or query. Smithy: value (a string) or json (JSON text, for
+                  lists and structures).
+                enum: [path, query, value, json]
               required:
                 type: boolean
               type:

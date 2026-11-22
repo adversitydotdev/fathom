@@ -1952,6 +1952,122 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/integrations/{id}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search an integration's read operations (query sources, RFC 0006).
+         * @description Operations of the bundled OpenAPI description that a query may use, matched by id, path, or summary. At most 100.
+         */
+        get: operations["searchOperations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/operations/{operation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Parameters and the flattened item schema of one operation. */
+        get: operations["describeOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Statically validate a query source definition.
+         * @description RFC 0006 section 6, step one. Needs no vendor call.
+         */
+        post: operations["validateQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Collect one sample of a query through a connection; nothing is stored.
+         * @description RFC 0006 section 6, step two. Stops after `max_items` items.
+         */
+        post: operations["dryRunQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List query source definitions. */
+        get: operations["listQueries"];
+        put?: never;
+        /**
+         * Save a query source definition (immutable per version).
+         * @description Validates statically first. A taken integration, name, and version is a 409; save changes as a new version.
+         */
+        post: operations["createQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one query source definition. */
+        get: operations["getQuery"];
+        put?: never;
+        post?: never;
+        /** Delete a query source no test reads. */
+        delete: operations["deleteQuery"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/snapshots": {
         parameters: {
             query?: never;
@@ -2212,6 +2328,106 @@ export interface components {
              */
             modified: string;
         };
+        QueryWrite: {
+            integration_id: string;
+            name: string;
+            /** @default 1 */
+            version?: number;
+            description?: string;
+            /** @description An operationId in the integration's bundled OpenAPI description (RFC 0006), or `<service>.<Operation>` in its Smithy models (RFC 0007). */
+            operation: string;
+            params?: {
+                [key: string]: string;
+            };
+            /** @description Dotted path to the list in the response body; empty when the body is the list. */
+            items?: string;
+            /** @description Output field to the dotted path it reads in each item. Must include id and name. */
+            fields?: {
+                [key: string]: string;
+            };
+            /** @description Smithy query sources (RFC 0007) over regional services: region codes, or "*" for the connection's `regions` config. Each item gains `region`. */
+            regions?: string[] | "*";
+        };
+        DryRunRequest: components["schemas"]["QueryWrite"] & {
+            connection_id: string;
+            /** @default 50 */
+            max_items?: number;
+        };
+        QueryCheck: {
+            valid: boolean;
+            source: string;
+            errors: components["schemas"]["PreviewProblem"][];
+            warnings: components["schemas"]["PreviewProblem"][];
+            item_schema?: {
+                [key: string]: unknown;
+            };
+            fields: components["schemas"]["ResourceField"][];
+        };
+        DryRun: {
+            check: components["schemas"]["QueryCheck"];
+            items: {
+                [key: string]: unknown;
+            }[];
+            count: number;
+            warnings: components["schemas"]["PreviewProblem"][];
+            error?: string;
+        };
+        QueryDefinition: {
+            id: string;
+            integration_id: string;
+            name: string;
+            version: number;
+            description?: string;
+            operation: string;
+            params: {
+                [key: string]: string;
+            };
+            items: string;
+            fields: {
+                [key: string]: string;
+            };
+            /** @description Smithy query sources (RFC 0007) over regional services: region codes, or "*" for the connection's `regions` config. Each item gains `region`. */
+            regions?: string[] | "*";
+            item_schema: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created: string;
+            created_by_ref?: string;
+        };
+        Operation: {
+            id: string;
+            method: string;
+            path: string;
+            summary: string;
+            /** @description Smithy operations only, the AWS wire protocol (such as ec2Query). */
+            protocol?: string;
+            /** @description Smithy operations only, whether the service is collected once per region. */
+            regional?: boolean;
+            /** @description Whether a query source can use this operation; `reason` says why not. */
+            queryable?: boolean;
+            reason?: string;
+            /** @description Where the list is in the response, when described. */
+            items?: string;
+            parameters: {
+                name: string;
+                /**
+                 * @description OpenAPI: path or query. Smithy: value (a string) or json (JSON text, for lists and structures).
+                 * @enum {string}
+                 */
+                in: "path" | "query" | "value" | "json";
+                required: boolean;
+                type: string;
+                description?: string;
+            }[];
+            /** @description The flattened item schema, when the response holds a list. `items` names where the list is. */
+            fields?: {
+                path: string;
+                type: string;
+                description?: string;
+                items: string;
+            }[];
+        };
         ResourceField: {
             name: string;
             /**
@@ -2240,6 +2456,11 @@ export interface components {
              * @default 50
              */
             limit?: number;
+            /** @description Evaluate these items (a dry run's sample) instead of stored snapshots. */
+            items?: {
+                [key: string]: unknown;
+            }[];
+            query?: components["schemas"]["QueryWrite"];
         };
         PreviewProblem: {
             pointer: string;
@@ -7115,6 +7336,209 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    searchOperations: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching operations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Operation"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    describeOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The operation, with `fields` when its response holds a list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    validateQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryWrite"];
+            };
+        };
+        responses: {
+            /** @description Errors and warnings by pointer, and the derived item schema. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryCheck"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    dryRunQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DryRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The sample, or the error that stopped it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DryRun"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listQueries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The definitions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QueryDefinition"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryWrite"];
+            };
+        };
+        responses: {
+            /** @description The definition. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryDefinition"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The definition. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryDefinition"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listSnapshots: {

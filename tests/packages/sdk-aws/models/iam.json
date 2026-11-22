@@ -1,0 +1,81 @@
+{
+ "shapes": {
+  "com.amazonaws.iam#Iam": {
+   "operations": [
+    {
+     "target": "com.amazonaws.iam#ListRoles"
+    }
+   ],
+   "traits": {
+    "aws.auth#sigv4": {
+     "name": "iam"
+    },
+    "aws.protocols#awsQuery": {}
+   },
+   "type": "service",
+   "version": "2010-05-08"
+  },
+  "com.amazonaws.iam#ListRoles": {
+   "input": {
+    "target": "com.amazonaws.iam#ListRolesRequest"
+   },
+   "output": {
+    "target": "com.amazonaws.iam#ListRolesResponse"
+   },
+   "traits": {
+    "smithy.api#paginated": {
+     "inputToken": "Marker",
+     "items": "Roles",
+     "outputToken": "Marker"
+    }
+   },
+   "type": "operation"
+  },
+  "com.amazonaws.iam#ListRolesRequest": {
+   "members": {
+    "Marker": {
+     "target": "smithy.api#String"
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.iam#ListRolesResponse": {
+   "members": {
+    "Marker": {
+     "target": "smithy.api#String"
+    },
+    "Roles": {
+     "target": "com.amazonaws.iam#roleListType",
+     "traits": {
+      "smithy.api#required": {}
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.iam#Role": {
+   "members": {
+    "RoleId": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#required": {}
+     }
+    },
+    "RoleName": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#required": {}
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.iam#roleListType": {
+   "member": {
+    "target": "com.amazonaws.iam#Role"
+   },
+   "type": "list"
+  }
+ },
+ "smithy": "2.0"
+}

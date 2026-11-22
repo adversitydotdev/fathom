@@ -23,12 +23,11 @@ from typing import Any, Literal
 from urllib.parse import urlencode, urlsplit
 
 from jsonschema import Draft202012Validator
-from ogrl_integration.openapi import Query
-from ogrl_integration.openapi import validate as query_validate
 from pydantic import BaseModel, ConfigDict, Field
 
 from ogrl.access import Authorizer, Permission, Principal, require
 from ogrl.errors import Conflict, FieldError, Invalid, NotFound, PreconditionFailed
+from ogrl.integrations.apimodel import ApiModel, QuerySpec
 from ogrl.integrations.archive import read_archive
 from ogrl.integrations.manifest import (
     AwsRoleAuth,
@@ -147,7 +146,7 @@ class InstallRequest(BaseModel):
 
 
 class QueryWrite(BaseModel):
-    """A query source definition (RFC 0006 section 3)."""
+    """A query source definition (RFC 0006 section 3; `regions` from RFC 0007 section 4)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -159,6 +158,7 @@ class QueryWrite(BaseModel):
     params: dict[str, str] = Field(default_factory=dict)
     items: str = ""
     fields: dict[str, str] = Field(default_factory=dict)
+    regions: list[str] | Literal["*"] | None = None
 
 
 class QueryCheck(BaseModel):
@@ -188,11 +188,16 @@ class DryRun(BaseModel):
 
 
 class OperationView(BaseModel):
-    id: str
+    id: str  # an operationId (OpenAPI) or <service>.<Operation> (Smithy)
     method: str
     path: str
     summary: str
+    protocol: str | None = None  # Smithy: the AWS wire protocol
+    regional: bool | None = None  # Smithy: collected once per region
+    queryable: bool = True
+    reason: str | None = None  # why it cannot be queried, when it cannot
     parameters: list[dict[str, Any]] = Field(default_factory=list)
+    items: str | None = None  # where the list is, when described
     fields: list[dict[str, Any]] | None = None  # the item schema, when described
 
 
@@ -1141,7 +1146,7 @@ class IntegrationService:
             return package, package.schema(source.name, source.major), None
         for query in await self._store.list_queries():
             if query.source == str(source):
-                if package.manifest.openapi is None:
+                if not package.manifest.queryable:
                     raise Invalid(
                         f"{package.id} {package.manifest.version} no longer supports query sources"
                     )
@@ -1151,82 +1156,54 @@ class IntegrationService:
             "and no query source defines it"
         )
 
-    def _openapi(self, integration_id: str) -> tuple[Package, Any, Any]:
+    def _api_model(self, integration_id: str) -> tuple[Package, ApiModel]:
         package = self.package(integration_id)
         try:
-            bundled = package.openapi()
+            model = package.api_model()
         except PackageError as exc:
             raise Invalid(str(exc)) from exc
-        if bundled is None:
+        if model is None:
             raise Invalid(
-                f"{integration_id} does not support query sources (no openapi in its manifest)",
+                f"{integration_id} does not support query sources (no API model in its manifest)",
                 errors=[
-                    FieldError("this integration has no OpenAPI description", "/integration_id")
+                    FieldError(
+                        "this integration bundles no OpenAPI description or Smithy model",
+                        "/integration_id",
+                    )
                 ],
             )
-        return package, *bundled
+        return package, model
 
     async def search_operations(
         self, principal: Principal, integration_id: str, text: str
     ) -> list[OperationView]:
-        """Read operations of the description whose id, path, or summary contain every word."""
+        """Queryable operations whose name, path, or summary contain every word."""
         require(self._authorizer, principal, Permission.PROGRAMS_READ)
         await self.ready()
-        _, settings, description = self._openapi(integration_id)
-        words = text.lower().split()
-        out = []
-        for op in description.operations.values():
-            if op.method != "GET" and op.id not in settings.read_operations:
-                continue
-            if all(w in f"{op.id} {op.path} {op.summary}".lower() for w in words):
-                out.append(_operation_view(op))
-        return out[:100]
+        _, model = self._api_model(integration_id)
+        return [OperationView(**view) for view in model.search(text, limit=100)]
 
     async def describe_operation(
         self, principal: Principal, integration_id: str, operation: str
     ) -> OperationView:
-        """Parameters and the flattened item schema of one operation."""
+        """Parameters, the flattened item schema, and the read classification of one operation."""
         require(self._authorizer, principal, Permission.PROGRAMS_READ)
         await self.ready()
-        _, _, description = self._openapi(integration_id)
-        op = description.operations.get(operation)
-        if op is None:
+        _, model = self._api_model(integration_id)
+        view = model.describe(operation)
+        if view is None:
             raise NotFound(f"{integration_id} has no operation {operation}")
-        view = _operation_view(op)
-        if op.response is not None:
-            schema = description.schema(op.response)
-            # A list body, or the first list property (such as `value` or `data`), holds the items.
-            items, prefix = None, ""
-            if schema.get("type") == "array":
-                items = schema.get("items")
-            else:
-                for name, child in (schema.get("properties") or {}).items():
-                    child = description.schema(child)
-                    if child.get("type") == "array":
-                        items, prefix = child.get("items"), name
-                        break
-            if items is not None:
-                view.fields = [{**f, "items": prefix} for f in description.fields_of(items)]
-        return view
+        return OperationView(**view)
 
     async def _check_query(self, write: QueryWrite) -> QueryCheck:
         source = f"{write.integration_id}/{write.name}@{write.version}"
         try:
-            package, settings, description = self._openapi(write.integration_id)
+            package, model = self._api_model(write.integration_id)
         except (Invalid, NotFound) as exc:
             problem = PreviewProblem(pointer="/integration_id", detail=exc.detail)
             return QueryCheck(valid=False, source=source, errors=[problem])
-        problems, schema = query_validate(
-            description,
-            settings,
-            Query(
-                operation=write.operation,
-                params=write.params,
-                items=write.items,
-                fields=write.fields,
-            ),
-            name=write.name,
-        )
+        spec = QuerySpec(write.operation, write.params, write.items, write.fields, write.regions)
+        problems, schema = model.validate(spec, name=write.name)
         errors = [
             PreviewProblem(pointer=p.pointer, detail=p.detail) for p in problems if not p.warning
         ]
@@ -1282,6 +1259,7 @@ class IntegrationService:
             "params": write.params,
             "items": write.items,
             "fields": write.fields,
+            **({"regions": write.regions} if write.regions else {}),
             "max_items": request.max_items,
         }
         try:
@@ -1327,6 +1305,7 @@ class IntegrationService:
             params=write.params,
             items=write.items,
             fields=write.fields,
+            regions=write.regions,
             item_schema=check.item_schema,
             created=utc(self._clock()),
             created_by_ref=principal.actor_id,
@@ -1628,11 +1607,11 @@ class IntegrationService:
                 f"sources: {', '.join(sorted(taken))}",
                 slug="upgrade-breaks-tests",
             )
-        if manifest.openapi is None and any(
+        if not manifest.queryable and any(
             q.integration_id == manifest.id for q in await self._store.list_queries()
         ):
             raise Conflict(
-                f"{manifest.id} {manifest.version} drops OpenAPI support that query sources use",
+                f"{manifest.id} {manifest.version} drops the API model that query sources use",
                 slug="upgrade-breaks-tests",
             )
         broken = await self._dependents_missing(manifest)
@@ -1746,26 +1725,8 @@ def _definition(query: QueryDefinition) -> dict[str, Any]:
         "params": dict(query.params),
         "items": query.items,
         "fields": dict(query.fields),
+        **({"regions": query.regions} if query.regions else {}),
     }
-
-
-def _operation_view(op: Any) -> OperationView:
-    return OperationView(
-        id=op.id,
-        method=op.method,
-        path=op.path,
-        summary=op.summary,
-        parameters=[
-            {
-                "name": name,
-                "in": p["in"],
-                "required": p["required"],
-                "type": p["schema"].get("type", "string"),
-                **({"description": p["description"][:200]} if p.get("description") else {}),
-            }
-            for name, p in op.parameters.items()
-        ],
-    )
 
 
 def rules_match(pattern: str, value: str) -> bool:

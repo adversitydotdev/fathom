@@ -1,0 +1,31 @@
+# A test integration built with the SDK, for Smithy query sources (RFC 0007). Its AWS is
+# the local emulator in tests/test_smithy_query_sources.py, which writes the port into
+# the endpoint; the models are minimal excerpts shaped like aws/api-models-aws.
+id: dev.ogrl.aws
+name: AWS (test)
+version: 0.1.0
+protocol: 1
+publisher: ogrl.dev
+runtime:
+  kind: python
+  entrypoint: aws_integration:app.run
+config:
+  - name: regions
+    label: Regions
+    required: false
+auth:
+  - kind: aws_role
+    label: Read-only role
+smithy:
+  services:
+    ec2:
+      model: models/ec2.json
+      endpoint: "http://127.0.0.1:PORT/{region}"
+    iam:
+      model: models/iam.json
+      endpoint: "http://127.0.0.1:PORT/iam"
+  deny_operations: [ec2.GetPasswordData]
+resources:
+  - name: account
+    version: 1
+    schema: schemas/account.json

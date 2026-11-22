@@ -1,0 +1,183 @@
+{
+ "shapes": {
+  "com.amazonaws.ec2#AmazonEC2": {
+   "operations": [
+    {
+     "target": "com.amazonaws.ec2#DescribeSecurityGroups"
+    },
+    {
+     "target": "com.amazonaws.ec2#GetPasswordData"
+    },
+    {
+     "target": "com.amazonaws.ec2#RevokeSecurityGroupIngress"
+    }
+   ],
+   "traits": {
+    "aws.auth#sigv4": {
+     "name": "ec2"
+    },
+    "aws.protocols#ec2Query": {}
+   },
+   "type": "service",
+   "version": "2016-11-15"
+  },
+  "com.amazonaws.ec2#DescribeSecurityGroups": {
+   "input": {
+    "target": "com.amazonaws.ec2#DescribeSecurityGroupsRequest"
+   },
+   "output": {
+    "target": "com.amazonaws.ec2#DescribeSecurityGroupsResult"
+   },
+   "traits": {
+    "smithy.api#documentation": "<p>Describes the specified security groups.</p>",
+    "smithy.api#paginated": {
+     "inputToken": "NextToken",
+     "items": "SecurityGroups",
+     "outputToken": "NextToken",
+     "pageSize": "MaxResults"
+    }
+   },
+   "type": "operation"
+  },
+  "com.amazonaws.ec2#DescribeSecurityGroupsRequest": {
+   "members": {
+    "Filters": {
+     "target": "com.amazonaws.ec2#FilterList",
+     "traits": {
+      "smithy.api#xmlName": "Filter"
+     }
+    },
+    "MaxResults": {
+     "target": "smithy.api#Integer"
+    },
+    "NextToken": {
+     "target": "smithy.api#String"
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#DescribeSecurityGroupsResult": {
+   "members": {
+    "NextToken": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "nextToken"
+     }
+    },
+    "SecurityGroups": {
+     "target": "com.amazonaws.ec2#SecurityGroupList",
+     "traits": {
+      "smithy.api#xmlName": "securityGroupInfo"
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#Filter": {
+   "members": {
+    "Name": {
+     "target": "smithy.api#String"
+    },
+    "Values": {
+     "target": "com.amazonaws.ec2#ValueStringList",
+     "traits": {
+      "smithy.api#xmlName": "Value"
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#FilterList": {
+   "member": {
+    "target": "com.amazonaws.ec2#Filter",
+    "traits": {
+     "smithy.api#xmlName": "Filter"
+    }
+   },
+   "type": "list"
+  },
+  "com.amazonaws.ec2#GetPasswordData": {
+   "input": {
+    "target": "com.amazonaws.ec2#DescribeSecurityGroupsRequest"
+   },
+   "output": {
+    "target": "com.amazonaws.ec2#DescribeSecurityGroupsResult"
+   },
+   "type": "operation"
+  },
+  "com.amazonaws.ec2#IpPermission": {
+   "members": {
+    "CidrIp": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "cidrIp"
+     }
+    },
+    "FromPort": {
+     "target": "smithy.api#Integer",
+     "traits": {
+      "smithy.api#xmlName": "fromPort"
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#IpPermissionList": {
+   "member": {
+    "target": "com.amazonaws.ec2#IpPermission",
+    "traits": {
+     "smithy.api#xmlName": "item"
+    }
+   },
+   "type": "list"
+  },
+  "com.amazonaws.ec2#RevokeSecurityGroupIngress": {
+   "input": {
+    "target": "com.amazonaws.ec2#DescribeSecurityGroupsRequest"
+   },
+   "type": "operation"
+  },
+  "com.amazonaws.ec2#SecurityGroup": {
+   "members": {
+    "GroupId": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "groupId"
+     }
+    },
+    "GroupName": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "groupName"
+     }
+    },
+    "IpPermissions": {
+     "target": "com.amazonaws.ec2#IpPermissionList",
+     "traits": {
+      "smithy.api#xmlName": "ipPermissions"
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#SecurityGroupList": {
+   "member": {
+    "target": "com.amazonaws.ec2#SecurityGroup",
+    "traits": {
+     "smithy.api#xmlName": "item"
+    }
+   },
+   "type": "list"
+  },
+  "com.amazonaws.ec2#ValueStringList": {
+   "member": {
+    "target": "smithy.api#String",
+    "traits": {
+     "smithy.api#xmlName": "item"
+    }
+   },
+   "type": "list"
+  }
+ },
+ "smithy": "2.0"
+}

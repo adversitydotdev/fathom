@@ -894,7 +894,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "logfire", extras = ["fastapi", "sqlalchemy", "httpx"], marker = "extra == 'telemetry'", specifier = ">=3.0.0" },
-    { name = "ogrl-integration", git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a9" },
+    { name = "ogrl-integration", git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a10" },
     { name = "ogrl-rs", marker = "(platform_machine != 'AMD64' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64') or (platform_machine == 'AMD64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'AMD64' and sys_platform == 'linux') or (platform_machine == 'arm64' and sys_platform == 'linux') or (platform_machine == 'aarch64' and sys_platform == 'win32') or (platform_machine == 'arm64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')", specifier = "==0.1.0" },
     { name = "ogrl-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-macosx_11_0_arm64.whl" },
     { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-macosx_10_12_x86_64.whl" },
@@ -919,8 +919,8 @@ dev = [
 
 [[package]]
 name = "ogrl-integration"
-version = "0.1.0a9"
-source = { git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a9#70b3aa3c1598619b27650370cb6cb3dd4c128620" }
+version = "0.1.0a10"
+source = { git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a10#b4db8bf55b0df50a8f2db928afd321b47e8ff678" }
 
 [[package]]
 name = "ogrl-rs"

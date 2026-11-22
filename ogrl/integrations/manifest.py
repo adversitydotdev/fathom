@@ -15,9 +15,17 @@ from typing import Any, Literal
 
 import yaml
 from jsonschema import Draft202012Validator
-from ogrl_integration.openapi import Description, Settings
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from ogrl_integration import openapi, smithy
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
+from ogrl.integrations.apimodel import ApiModel, OpenApiModel, SmithyModel
 from ogrl.kernel import rules
 
 PROTOCOL_VERSION = 1
@@ -139,6 +147,44 @@ class OpenApiBlock(_Model):
         return value
 
 
+SERVICE_NAME = re.compile(r"^[a-z0-9]+$")
+
+
+class SmithyService(_Model):
+    """One AWS service a package bundles a Smithy model for (RFC 0007 section 2)."""
+
+    model: str
+    endpoint: str
+    signing_region: str = "us-east-1"
+    target_prefix: str = ""
+
+    @field_validator("endpoint")
+    @classmethod
+    def _endpoint(cls, value: str) -> str:
+        loopback = value.startswith(("http://127.0.0.1:", "http://localhost:"))  # emulators
+        if not value.startswith("https://") and not loopback:
+            raise ValueError("an https:// URL")
+        if set(re.findall(r"\{(\w+)\}", value)) - {"region"}:
+            raise ValueError("the only placeholder is {region}")
+        return value
+
+
+class SmithyBlock(_Model):
+    """Query source support over AWS Smithy models (RFC 0007 section 2)."""
+
+    services: dict[str, SmithyService] = Field(min_length=1)
+    read_operations: list[str] = Field(default_factory=list)
+    deny_operations: list[str] = Field(default_factory=list)
+
+    @field_validator("services")
+    @classmethod
+    def _services(cls, value: dict[str, SmithyService]) -> dict[str, SmithyService]:
+        for name in value:
+            if not SERVICE_NAME.match(name):
+                raise ValueError(f"service names match [a-z0-9]+, not {name!r}")
+        return value
+
+
 class Template(_Model):
     name: str
     fulfills_ref: str | None = None
@@ -160,6 +206,18 @@ class Manifest(_Model):
     checks: list[CheckSpec] = Field(default_factory=list)
     templates: list[Template] = Field(default_factory=list)
     openapi: OpenApiBlock | None = None
+    smithy: SmithyBlock | None = None
+
+    @model_validator(mode="after")
+    def _one_api_model(self) -> "Manifest":
+        if self.openapi is not None and self.smithy is not None:
+            raise ValueError("declare openapi or smithy, not both")
+        return self
+
+    @property
+    def queryable(self) -> bool:
+        """Whether query sources can be defined over this integration (RFC 0006, 0007)."""
+        return self.openapi is not None or self.smithy is not None
 
     @field_validator("id")
     @classmethod
@@ -225,30 +283,51 @@ class Package:
     def schema(self, name: str, version: int) -> dict[str, Any]:
         return self.schemas[(name, version)]
 
-    def openapi(self) -> "tuple[Settings, Description] | None":
-        """The vendor description and query settings, loaded once per package version."""
-        block = self.manifest.openapi
-        if block is None:
-            return None
-        key = (self.manifest.id, self.digest)
-        if key not in _DESCRIPTIONS:
-            raw = (
-                self.files.get(block.description)
-                if self.root is None
-                else (self.root / block.description).read_bytes()
-            )
+    def read(self, relative: str) -> bytes:
+        """A file of the package, from memory or from its directory."""
+        path = PurePosixPath(relative)
+        if ".." in path.parts or path.is_absolute():
+            raise PackageError(f"{relative} is outside the package")
+        if self.root is None:
+            raw = self.files.get(str(path))
             if raw is None:
-                raise PackageError(f"the package has no {block.description}")
-            text = raw.decode()
-            document = (
-                json.loads(text) if block.description.endswith(".json") else yaml.safe_load(text)
-            )
-            settings = Settings.from_json(block.model_dump())
-            _DESCRIPTIONS[key] = (settings, Description(document))
-        return _DESCRIPTIONS[key]
+                raise PackageError(f"the package has no {relative}")
+            return raw
+        try:
+            return (self.root / relative).read_bytes()
+        except OSError as exc:
+            raise PackageError(f"the package has no readable {relative}") from exc
+
+    def api_model(self) -> ApiModel | None:
+        """The bundled API model query sources are defined over, loaded once per version."""
+        manifest = self.manifest
+        if not manifest.queryable:
+            return None
+        key = (manifest.id, self.digest)
+        if key not in _API_MODELS:
+            try:
+                if manifest.smithy is not None:
+                    settings = smithy.Settings.from_json(manifest.smithy.model_dump())
+                    _API_MODELS[key] = SmithyModel(smithy.load(settings, self.read))
+                else:
+                    block = manifest.openapi
+                    assert block is not None
+                    text = self.read(block.description).decode()
+                    document = (
+                        json.loads(text)
+                        if block.description.endswith(".json")
+                        else yaml.safe_load(text)
+                    )
+                    settings_ = openapi.Settings.from_json(block.model_dump())
+                    _API_MODELS[key] = OpenApiModel(settings_, openapi.Description(document))
+            except PackageError:
+                raise
+            except (ValueError, KeyError) as exc:
+                raise PackageError(f"{manifest.id} {manifest.version}: {exc}") from exc
+        return _API_MODELS[key]
 
 
-_DESCRIPTIONS: dict[tuple[str, str], Any] = {}
+_API_MODELS: dict[tuple[str, str], ApiModel] = {}
 
 
 def _unique(values: list[Any], what: str) -> None:

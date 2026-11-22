@@ -70,7 +70,7 @@ class Snapshot(BaseModel):
 
 
 class QueryDefinition(BaseModel):
-    """An organization-defined resource over the vendor's OpenAPI description (RFC 0006)."""
+    """An organization-defined resource over the vendor's API model (RFC 0006, RFC 0007)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -83,7 +83,8 @@ class QueryDefinition(BaseModel):
     params: dict[str, str] = Field(default_factory=dict)
     items: str = ""
     fields: dict[str, str]
-    item_schema: dict[str, Any]  # derived from the description when saved
+    regions: list[str] | Literal["*"] | None = None  # Smithy: region codes, or the connection's
+    item_schema: dict[str, Any]  # derived from the API model when saved
     created: datetime
     created_by_ref: str | None = None
 
@@ -98,6 +99,7 @@ class QueryDefinition(BaseModel):
             "params": dict(self.params),
             "items": self.items,
             "fields": dict(self.fields),
+            **({"regions": self.regions} if self.regions else {}),
         }
 
 
