@@ -2347,6 +2347,22 @@ export interface components {
             };
             /** @description Smithy query sources (RFC 0007) over regional services: region codes, or "*" for the connection's `regions` config. Each item gains `region`. */
             regions?: string[] | "*";
+            for_each?: components["schemas"]["ForEach"];
+        };
+        /** @description Smithy query sources (RFC 0007 section 4): call the query's operation once per item that `operation` lists. Items gain `error`, the AWS error code when a call failed. */
+        ForEach: {
+            /** @description A list operation in the same service, as `<service>.<Operation>`. */
+            operation: string;
+            /** @description The query operation's parameter to the path it reads in each listed item. */
+            bind: {
+                [key: string]: string;
+            };
+            params?: {
+                [key: string]: string;
+            };
+            items?: string;
+            /** @default 1000 */
+            limit?: number;
         };
         DryRunRequest: components["schemas"]["QueryWrite"] & {
             connection_id: string;
@@ -2388,6 +2404,7 @@ export interface components {
             };
             /** @description Smithy query sources (RFC 0007) over regional services: region codes, or "*" for the connection's `regions` config. Each item gains `region`. */
             regions?: string[] | "*";
+            for_each?: components["schemas"]["ForEach"];
             item_schema: {
                 [key: string]: unknown;
             };

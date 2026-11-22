@@ -21,6 +21,7 @@ class QuerySpec:
     items: str = ""
     fields: dict[str, str] = field(default_factory=dict)
     regions: list[str] | Literal["*"] | None = None
+    for_each: dict[str, Any] | None = None  # RFC 0007 section 4
 
 
 class ApiModel(Protocol):
@@ -105,6 +106,10 @@ class OpenApiModel:
         problems, schema = openapi.validate(self.description, self.settings, query, name=name)
         if spec.regions:
             problems.append(Problem("/regions", "regions apply to AWS (Smithy) query sources only"))
+        if spec.for_each:
+            problems.append(
+                Problem("/for_each", "for_each applies to AWS (Smithy) query sources only")
+            )
         return problems, schema
 
 
@@ -156,6 +161,11 @@ class SmithyModel:
         self, spec: QuerySpec, name: str | None = None
     ) -> tuple[list[Problem], dict[str, Any] | None]:
         query = smithy.Query(
-            spec.operation, spec.params, spec.items, spec.fields, regions=spec.regions or []
+            spec.operation,
+            spec.params,
+            spec.items,
+            spec.fields,
+            regions=spec.regions or [],
+            for_each=smithy.ForEach.from_json(spec.for_each) if spec.for_each else None,
         )
         return smithy.validate(self.api, query, name=name)

@@ -49,6 +49,7 @@ from ogrl.operations.catalog import PackageCatalog
 from ogrl.operations.connections import (
     Connection,
     ConnectionStore,
+    ForEach,
     InstallRecord,
     QueryDefinition,
     Snapshot,
@@ -159,6 +160,7 @@ class QueryWrite(BaseModel):
     items: str = ""
     fields: dict[str, str] = Field(default_factory=dict)
     regions: list[str] | Literal["*"] | None = None
+    for_each: ForEach | None = None
 
 
 class QueryCheck(BaseModel):
@@ -1202,7 +1204,14 @@ class IntegrationService:
         except (Invalid, NotFound) as exc:
             problem = PreviewProblem(pointer="/integration_id", detail=exc.detail)
             return QueryCheck(valid=False, source=source, errors=[problem])
-        spec = QuerySpec(write.operation, write.params, write.items, write.fields, write.regions)
+        spec = QuerySpec(
+            write.operation,
+            write.params,
+            write.items,
+            write.fields,
+            write.regions,
+            write.for_each.model_dump() if write.for_each else None,
+        )
         problems, schema = model.validate(spec, name=write.name)
         errors = [
             PreviewProblem(pointer=p.pointer, detail=p.detail) for p in problems if not p.warning
@@ -1260,6 +1269,7 @@ class IntegrationService:
             "items": write.items,
             "fields": write.fields,
             **({"regions": write.regions} if write.regions else {}),
+            **({"for_each": write.for_each.model_dump()} if write.for_each else {}),
             "max_items": request.max_items,
         }
         try:
@@ -1306,6 +1316,7 @@ class IntegrationService:
             items=write.items,
             fields=write.fields,
             regions=write.regions,
+            for_each=write.for_each,
             item_schema=check.item_schema,
             created=utc(self._clock()),
             created_by_ref=principal.actor_id,
@@ -1726,6 +1737,7 @@ def _definition(query: QueryDefinition) -> dict[str, Any]:
         "items": query.items,
         "fields": dict(query.fields),
         **({"regions": query.regions} if query.regions else {}),
+        **({"for_each": query.for_each.model_dump()} if query.for_each else {}),
     }
 
 

@@ -10,6 +10,12 @@
     },
     {
      "target": "com.amazonaws.ec2#RevokeSecurityGroupIngress"
+    },
+    {
+     "target": "com.amazonaws.ec2#DescribeVpcs"
+    },
+    {
+     "target": "com.amazonaws.ec2#GetSecurityGroupsForVpc"
     }
    ],
    "traits": {
@@ -73,6 +79,47 @@
    },
    "type": "structure"
   },
+  "com.amazonaws.ec2#DescribeVpcs": {
+   "input": {
+    "target": "com.amazonaws.ec2#DescribeVpcsRequest"
+   },
+   "output": {
+    "target": "com.amazonaws.ec2#DescribeVpcsResult"
+   },
+   "traits": {
+    "smithy.api#paginated": {
+     "inputToken": "NextToken",
+     "items": "Vpcs",
+     "outputToken": "NextToken"
+    }
+   },
+   "type": "operation"
+  },
+  "com.amazonaws.ec2#DescribeVpcsRequest": {
+   "members": {
+    "NextToken": {
+     "target": "smithy.api#String"
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#DescribeVpcsResult": {
+   "members": {
+    "NextToken": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "nextToken"
+     }
+    },
+    "Vpcs": {
+     "target": "com.amazonaws.ec2#VpcList",
+     "traits": {
+      "smithy.api#xmlName": "vpcSet"
+     }
+    }
+   },
+   "type": "structure"
+  },
   "com.amazonaws.ec2#Filter": {
    "members": {
     "Name": {
@@ -104,6 +151,53 @@
     "target": "com.amazonaws.ec2#DescribeSecurityGroupsResult"
    },
    "type": "operation"
+  },
+  "com.amazonaws.ec2#GetSecurityGroupsForVpc": {
+   "input": {
+    "target": "com.amazonaws.ec2#GetSecurityGroupsForVpcRequest"
+   },
+   "output": {
+    "target": "com.amazonaws.ec2#GetSecurityGroupsForVpcResult"
+   },
+   "traits": {
+    "smithy.api#paginated": {
+     "inputToken": "NextToken",
+     "items": "SecurityGroupForVpcs",
+     "outputToken": "NextToken"
+    }
+   },
+   "type": "operation"
+  },
+  "com.amazonaws.ec2#GetSecurityGroupsForVpcRequest": {
+   "members": {
+    "NextToken": {
+     "target": "smithy.api#String"
+    },
+    "VpcId": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#required": {}
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#GetSecurityGroupsForVpcResult": {
+   "members": {
+    "NextToken": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "nextToken"
+     }
+    },
+    "SecurityGroupForVpcs": {
+     "target": "com.amazonaws.ec2#SecurityGroupForVpcList",
+     "traits": {
+      "smithy.api#xmlName": "securityGroupForVpcSet"
+     }
+    }
+   },
+   "type": "structure"
   },
   "com.amazonaws.ec2#IpPermission": {
    "members": {
@@ -160,6 +254,32 @@
    },
    "type": "structure"
   },
+  "com.amazonaws.ec2#SecurityGroupForVpc": {
+   "members": {
+    "GroupId": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "groupId"
+     }
+    },
+    "GroupName": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "groupName"
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#SecurityGroupForVpcList": {
+   "member": {
+    "target": "com.amazonaws.ec2#SecurityGroupForVpc",
+    "traits": {
+     "smithy.api#xmlName": "item"
+    }
+   },
+   "type": "list"
+  },
   "com.amazonaws.ec2#SecurityGroupList": {
    "member": {
     "target": "com.amazonaws.ec2#SecurityGroup",
@@ -172,6 +292,32 @@
   "com.amazonaws.ec2#ValueStringList": {
    "member": {
     "target": "smithy.api#String",
+    "traits": {
+     "smithy.api#xmlName": "item"
+    }
+   },
+   "type": "list"
+  },
+  "com.amazonaws.ec2#Vpc": {
+   "members": {
+    "IsDefault": {
+     "target": "smithy.api#Boolean",
+     "traits": {
+      "smithy.api#xmlName": "isDefault"
+     }
+    },
+    "VpcId": {
+     "target": "smithy.api#String",
+     "traits": {
+      "smithy.api#xmlName": "vpcId"
+     }
+    }
+   },
+   "type": "structure"
+  },
+  "com.amazonaws.ec2#VpcList": {
+   "member": {
+    "target": "com.amazonaws.ec2#Vpc",
     "traits": {
      "smithy.api#xmlName": "item"
     }

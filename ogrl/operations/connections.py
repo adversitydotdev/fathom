@@ -69,6 +69,18 @@ class Snapshot(BaseModel):
     warnings: list[str] | None = None
 
 
+class ForEach(BaseModel):
+    """Per-item calls (RFC 0007 section 4): `operation` once per item a list operation returns."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    operation: str
+    bind: dict[str, str]
+    params: dict[str, str] = Field(default_factory=dict)
+    items: str = ""
+    limit: int = Field(default=1000, ge=1, le=5000)
+
+
 class QueryDefinition(BaseModel):
     """An organization-defined resource over the vendor's API model (RFC 0006, RFC 0007)."""
 
@@ -84,6 +96,7 @@ class QueryDefinition(BaseModel):
     items: str = ""
     fields: dict[str, str]
     regions: list[str] | Literal["*"] | None = None  # Smithy: region codes, or the connection's
+    for_each: ForEach | None = None  # Smithy: one call per listed item
     item_schema: dict[str, Any]  # derived from the API model when saved
     created: datetime
     created_by_ref: str | None = None
@@ -100,6 +113,7 @@ class QueryDefinition(BaseModel):
             "items": self.items,
             "fields": dict(self.fields),
             **({"regions": self.regions} if self.regions else {}),
+            **({"for_each": self.for_each.model_dump()} if self.for_each else {}),
         }
 
 

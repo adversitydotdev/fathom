@@ -63,6 +63,25 @@ class Emulator(BaseHTTPRequestHandler):
             return self._send(
                 403, "<Response><Errors><Error><Code>MissingAuth</Code></Error></Errors></Response>"
             )
+        if form.get("Action") == "DescribeVpcs":
+            return self._send(
+                200,
+                "<DescribeVpcsResponse><vpcSet><item><vpcId>vpc-1</vpcId><isDefault>true</isDefault></item>"
+                "<item><vpcId>vpc-gone</vpcId></item></vpcSet></DescribeVpcsResponse>",
+            )
+        if form.get("Action") == "GetSecurityGroupsForVpc":
+            if form.get("VpcId") != "vpc-1":
+                return self._send(
+                    400,
+                    "<Response><Errors><Error><Code>InvalidVpcID.NotFound</Code>"
+                    "<Message>no such VPC</Message></Error></Errors></Response>",
+                )
+            return self._send(
+                200,
+                "<GetSecurityGroupsForVpcResponse><securityGroupForVpcSet><item><groupId>sg-1</groupId>"
+                "<groupName>default</groupName></item></securityGroupForVpcSet>"
+                "</GetSecurityGroupsForVpcResponse>",
+            )
         if form.get("Action") != "DescribeSecurityGroups":
             return self._send(
                 400,
@@ -142,9 +161,8 @@ QUERY = {
 def test_operations_search_and_describe(world):
     api = world["api"]
     found = api.get(f"/integrations/{AWS}/operations?q=security")["data"]
-    assert [o["id"] for o in found] == [
-        "ec2.DescribeSecurityGroups"
-    ]  # not the write or the denied read
+    # not the write (RevokeSecurityGroupIngress) or the denied read (GetPasswordData)
+    assert [o["id"] for o in found] == ["ec2.DescribeSecurityGroups", "ec2.GetSecurityGroupsForVpc"]
     assert (found[0]["protocol"], found[0]["regional"]) == ("ec2Query", True)
     assert found[0]["summary"] == "Describes the specified security groups."
 
@@ -268,3 +286,59 @@ def test_a_failing_region_makes_the_snapshot_incomplete(world):
         "ap-east-1" in snapshot["reason"]
         and "AuthFailure: region not enabled" in snapshot["reason"]
     )
+
+
+def test_for_each_calls_once_per_listed_item(world):
+    api = world["api"]
+    per_vpc = {
+        "integration_id": AWS,
+        "name": "groups-per-vpc",
+        "operation": "ec2.GetSecurityGroupsForVpc",
+        "regions": ["us-east-1"],
+        "for_each": {"operation": "ec2.DescribeVpcs", "bind": {"VpcId": "VpcId"}},
+        "fields": {
+            "id": "GroupId",
+            "name": "GroupName",
+            "vpc": "$parent.VpcId",
+            "default": "$parent.IsDefault",
+        },
+    }
+    check = api.post("/queries/validate", per_vpc, expect=200)
+    assert check["valid"], check["errors"]
+    assert check["item_schema"]["properties"]["error"] == {"type": ["string", "null"]}
+    bad = api.post(
+        "/queries/validate",
+        {**per_vpc, "for_each": {**per_vpc["for_each"], "bind": {"VpcId": "Vpcid"}}},
+        expect=200,
+    )
+    assert bad["errors"] == [
+        {
+            "pointer": "/for_each/bind/VpcId",
+            "detail": "items have no 'Vpcid'; did you mean 'VpcId'?",
+        }
+    ]
+
+    run = api.post(
+        "/queries/dry-run", {**per_vpc, "connection_id": world["connection"]}, expect=200
+    )
+    assert run.get("error") is None, run
+    assert run["items"] == [
+        {
+            "id": "sg-1",
+            "name": "default",
+            "vpc": "vpc-1",
+            "default": True,
+            "region": "us-east-1",
+            "error": None,
+        },
+        {
+            "id": None,
+            "name": None,
+            "vpc": "vpc-gone",
+            "default": None,
+            "region": "us-east-1",
+            "error": "InvalidVpcID.NotFound",
+        },
+    ]
+    saved = api.post("/queries", per_vpc, expect=201)
+    assert saved["for_each"]["bind"] == {"VpcId": "VpcId"}

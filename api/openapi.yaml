@@ -4260,6 +4260,35 @@ components:
                 pattern: "^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$"
             - type: string
               enum: ["*"]
+        for_each:
+          $ref: "#/components/schemas/ForEach"
+    ForEach:
+      type: object
+      description: >
+        Smithy query sources (RFC 0007 section 4): call the query's operation once per item
+        that `operation` lists. Items gain `error`, the AWS error code when a call failed.
+      required: [operation, bind]
+      additionalProperties: false
+      properties:
+        operation:
+          type: string
+          description: A list operation in the same service, as `<service>.<Operation>`.
+        bind:
+          type: object
+          description: The query operation's parameter to the path it reads in each listed item.
+          additionalProperties:
+            type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        items:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 5000
+          default: 1000
     DryRunRequest:
       allOf:
         - $ref: "#/components/schemas/QueryWrite"
@@ -4352,6 +4381,8 @@ components:
                 pattern: "^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$"
             - type: string
               enum: ["*"]
+        for_each:
+          $ref: "#/components/schemas/ForEach"
         item_schema:
           type: object
           additionalProperties: true
