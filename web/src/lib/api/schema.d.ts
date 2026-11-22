@@ -2364,9 +2364,9 @@ export interface components {
             regions?: string[] | "*";
             for_each?: components["schemas"]["ForEach"];
         };
-        /** @description Smithy query sources (RFC 0007 section 4): call the query's operation once per item that `operation` lists. Items gain `error`, the AWS error code when a call failed. */
+        /** @description Per-item calls (RFC 0006 section 3): call the query's operation once per item that `operation` lists. Items gain `error`, the vendor's error code when a call failed. */
         ForEach: {
-            /** @description A list operation in the same service, as `<service>.<Operation>`. */
+            /** @description A read operation that returns a list (for Smithy, in the same service). */
             operation: string;
             /** @description The query operation's parameter to the path it reads in each listed item. */
             bind: {
@@ -2678,6 +2678,8 @@ export interface components {
         RequirementClass: "criterion" | "control" | "enhancement" | "clause" | "specification";
         Requirement: components["schemas"]["Envelope"] & {
             display_id?: string;
+            /** @description Official upstream citation, e.g. SOC 2 criterion wording reference. */
+            citation?: string;
             framework_ref: string;
             class: components["schemas"]["RequirementClass"];
             /**

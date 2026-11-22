@@ -2,7 +2,7 @@
 # ruff: noqa: E501
 """Idempotent local development seeder for the OGRL Docker Compose stack.
 
-Pulls `ogrl-library` v0.2.0 and populates a starter organization ("Acme Platform")
+Pulls `ogrl-library` (default v0.4.1) and populates a starter organization ("Acme Platform")
 with two live programs (NIST 800-171 r3 & SOC 2), implementations, results,
 evidence, risks, an exception, a finding, policies, and procedures so the UI
 opens straight into real Postgres + ogrl-rs kernel data.
@@ -22,7 +22,7 @@ from datetime import UTC, datetime, timedelta
 
 API = os.environ.get("OGRL_API_ORIGIN", "http://api:8080").rstrip("/")
 TOKEN = os.environ.get("OGRL_API_TOKEN", "ogrl_pat_local_dev_admin")
-LIB_VERSION = os.environ.get("OGRL_SEED_LIBRARY_VERSION", "0.2.0")
+LIB_VERSION = os.environ.get("OGRL_SEED_LIBRARY_VERSION", "0.4.1")
 
 
 def req(method: str, path: str, body: dict | None = None, *, if_match: str | None = None) -> dict:
@@ -223,7 +223,7 @@ def main() -> int:
         },
     )["id"]
 
-    # Programs bound to real v0.2.0 library baselines
+    # Programs bound to library baselines (IDs from the pinned ogrl-library release)
     req(
         "POST",
         "/v1/programs",
