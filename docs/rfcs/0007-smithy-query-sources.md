@@ -80,7 +80,31 @@ regions: "*"
 fields: {id: $region, name: $region, enabled: EbsEncryptionByDefault}
 ```
 
-**Regions.** `regions` is a list of region codes, or `"*"` for the connection's `regions` config. A regional operation is collected once per region and items gain a `region` field; a global operation ignores `regions`.
+**Regions.** `regions` is a list of region codes, or `"*"` for the connection's `regions` config. A regional operation is collected once per region and items gain a `region` field; a global operation ignores `regions`. A parameter whose value is exactly `$region` takes the region being collected, such as S3's `BucketRegion`.
+
+**Per-item calls.** Many AWS settings are read one resource at a time: S3 encryption per bucket, the public access block per bucket. `for_each` runs a list operation first and calls `operation` once per item it returns:
+
+```yaml
+integration: dev.adversity.aws
+name: bucket-encryption
+version: 1
+operation: s3.GetBucketEncryption
+regions: "*"
+for_each:
+  operation: s3.ListBuckets            # same service as operation
+  params: {BucketRegion: $region}      # buckets homed in the region being collected
+  bind: {Bucket: Name}                 # operation parameter: path in each listed item
+  limit: 1000                          # at most this many listed items (default 1000, at most 5000)
+fields:
+  id: $parent.BucketArn
+  name: $parent.Name
+  rules: ServerSideEncryptionConfiguration.Rules
+```
+
+- `for_each.operation` is queryable by Section 3, in the same service, and paginated or given `items`. `bind` names required parameters of `operation`, which `params` may not also set.
+- Each call yields items as an ordinary query would. Fields may read the listed item through `$parent.<path>`.
+- A call that fails with a client error other than authentication, permission, or throttling yields one item with every field empty and `error` holding the AWS error code, such as `NoSuchPublicAccessBlockConfiguration`. Items of a `for_each` query always carry `error` (null on success), so a rule can treat a missing configuration as a failure. Any other failure fails the region, as for a plain query.
+- More listed items than `limit` makes the collection incomplete.
 
 ## 5. Protocols
 
@@ -117,11 +141,11 @@ RFC 0006's routes serve Smithy-backed integrations without change. `GET /integra
 | 1 | SDK: Smithy model loading and trimming, Section 3 classification, shape-driven validation and item schemas, SigV4, and the JSON and query protocols (`awsJson1_0`, `awsJson1_1`, `restJson1`, `awsQuery`, `ec2Query`) with pagination and regions. |
 | 2 | `ogrl-aws` bundles IAM, EC2, RDS, KMS, CloudTrail, and GuardDuty, and drops its hand-written SigV4 for the SDK's. |
 | 3 | OGRL: the shared API-model interface over OpenAPI and Smithy; `regions` on definitions. |
-| 4 | `restXml` and S3. |
+| 4 | `restXml` and S3; `for_each` per-item calls. |
 
 ## 10. Open questions
 
-1. **Per-item follow-up calls.** Many AWS checks need one call per resource: S3 encryption per bucket (`GetBucketEncryption`), IAM policies per role. Query sources make one call per page. A bounded `for_each` (run operation B for each item of query A, with a cap) would cover them without code; until then they stay built-in resources.
+1. **Per-item calls for OpenAPI.** `for_each` is specified for Smithy query sources; RFC 0006 sources (such as Okta factors per user) could use the same shape.
 2. **Endpoint rulesets.** Declared endpoints cover the commercial partition. FIPS, dual-stack, GovCloud, and China need either partition-specific declarations or an evaluator for Smithy's endpoint rules.
 3. **Classifying reads.** The name-prefix rule plus a deny list is a heuristic. A reviewed allowlist per service is stricter but much longer to maintain; the deny list should grow from review and from AWS's own access-level data in the IAM service authorization reference.
 4. **Model drift.** New service model versions can rename members. The upgrade check (RFC 0006 open question 3) applies.
