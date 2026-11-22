@@ -276,24 +276,24 @@ def main() -> int:
             "test--ogrl-ac-03-least-privilege",
         ),
         (
-            "control--ogrl-ia-01",
+            "control--ogrl-ac-05",
             "implemented",
             "shared",
             jordan,
             "Okta enforces WebAuthn security keys for Admins and Break-glass groups.",
             {"mfa_standard": "phishing-resistant (FIDO2/WebAuthn)"},
             "fail",
-            "test--ogrl-ia-01-mfa-enforcement",
+            "test--ogrl-ac-05-mfa-enforcement",
         ),
         (
-            "control--ogrl-au-01",
+            "control--ogrl-lm-01",
             "implemented",
             "provider",
             secops,
             "CloudTrail organization trail, VPC flow logs, and Okta System Log stream to the SIEM.",
             None,
             "pass",
-            "test--ogrl-au-01-audit-logging",
+            "test--ogrl-lm-01-audit-logging",
         ),
         (
             "control--ogrl-cm-01",
@@ -306,14 +306,14 @@ def main() -> int:
             "test--ogrl-cm-01-change-control",
         ),
         (
-            "control--ogrl-sc-01",
+            "control--ogrl-cr-01",
             "implemented",
             "provider",
             platform,
             "RDS, S3, and EBS use KMS CMKs; external and internal traffic enforces TLS 1.2+.",
             None,
             "pass",
-            "test--ogrl-sc-01-encryption",
+            "test--ogrl-cr-01-encryption",
         ),
         (
             "control--ogrl-ir-01",
@@ -326,14 +326,14 @@ def main() -> int:
             "test--ogrl-ir-01-ir-testing",
         ),
         (
-            "control--ogrl-ra-01",
+            "control--ogrl-vm-01",
             "implemented",
             "provider",
             secops,
             "AWS Inspector scans hosts and ECR images continuously; Dependabot covers app dependencies.",
             None,
             "fail",
-            "test--ogrl-ra-01-vuln-scanning",
+            "test--ogrl-vm-01-vuln-scanning",
         ),
     ]
 
@@ -359,9 +359,9 @@ def main() -> int:
         test_obj = tests_by_id.get(test_id)
         if outcome and test_obj and test_obj.get("method") == "manual":
             summary = None
-            if outcome == "fail" and ctrl_id == "control--ogrl-ia-01":
+            if outcome == "fail" and ctrl_id == "control--ogrl-ac-05":
                 summary = "2 of 14 privileged users still have SMS fallback enrolled."
-            elif outcome == "fail" and ctrl_id == "control--ogrl-ra-01":
+            elif outcome == "fail" and ctrl_id == "control--ogrl-vm-01":
                 summary = "3 critical CVEs open past 15-day SLA on ECR image api:2026.10."
             res_payload: dict = {
                 "test_ref": test_id,
@@ -424,7 +424,7 @@ def main() -> int:
             "treatment": "mitigate",
             "status": "open",
             "owner_ref": jordan,
-            "control_refs": ["control--ogrl-ia-01"],
+            "control_refs": ["control--ogrl-ac-05"],
         },
     )
     req(
@@ -439,7 +439,7 @@ def main() -> int:
             "treatment": "mitigate",
             "status": "open",
             "owner_ref": platform,
-            "control_refs": ["control--ogrl-ra-01"],
+            "control_refs": ["control--ogrl-vm-01"],
         },
     )
 
@@ -465,7 +465,7 @@ def main() -> int:
             "determination": "not-satisfied",
             "observed": iso_day(-3),
             "narrative": "Okta authentication policy permitted SMS fallback for two legacy admin accounts.",
-            "implementation_ref": impl_ids["control--ogrl-ia-01"],
+            "implementation_ref": impl_ids["control--ogrl-ac-05"],
         },
     )
 
@@ -478,7 +478,7 @@ def main() -> int:
             "owner_ref": priya,
             "reviewed": iso_day(-20),
             "review_interval": "annual",
-            "control_refs": ["control--ogrl-ac-01", "control--ogrl-sc-01"],
+            "control_refs": ["control--ogrl-ac-01", "control--ogrl-cr-01"],
         },
         "# Information Security Policy v2.3\n\nAcme protects customer data and CUI across Acme Platform.\n",
         adopted_date=iso_day(-180),
@@ -491,7 +491,7 @@ def main() -> int:
             "owner_ref": jordan,
             "reviewed": iso_day(-15),
             "review_interval": "annual",
-            "control_refs": ["control--ogrl-ac-01", "control--ogrl-ac-02", "control--ogrl-ia-01"],
+            "control_refs": ["control--ogrl-ac-01", "control--ogrl-ac-02", "control--ogrl-ac-05"],
         },
         "# Access Control & Identity Policy v1.8\n\nAll workforce and privileged accounts enforce phishing-resistant MFA.\n",
         adopted_date=iso_day(-150),
@@ -523,7 +523,7 @@ def main() -> int:
             "name": "Vulnerability Triage & Patching SLA",
             "policy_ref": infosec_pol,
             "owner_ref": secops,
-            "control_refs": ["control--ogrl-ra-01"],
+            "control_refs": ["control--ogrl-vm-01"],
         },
         "# Vulnerability Triage & Patching SLA\n\nRemediate critical CVEs within 15 days and high CVEs within 30 days.\n",
     )
