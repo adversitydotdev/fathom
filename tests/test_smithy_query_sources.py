@@ -342,3 +342,18 @@ def test_for_each_calls_once_per_listed_item(world):
     ]
     saved = api.post("/queries", per_vpc, expect=201)
     assert saved["for_each"]["bind"] == {"VpcId": "VpcId"}
+    view = api.get(f"/integrations/{AWS}")
+    assert view["query_model"] == "smithy"
+    ((listed,),) = [view["queries"]]
+    assert (listed["source"], listed["operation"]) == (
+        f"{AWS}/groups-per-vpc@1",
+        "ec2.GetSecurityGroupsForVpc",
+    )
+    assert {f["name"] for f in listed["fields"]} == {
+        "id",
+        "name",
+        "vpc",
+        "default",
+        "region",
+        "error",
+    }

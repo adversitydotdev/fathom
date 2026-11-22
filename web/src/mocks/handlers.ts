@@ -6,6 +6,8 @@ import { CelError, evaluate as evaluateCel } from "./cel";
 import { db } from "./db";
 import { snapshotItems } from "./fixtures/program";
 import { programStatus, programSummary, systemGaps } from "./kernel";
+import { checkQuery, describe, dryRun, findOperation, saveQuery, schemaFields, searchOperations, sourceOf, withQueries } from "./queries";
+import { queryModels } from "./fixtures/queries";
 
 /** Matches `/v1` on any origin, so the same handlers serve in-process and HTTP calls. */
 const V = "*/v1";
@@ -249,10 +251,65 @@ export const handlers = [
   }),
 
   // Integrations (RFC 0005)
-  http.get(`${V}/integrations`, () => HttpResponse.json({ data: db.integrations })),
+  http.get(`${V}/integrations`, () => HttpResponse.json({ data: db.integrations.map(withQueries) })),
   http.get(`${V}/integrations/:id`, ({ params }) => {
     const item = db.integrations.find((i) => i.id === params.id);
-    return item ? HttpResponse.json(item) : notFound();
+    return item ? HttpResponse.json(withQueries(item)) : notFound();
+  }),
+
+  // Query sources (RFC 0006, RFC 0007)
+  http.get(`${V}/integrations/:id/operations`, ({ params, request }) => {
+    const id = String(params.id);
+    if (!db.integrations.some((i) => i.id === id)) return notFound();
+    if (!queryModels[id]) return problem(400, "bad-request", `${id} does not support query sources (no API model in its manifest)`);
+    return HttpResponse.json({ data: searchOperations(id, new URL(request.url).searchParams.get("q") ?? "") });
+  }),
+  http.get(`${V}/integrations/:id/operations/:operation`, ({ params }) => {
+    const op = findOperation(String(params.id), String(params.operation));
+    return op ? HttpResponse.json(describe(op)) : notFound();
+  }),
+  http.post(`${V}/queries/validate`, async ({ request }) => {
+    const body = (await request.json()) as Parameters<typeof checkQuery>[0];
+    return HttpResponse.json(checkQuery(body));
+  }),
+  http.post(`${V}/queries/dry-run`, async ({ request }) => {
+    const { connection_id, max_items, ...write } = (await request.json()) as Parameters<typeof checkQuery>[0] & {
+      connection_id: string;
+      max_items?: number;
+    };
+    return HttpResponse.json(dryRun(write, connection_id, max_items ?? 50));
+  }),
+  http.get(`${V}/queries`, () => HttpResponse.json({ data: db.queries })),
+  http.get(`${V}/queries/:id`, ({ params }) => {
+    const query = db.queries.find((q) => q.id === params.id);
+    return query ? HttpResponse.json(query) : notFound();
+  }),
+  http.post(`${V}/queries`, async ({ request }) => {
+    const body = (await request.json()) as Parameters<typeof checkQuery>[0];
+    const { query, check } = saveQuery(body, "party--priya-shah");
+    if (query) return HttpResponse.json(query, { status: 201 });
+    if (check.errors.length === 1 && check.errors[0].pointer === "/version") {
+      return problem(409, "query-exists", check.errors[0].detail);
+    }
+    return HttpResponse.json(
+      {
+        type: "urn:ogrl:problem:invalid",
+        title: "the query source does not validate",
+        status: 400,
+        errors: check.errors.map((e) => ({ pointer: e.pointer, detail: e.detail })),
+      },
+      { status: 400, headers: { "Content-Type": "application/problem+json" } },
+    );
+  }),
+  http.delete(`${V}/queries/:id`, ({ params }) => {
+    const query = db.queries.find((q) => q.id === params.id);
+    if (!query) return notFound();
+    const readers = db.tests.filter((t) => !t.revoked && t.run && "source" in t.run && t.run.source === sourceOf(query));
+    if (readers.length) {
+      return problem(409, "query-in-use", `${sourceOf(query)} is read by ${readers.map((t) => t.id).join(", ")}; revoke those tests first`);
+    }
+    db.queries.splice(db.queries.indexOf(query), 1);
+    return new HttpResponse(null, { status: 204 });
   }),
   http.post(`${V}/integrations`, async ({ request }) => {
     const body = (await request.json().catch(() => ({}))) as { url?: string };
@@ -413,7 +470,9 @@ export const handlers = [
     };
     const run = body.run ?? {};
     const source = String(run.source ?? "");
-    const resource = db.integrations.flatMap((i) => i.resources).find((r) => r.source === source);
+    const resource =
+      db.integrations.flatMap((i) => i.resources).find((r) => r.source === source) ??
+      db.queries.filter((q) => sourceOf(q) === source).map((q) => ({ source, name: q.name, fields: schemaFields(q.item_schema) }))[0];
     const empty = { selected: 0, total: 0, subjects: [], warnings: [], snapshots: [], params: body.params ?? {}, sample: [] };
     if (!resource) {
       return HttpResponse.json({

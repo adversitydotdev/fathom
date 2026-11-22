@@ -1,4 +1,5 @@
 import * as f from "./fixtures/program";
+import { queryDefinitions } from "./fixtures/queries";
 import { requirements } from "./fixtures/requirements";
 
 function createDb() {
@@ -27,6 +28,7 @@ function createDb() {
     providers: [...f.providers],
     integrations: [...f.integrations],
     connections: [...f.connections],
+    queries: [...queryDefinitions],
     snapshots: [...f.snapshots],
     integrationVersions: [...f.integrationVersions],
     templateUpdates: [...f.templateUpdates],

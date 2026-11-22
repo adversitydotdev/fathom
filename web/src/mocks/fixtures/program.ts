@@ -790,7 +790,7 @@ connections.push({
   id: "connection--aws-prod",
   integration_id: "dev.adversity.aws",
   name: "AWS production",
-  config: { aws_role_arn: "arn:aws:iam::447100000000:role/ogrl-readonly" },
+  config: { aws_role_arn: "arn:aws:iam::447100000000:role/ogrl-readonly", regions: "us-east-1,eu-west-1" },
   auth_kind: "aws_role",
   bindings: ["component--aws"],
   state: "active",
@@ -839,6 +839,17 @@ export const snapshots: Snapshot[] = [
     uri: "s3://acme-ogrl-evidence/snapshots/github-repos.json",
     digest: "0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9",
   },
+  {
+    id: "snapshot--aws-security-groups-latest",
+    connection_id: "connection--aws-prod",
+    source: "dev.adversity.aws/security-groups@1",
+    collected: at(-1, "06:01:12Z"),
+    complete: true,
+    item_count: 3,
+    size: 1_204,
+    uri: "s3://acme-ogrl-evidence/snapshots/aws-security-groups.json",
+    digest: "9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7",
+  },
 ];
 
 export const integrationVersions: IntegrationInstall[] = [
@@ -867,6 +878,11 @@ export const snapshotItems: Record<string, Record<string, unknown>[]> = {
     { id: "00u3cy", name: "cy@acme.test", email: "cy@acme.test", status: "ACTIVE", last_login: at(-140, "08:00:00Z"), admin: false, mfa_factors: ["sms"], mfa_enrolled: true, strong_mfa: false, phishing_resistant: false },
     { id: "00u4dee", name: "dee@acme.test", email: "dee@acme.test", status: "ACTIVE", last_login: null, admin: true, mfa_factors: ["push"], mfa_enrolled: true, strong_mfa: false, phishing_resistant: false },
     { id: "00u5eve", name: "eve@acme.test", email: "eve@acme.test", status: "SUSPENDED", last_login: at(-300, "08:00:00Z"), admin: false, mfa_factors: [], mfa_enrolled: false, strong_mfa: false, phishing_resistant: false },
+  ],
+  "dev.adversity.aws/security-groups@1": [
+    { id: "sg-0a1default", name: "default", vpc: "vpc-0prod", rules: [], region: "us-east-1" },
+    { id: "sg-0b2bastion", name: "bastion", vpc: "vpc-0prod", rules: [{ FromPort: 22, IpRanges: [{ CidrIp: "0.0.0.0/0" }] }], region: "us-east-1" },
+    { id: "sg-0c3web", name: "web", vpc: "vpc-0prod", rules: [{ FromPort: 443, IpRanges: [{ CidrIp: "0.0.0.0/0" }] }], region: "eu-west-1" },
   ],
 };
 

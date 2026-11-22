@@ -16,7 +16,7 @@ import json
 import logging
 import re
 import secrets
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
@@ -284,11 +284,27 @@ class IntegrationView(BaseModel):
     resources: list[dict[str, Any]]
     checks: list[dict[str, Any]]
     templates: list[dict[str, Any]]
+    query_model: Literal["openapi", "smithy"] | None = None  # what query sources are defined over
+    queries: list[dict[str, Any]] = Field(default_factory=list)  # saved query sources
 
 
-def integration_view(package: Package) -> IntegrationView:
+def integration_view(package: Package, queries: Sequence[QueryDefinition] = ()) -> IntegrationView:
     m = package.manifest
     return IntegrationView(
+        query_model="smithy" if m.smithy else "openapi" if m.openapi else None,
+        queries=[
+            {
+                "id": q.id,
+                "name": q.name,
+                "version": q.version,
+                "source": q.source,
+                "operation": q.operation,
+                **({"description": q.description} if q.description else {}),
+                "fields": schema_fields(q.item_schema),
+            }
+            for q in queries
+            if q.integration_id == m.id
+        ],
         id=m.id,
         name=m.name,
         version=m.version,
@@ -483,12 +499,13 @@ class IntegrationService:
     async def list_integrations(self, principal: Principal) -> list[IntegrationView]:
         require(self._authorizer, principal, Permission.PROGRAMS_READ)
         await self.ready()
-        return [integration_view(self.package(i)) for i in self._packages.names()]
+        queries = await self._store.list_queries()
+        return [integration_view(self.package(i), queries) for i in self._packages.names()]
 
     async def get_integration(self, principal: Principal, integration_id: str) -> IntegrationView:
         require(self._authorizer, principal, Permission.PROGRAMS_READ)
         await self.ready()
-        return integration_view(self.package(integration_id))
+        return integration_view(self.package(integration_id), await self._store.list_queries())
 
     async def enable_template(
         self, principal: Principal, integration_id: str, name: str, request: TemplateEnable
@@ -1606,7 +1623,7 @@ class IntegrationService:
         except PackageError as exc:
             raise Invalid(str(exc), slug="bad-package") from exc
         await self._enable(package.manifest)
-        return integration_view(self.package(integration_id))
+        return integration_view(self.package(integration_id), await self._store.list_queries())
 
     async def _enable(self, manifest: Manifest) -> None:
         taken = {

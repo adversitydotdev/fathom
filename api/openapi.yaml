@@ -4155,6 +4155,33 @@ components:
                 type: string
               runner:
                 type: string
+        query_model:
+          type: string
+          enum: [openapi, smithy]
+          description: What query sources over this integration are defined against; absent when it supports none.
+        queries:
+          type: array
+          description: Saved query sources over this integration (RFC 0006), readable by rules like resources.
+          items:
+            type: object
+            required: [id, name, version, source, operation, fields]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              version:
+                type: integer
+              source:
+                type: string
+              operation:
+                type: string
+              description:
+                type: string
+              fields:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResourceField"
     InstallRequest:
       type: object
       required: [url]

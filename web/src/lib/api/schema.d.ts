@@ -2293,6 +2293,21 @@ export interface components {
                 control_ref?: string;
                 runner?: string;
             }[];
+            /**
+             * @description What query sources over this integration are defined against; absent when it supports none.
+             * @enum {string}
+             */
+            query_model?: "openapi" | "smithy";
+            /** @description Saved query sources over this integration (RFC 0006), readable by rules like resources. */
+            queries?: {
+                id: string;
+                name: string;
+                version: number;
+                source: string;
+                operation: string;
+                description?: string;
+                fields: components["schemas"]["ResourceField"][];
+            }[];
         };
         InstallRequest: {
             url: string;

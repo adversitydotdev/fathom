@@ -211,6 +211,56 @@ export async function enableTemplate(integrationId: string, name: string): Promi
   return { id: data.id };
 }
 
+// Query sources (RFC 0006, 0007) ------------------------------------------
+
+export async function searchOperations(
+  integrationId: string,
+  q: string,
+): Promise<{ operations?: S["Operation"][]; error?: string }> {
+  const { data, error } = await api.GET("/integrations/{id}/operations", {
+    params: { path: { id: integrationId }, query: { q } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't search operations.") };
+  return { operations: data.data };
+}
+
+export async function describeOperation(
+  integrationId: string,
+  operation: string,
+): Promise<{ operation?: S["Operation"]; error?: string }> {
+  const { data, error } = await api.GET("/integrations/{id}/operations/{operation}", {
+    params: { path: { id: integrationId, operation } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't describe the operation.") };
+  return { operation: data };
+}
+
+export async function validateQuery(body: S["QueryWrite"]): Promise<{ check?: S["QueryCheck"]; error?: string }> {
+  const { data, error } = await api.POST("/queries/validate", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't validate the query.") };
+  return { check: data };
+}
+
+export async function dryRunQuery(body: S["DryRunRequest"]): Promise<{ run?: S["DryRun"]; error?: string }> {
+  const { data, error } = await api.POST("/queries/dry-run", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't run the query.") };
+  return { run: data };
+}
+
+export async function createQuery(body: S["QueryWrite"]): Promise<ActionState> {
+  const { data, error } = await api.POST("/queries", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't save the query source.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function deleteQuery(id: string): Promise<ActionState> {
+  const { error } = await api.DELETE("/queries/{id}", { params: { path: { id } } });
+  if (error) return { error: formatError(error, "Couldn't remove the query source.") };
+  refresh();
+  return {};
+}
+
 // Controls -----------------------------------------------------------------
 
 export async function createControl(body: S["ControlWrite"]): Promise<ActionState> {

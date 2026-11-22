@@ -12,6 +12,7 @@ import {
   collectConnection,
   createConnection,
   deleteConnection,
+  deleteQuery,
   enableIntegrationVersion,
   enableTemplate,
   installIntegration,
@@ -434,4 +435,8 @@ export function ApplyUpdateButton({
       </LoadingButton>
     </span>
   );
+}
+
+export function RemoveQueryButton({ id, source }: { id: string; source: string }) {
+  return <RevokeButton compact label={`Remove ${source}`} onRevoke={() => deleteQuery(id)} />;
 }

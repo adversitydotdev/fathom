@@ -28,7 +28,9 @@ import {
   EnableVersionButton,
   InstallIntegrationDialog,
   NewConnectionDialog,
+  RemoveQueryButton,
 } from "./integration-actions";
+import { QueryEditorDialog } from "./query-editor";
 
 export const metadata: Metadata = { title: "Integrations" };
 
@@ -214,6 +216,37 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
                     ))}
                   </div>
                 </div>
+                {i.query_model && (
+                  <div className="flex flex-col gap-1.5" aria-label={`${i.name} query sources`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                        Query sources · {i.query_model === "smithy" ? "AWS models" : "OpenAPI"}
+                      </span>
+                      <QueryEditorDialog
+                        integration={i}
+                        connections={connections.filter((c) => c.integration_id === i.id)}
+                      />
+                    </div>
+                    {(i.queries ?? []).length === 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        None yet. Define one to read more from {i.name} without code.
+                      </p>
+                    ) : (
+                      (i.queries ?? []).map((q) => (
+                        <div key={q.id} className="flex items-center justify-between gap-3 text-xs">
+                          <div className="min-w-0">
+                            <code className="rounded border bg-muted/40 px-1.5 py-0.5 font-mono text-[11px]">
+                              {q.name}@{q.version}
+                            </code>{" "}
+                            <span className="font-mono text-[11px] text-muted-foreground">{q.operation}</span>
+                            {q.description && <div className="truncate text-muted-foreground">{q.description}</div>}
+                          </div>
+                          <RemoveQueryButton id={q.id} source={q.source} />
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
                 {(versionsOf.get(i.id)?.length ?? 0) > 0 && (
                   <div className="flex flex-col gap-1.5" aria-label={`${i.name} versions`}>
                     <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
