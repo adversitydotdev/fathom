@@ -65,13 +65,37 @@ The design keeps three properties from RFC 0005:
 | `operation` | Yes | An `operationId` in the description that is a read ([Section 5](#5-read-only-enforcement)) and returns a list. |
 | `params` | No | Query and path parameters, as strings. Every required path parameter must be present. Headers and bodies cannot be set. |
 | `items` | No | Dotted path to the list in the response body. Empty (the default) means the body is the list. |
+| `for_each` | No | Per-item calls: `operation`, `params`, `items`, `bind`, `limit` (below). |
 | `fields` | Yes | Output field name (`[a-z][a-z0-9_]*`) to a dotted path in each item, such as `profile.login`. Must include `id` and `name`, which the rule runner uses to name failing items (RFC 0001 section 7.6). |
 
 **Item schema.** OGRL derives each query source's item schema from the description: the type at each projected path in the operation's response schema, nullable unless every schema level on the path marks it required. That schema validates collected items exactly as a built-in resource's schema does (RFC 0005 section 6), and lists the fields the rule editor shows.
 
 **Versions are immutable.** Saving a definition with an existing `(integration, name, version)` and different content is refused. Changing a filter changes what the data means, so every edit is a new version. Older versions stay usable while tests read them, and a version cannot be removed while a non-revoked test reads it.
 
-**One operation, no joins.** A query source calls one list operation and pages through it. Per-item follow-up calls (such as Okta factors per user) remain built-in resources.
+**Per-item calls.** Some settings are read one resource at a time, such as the members of each group. `for_each` runs a list operation first and calls `operation` once per item it returns:
+
+```yaml
+integration: dev.adversity.okta
+name: admin-group-members
+version: 1
+operation: listGroupUsers
+for_each:
+  operation: listGroups               # a read operation that returns a list
+  params: {search: 'profile.name sw "Admin"'}
+  bind: {groupId: id}                 # operation parameter: path in each listed item
+  limit: 1000                         # at most this many listed items (default 1000, at most 5000)
+fields:
+  id: id
+  name: profile.login
+  group: $parent.profile.name
+```
+
+- `for_each.operation` follows Section 5, and its `items` names its list as `items` does. `bind` names parameters of `operation`, which `params` may not also set; a bound path parameter whose value contains `/` or is `.` or `..` is refused for that item.
+- Fields may read the listed item through `$parent.<path>`.
+- A call that fails with a client error other than authentication, permission, or rate limiting yields one item with every field empty and `error` holding the vendor's error code (or `HTTP <status>`). Items of a `for_each` query always carry `error`, null on success. Any other failure fails the collection.
+- More listed items than `limit` makes the collection incomplete.
+
+There are no joins beyond this: a query source reads one operation, or one per listed item. Anything else stays a built-in resource.
 
 ## 4. Integration support
 

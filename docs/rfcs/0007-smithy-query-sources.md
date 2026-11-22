@@ -82,7 +82,7 @@ fields: {id: $region, name: $region, enabled: EbsEncryptionByDefault}
 
 **Regions.** `regions` is a list of region codes, or `"*"` for the connection's `regions` config. A regional operation is collected once per region and items gain a `region` field; a global operation ignores `regions`. A parameter whose value is exactly `$region` takes the region being collected, such as S3's `BucketRegion`.
 
-**Per-item calls.** Many AWS settings are read one resource at a time: S3 encryption per bucket, the public access block per bucket. `for_each` runs a list operation first and calls `operation` once per item it returns:
+**Per-item calls.** Many AWS settings are read one resource at a time: S3 encryption per bucket, the public access block per bucket. `for_each` (RFC 0006 section 3) runs a list operation first and calls `operation` once per item it returns:
 
 ```yaml
 integration: dev.adversity.aws
@@ -145,7 +145,6 @@ RFC 0006's routes serve Smithy-backed integrations without change. `GET /integra
 
 ## 10. Open questions
 
-1. **Per-item calls for OpenAPI.** `for_each` is specified for Smithy query sources; RFC 0006 sources (such as Okta factors per user) could use the same shape.
-2. **Endpoint rulesets.** Declared endpoints cover the commercial partition. FIPS, dual-stack, GovCloud, and China need either partition-specific declarations or an evaluator for Smithy's endpoint rules.
-3. **Classifying reads.** The name-prefix rule plus a deny list is a heuristic. A reviewed allowlist per service is stricter but much longer to maintain; the deny list should grow from review and from AWS's own access-level data in the IAM service authorization reference.
-4. **Model drift.** New service model versions can rename members. The upgrade check (RFC 0006 open question 3) applies.
+1. **Endpoint rulesets.** Declared endpoints cover the commercial partition. FIPS, dual-stack, GovCloud, and China need either partition-specific declarations or an evaluator for Smithy's endpoint rules.
+2. **Classifying reads.** The name-prefix rule plus a deny list is a heuristic. A reviewed allowlist per service is stricter but much longer to maintain; the deny list should grow from review and from AWS's own access-level data in the IAM service authorization reference.
+3. **Model drift.** New service model versions can rename members. The upgrade check (RFC 0006 open question 3) applies.
