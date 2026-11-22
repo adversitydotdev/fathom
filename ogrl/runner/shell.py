@@ -92,7 +92,14 @@ class ShellRunner:
         except ValueError as exc:
             return RunReport("error", str(exc), observed)
 
-        scratch = Path(tempfile.mkdtemp(prefix="ogrl-run-"))
+        try:
+            scratch = Path(tempfile.mkdtemp(prefix="ogrl-run-"))
+        except OSError as exc:  # a read-only root filesystem with no writable TMPDIR
+            return RunReport(
+                "error",
+                f"the shell runner needs a writable temporary directory (TMPDIR): {exc.strerror}",
+                observed,
+            )
         try:
             script = scratch / ".ogrl-command.sh"
             script.write_text(run.command)

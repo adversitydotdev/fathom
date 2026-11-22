@@ -8,16 +8,20 @@ People author YAML they can review. Status is computed from implementations, par
 
 The shared standard library lives in [`adversitydotdev/ogrl-library`](https://github.com/adversitydotdev/ogrl-library) (browsable at [ogrl.adversity.dev/library](https://ogrl.adversity.dev/library/)). Once an organization pulls a pinned library revision, their database is the source of truth for their program. A scheduled export writes a git snapshot, and the running tool does not read it back. A provider can publish what a service inherits, and a customer does not retype it. The same program renders to OSCAL when a government customer needs that package.
 
-Language specifications live in the sibling `ogrl-rfcs` repository; application design docs live in this repo:
+The language specifications are published at [ogrl.adversity.dev](https://ogrl.adversity.dev) from [`ogrl-rfcs`](https://github.com/adversitydotdev/ogrl-rfcs). This application's design docs and operator documentation are published at [tools.adversity.dev](https://tools.adversity.dev) from [`ogrl-tooling`](https://github.com/adversitydotdev/ogrl-tooling):
 
-- RFC 0001: OGRL Object Model (`ogrl-rfcs/rfcs/0001-object-model.md`)
-- RFC 0002: Tooling and Sources of Truth (`ogrl-rfcs/rfcs/0002-tooling.md`)
-- [RFC 0003: Application Architecture](docs/rfcs/0003-application.md) (draft)
-- [RFC 0004: HTTP API](docs/rfcs/0004-http-api.md) (draft), contract in [api/openapi.yaml](api/openapi.yaml)
+- [RFC 0001: OGRL Object Model](https://ogrl.adversity.dev/rfcs/0001-object-model/)
+- [RFC 0002: Tooling and Sources of Truth](https://ogrl.adversity.dev/rfcs/0002-tooling/)
+- [RFC 0003: Application Architecture](https://tools.adversity.dev/rfcs/0003-application/) (draft)
+- [RFC 0004: HTTP API](https://tools.adversity.dev/rfcs/0004-http-api/) (draft), contract in [api/openapi.yaml](api/openapi.yaml)
+- [RFC 0005: Integrations](https://tools.adversity.dev/rfcs/0005-integrations/) (draft)
+- [RFC 0006: Query Sources](https://tools.adversity.dev/rfcs/0006-query-sources/) (draft)
+- [RFC 0007: Smithy Query Sources](https://tools.adversity.dev/rfcs/0007-smithy-query-sources/) (draft)
+- [Self-hosting guide](https://tools.adversity.dev/docs/self-hosting/)
 
 ## Estimated monthly cost
 
-The production account in [RFC 0003](docs/rfcs/0003-application.md) is one Linux/ARM Fargate task (0.25 vCPU, 1 GB, API and web together), one single-AZ `db.t4g.micro`, 20 GB of gp3, a private S3 bucket, SSM Parameter Store, SES, and CloudWatch Logs. Figures below are AWS on-demand list prices for US East (N. Virginia) as of 9 November 2026. A month is 730 hours. The 12-month free tier is not subtracted. The two containers share one task, so vCPU and memory are billed once.
+The production account in [RFC 0003](https://tools.adversity.dev/rfcs/0003-application/) is one Linux/ARM Fargate task (0.25 vCPU, 1 GB, API and web together), one single-AZ `db.t4g.micro`, 20 GB of gp3, a private S3 bucket, SSM Parameter Store, SES, and CloudWatch Logs. Figures below are AWS on-demand list prices for US East (N. Virginia) as of 9 November 2026. A month is 730 hours. The 12-month free tier is not subtracted. The two containers share one task, so vCPU and memory are billed once.
 
 | Line | Rate | Per month |
 |---|---|---|

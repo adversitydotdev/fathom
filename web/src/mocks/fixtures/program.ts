@@ -9,6 +9,7 @@
 import type {
   Baseline,
   Component,
+  Connection,
   ControlState,
   Control,
   Evidence,
@@ -16,6 +17,8 @@ import type {
   Finding,
   Framework,
   Implementation,
+  Integration,
+  IntegrationInstall,
   Job,
   LibraryPin,
   Mapping,
@@ -26,7 +29,9 @@ import type {
   ProviderPin,
   Result,
   Risk,
+  Snapshot,
   System,
+  TemplateUpdate,
   Test,
 } from "@/lib/api/types";
 
@@ -672,3 +677,212 @@ export const providers: ProviderPin[] = [
     kind: "oscal-component",
   },
 ];
+
+// Integrations (RFC 0005) --------------------------------------------------
+
+const OKTA = "dev.adversity.okta";
+const GITHUB = "dev.adversity.github";
+
+export const integrations: Integration[] = [
+  {
+    id: OKTA,
+    name: "Okta",
+    version: "1.4.0",
+    publisher: "adversity.dev",
+    description: "Workforce users, groups, and MFA factors from Okta.",
+    tier: "first-party",
+    digest: "7f3a9c1e5b2d8f0a4c6e8b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f1a",
+    runtime: "python",
+    egress: ["*.okta.com"],
+    config: [{ name: "domain", label: "Okta domain", pattern: "^[a-z0-9-]+\\.okta\\.com$", required: true }],
+    auth: [
+      { kind: "fields", label: "API token", supported: true, fields: [{ name: "OKTA_API_TOKEN", label: "Read-only API token", secret: true }] },
+      { kind: "oauth2", label: "OAuth application", supported: true, scopes: ["okta.users.read", "okta.groups.read"] },
+    ],
+    resources: [
+      { name: "users", version: 1, source: `${OKTA}/users@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true, description: 'The Okta login.' }, { name: 'email', type: 'string', nullable: true, required: false }, { name: 'status', type: 'string', nullable: false, required: true }, { name: 'last_login', type: 'string', nullable: true, required: false }, { name: 'admin', type: 'boolean', nullable: false, required: true, description: 'Holds at least one Okta admin role.' }, { name: 'mfa_factors', type: 'array of string', nullable: false, required: true, description: 'Active factor types.' }, { name: 'mfa_enrolled', type: 'boolean', nullable: false, required: true }, { name: 'strong_mfa', type: 'boolean', nullable: false, required: true, description: 'TOTP, hardware token, or phishing-resistant.' }, { name: 'phishing_resistant', type: 'boolean', nullable: false, required: true, description: 'WebAuthn, U2F, or Okta FastPass.' }] },
+      { name: "groups", version: 1, source: `${OKTA}/groups@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'group_type', type: 'string', nullable: false, required: true }, { name: 'members', type: 'array of string', nullable: false, required: true, description: 'User ids.' }] },
+    ],
+    checks: [{ name: "admin-mfa-phishing-resistant", version: 1, check: `${OKTA}/admin-mfa-phishing-resistant@1`, sources: [`${OKTA}/users@1`, `${OKTA}/groups@1`] }],
+    templates: [
+      { name: "mfa-enforcement", fulfills_ref: "test--mfa-enforced", test_name: "Every active Okta user is enrolled in MFA", control_ref: "control--mfa-privileged", runner: "rule" },
+    ],
+  },
+  {
+    id: GITHUB,
+    name: "GitHub",
+    version: "0.9.2",
+    publisher: "adversity.dev",
+    description: "Repositories, branch rules, and organization members from GitHub.",
+    tier: "local",
+    digest: "c2e4a6b8d0f1a3c5e7b9d1f3a5c7e9b0d2f4a6c8e0b1d3f5a7c9e1b3d5f7a9c0",
+    runtime: "binary",
+    egress: ["api.github.com"],
+    config: [{ name: "organization", label: "GitHub organization", required: true }],
+    auth: [
+      { kind: "fields", label: "GitHub App", supported: true, fields: [{ name: "GITHUB_APP_ID", label: "App ID", secret: false }, { name: "GITHUB_APP_PRIVATE_KEY", label: "Private key", secret: true }] },
+    ],
+    resources: [
+      { name: "repositories", version: 1, source: `${GITHUB}/repositories@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'private', type: 'boolean', nullable: false, required: true }, { name: 'archived', type: 'boolean', nullable: false, required: true }, { name: 'fork', type: 'boolean', nullable: false, required: true }, { name: 'default_branch', type: 'string', nullable: true, required: true }] },
+      { name: "rulesets", version: 1, source: `${GITHUB}/rulesets@1`, fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'required_approvals', type: 'integer', nullable: false, required: true }, { name: 'status_checks', type: 'array of string', nullable: false, required: true }, { name: 'force_push_blocked', type: 'boolean', nullable: false, required: true }] },
+    ],
+    checks: [{ name: "branch-protection", version: 1, check: `${GITHUB}/branch-protection@1`, sources: [`${GITHUB}/repositories@1`, `${GITHUB}/rulesets@1`] }],
+    templates: [
+      { name: "change-control", fulfills_ref: "test--change-review-enforced", test_name: "Production branches require review and passing checks", control_ref: "control--change-control", runner: "integration" },
+    ],
+  },
+];
+
+integrations.push({
+  id: "dev.adversity.aws",
+  name: "AWS",
+  version: "1.1.0",
+  publisher: "adversity.dev",
+  description: "IAM users, roles, and account password policy from AWS, through a read-only role.",
+  tier: "first-party",
+  digest: "e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e6b8d1f3a5c7e9b0d2f4a6c8e1b3",
+  runtime: "python",
+  egress: ["*.amazonaws.com"],
+  config: [],
+  auth: [{ kind: "aws_role", label: "IAM role", supported: true }],
+  resources: [
+    { name: "iam-users", version: 1, source: "dev.adversity.aws/iam-users@1", fields: [{ name: 'id', type: 'string', nullable: false, required: true, description: "The user's ARN." }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'root', type: 'boolean', nullable: false, required: true }, { name: 'console_access', type: 'boolean', nullable: false, required: true }, { name: 'mfa_active', type: 'boolean', nullable: false, required: true }, { name: 'active_access_keys', type: 'integer', nullable: false, required: true }, { name: 'oldest_active_key_rotated', type: 'string', nullable: true, required: true }] },
+    { name: "password-policy", version: 1, source: "dev.adversity.aws/password-policy@1", fields: [{ name: 'id', type: 'string', nullable: false, required: true }, { name: 'name', type: 'string', nullable: false, required: true }, { name: 'minimum_length', type: 'integer', nullable: false, required: true }] },
+  ],
+  checks: [],
+  templates: [],
+});
+
+export const connections: Connection[] = [
+  {
+    id: "connection--okta-prod",
+    integration_id: OKTA,
+    name: "Okta production",
+    config: { domain: "acme.okta.com" },
+    auth_kind: "fields",
+    bindings: ["component--okta"],
+    state: "active",
+    identity: "acme.okta.com as svc-ogrl",
+    granted_scopes: ["okta.users.read", "okta.groups.read"],
+    last_validated: at(-1, "05:58:02Z"),
+    secrets_set: ["OKTA_API_TOKEN"],
+    created: at(-30),
+    modified: at(-1, "05:58:02Z"),
+    created_by_ref: "party--priya-shah",
+  },
+  {
+    id: "connection--github-acme",
+    integration_id: GITHUB,
+    name: "GitHub acme-eng",
+    config: { organization: "acme-eng" },
+    auth_kind: "fields",
+    bindings: ["system--acme-platform"],
+    state: "failing",
+    last_error: "permission_denied: the app cannot read repository rulesets",
+    secrets_set: ["GITHUB_APP_ID", "GITHUB_APP_PRIVATE_KEY"],
+    created: at(-12),
+    modified: at(-2, "06:00:11Z"),
+    created_by_ref: "party--priya-shah",
+  },
+];
+
+connections.push({
+  id: "connection--aws-prod",
+  integration_id: "dev.adversity.aws",
+  name: "AWS production",
+  config: { aws_role_arn: "arn:aws:iam::447100000000:role/ogrl-readonly", regions: "us-east-1,eu-west-1" },
+  auth_kind: "aws_role",
+  bindings: ["component--aws"],
+  state: "active",
+  identity: "arn:aws:sts::447100000000:assumed-role/ogrl-readonly",
+  last_validated: at(-1, "05:58:40Z"),
+  secrets_set: [],
+  external_id: "q8Jm2vT4xNcY7pLwR3eH9sKdF6bZ",
+  created: at(-30),
+  modified: at(-1, "05:58:40Z"),
+  created_by_ref: "party--priya-shah",
+});
+
+export const snapshots: Snapshot[] = [
+  {
+    id: "snapshot--okta-users-latest",
+    connection_id: "connection--okta-prod",
+    source: `${OKTA}/users@1`,
+    collected: at(-1, "06:00:31Z"),
+    complete: true,
+    item_count: 418,
+    size: 184_220,
+    uri: "s3://acme-ogrl-evidence/snapshots/okta-users.json",
+    digest: "5d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f",
+    warnings: ["removed undeclared fields: credentials"],
+  },
+  {
+    id: "snapshot--okta-groups-latest",
+    connection_id: "connection--okta-prod",
+    source: `${OKTA}/groups@1`,
+    collected: at(-1, "06:00:44Z"),
+    complete: true,
+    item_count: 37,
+    size: 12_904,
+    uri: "s3://acme-ogrl-evidence/snapshots/okta-groups.json",
+    digest: "a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9e0b2d4f",
+  },
+  {
+    id: "snapshot--github-repos-partial",
+    connection_id: "connection--github-acme",
+    source: `${GITHUB}/repositories@1`,
+    collected: at(-2, "06:00:09Z"),
+    complete: false,
+    reason: "rate limited after page 3",
+    item_count: 300,
+    size: 96_512,
+    uri: "s3://acme-ogrl-evidence/snapshots/github-repos.json",
+    digest: "0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9",
+  },
+  {
+    id: "snapshot--aws-security-groups-latest",
+    connection_id: "connection--aws-prod",
+    source: "dev.adversity.aws/security-groups@1",
+    collected: at(-1, "06:01:12Z"),
+    complete: true,
+    item_count: 3,
+    size: 1_204,
+    uri: "s3://acme-ogrl-evidence/snapshots/aws-security-groups.json",
+    digest: "9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7",
+  },
+];
+
+export const integrationVersions: IntegrationInstall[] = [
+  { id: "dev.adversity.okta", version: "1.3.0", digest: "3c5e7b9d1f3a5c7e9b0d2f4a6c8e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e", uri: "s3://acme-ogrl-evidence/integrations/dev.adversity.okta/1.3.0.tar.gz", tier: "first-party", enabled: false, installed: at(-60), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.3.0/dev.adversity.okta-1.3.0.tar.gz" },
+  { id: "dev.adversity.okta", version: "1.4.0", digest: "7f3a9c1e5b2d8f0a4c6e8b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f1a", uri: "s3://acme-ogrl-evidence/integrations/dev.adversity.okta/1.4.0.tar.gz", tier: "first-party", enabled: true, installed: at(-3), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.4.0/dev.adversity.okta-1.4.0.tar.gz" },
+];
+
+export const templateUpdates: (TemplateUpdate & { integration_id: string })[] = [
+  {
+    integration_id: "dev.adversity.okta",
+    test_id: "test--mfa-enforced",
+    test_name: "Privileged groups require phishing-resistant MFA",
+    template: "mfa-enforcement",
+    from_version: "1.3.0",
+    to_version: "1.4.0",
+    changes: ["run"],
+    modified: at(-150),
+  },
+];
+
+/** Latest snapshot items per source, for the rule preview in mock mode. */
+export const snapshotItems: Record<string, Record<string, unknown>[]> = {
+  "dev.adversity.okta/users@1": [
+    { id: "00u1ada", name: "ada@acme.test", email: "ada@acme.test", status: "ACTIVE", last_login: at(-1, "08:00:00Z"), admin: true, mfa_factors: ["webauthn"], mfa_enrolled: true, strong_mfa: true, phishing_resistant: true },
+    { id: "00u2ben", name: "ben@acme.test", email: "ben@acme.test", status: "ACTIVE", last_login: at(-2, "08:00:00Z"), admin: false, mfa_factors: ["token:software:totp"], mfa_enrolled: true, strong_mfa: true, phishing_resistant: false },
+    { id: "00u3cy", name: "cy@acme.test", email: "cy@acme.test", status: "ACTIVE", last_login: at(-140, "08:00:00Z"), admin: false, mfa_factors: ["sms"], mfa_enrolled: true, strong_mfa: false, phishing_resistant: false },
+    { id: "00u4dee", name: "dee@acme.test", email: "dee@acme.test", status: "ACTIVE", last_login: null, admin: true, mfa_factors: ["push"], mfa_enrolled: true, strong_mfa: false, phishing_resistant: false },
+    { id: "00u5eve", name: "eve@acme.test", email: "eve@acme.test", status: "SUSPENDED", last_login: at(-300, "08:00:00Z"), admin: false, mfa_factors: [], mfa_enrolled: false, strong_mfa: false, phishing_resistant: false },
+  ],
+  "dev.adversity.aws/security-groups@1": [
+    { id: "sg-0a1default", name: "default", vpc: "vpc-0prod", rules: [], region: "us-east-1" },
+    { id: "sg-0b2bastion", name: "bastion", vpc: "vpc-0prod", rules: [{ FromPort: 22, IpRanges: [{ CidrIp: "0.0.0.0/0" }] }], region: "us-east-1" },
+    { id: "sg-0c3web", name: "web", vpc: "vpc-0prod", rules: [{ FromPort: 443, IpRanges: [{ CidrIp: "0.0.0.0/0" }] }], region: "eu-west-1" },
+  ],
+};
+

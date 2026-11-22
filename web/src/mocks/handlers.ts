@@ -1,9 +1,13 @@
 import { http, HttpResponse, type HttpResponseResolver } from "msw";
 
-import type { Job } from "@/lib/api/types";
+import type { Connection, Job, Test } from "@/lib/api/types";
 
+import { CelError, evaluate as evaluateCel } from "./cel";
 import { db } from "./db";
+import { snapshotItems } from "./fixtures/program";
 import { programStatus, programSummary, systemGaps } from "./kernel";
+import { checkQuery, describe, dryRun, findOperation, saveQuery, schemaFields, searchOperations, sourceOf, withQueries } from "./queries";
+import { queryModels } from "./fixtures/queries";
 
 /** Matches `/v1` on any origin, so the same handlers serve in-process and HTTP calls. */
 const V = "*/v1";
@@ -244,6 +248,321 @@ export const handlers = [
     const job: Job = { id: `job--${crypto.randomUUID()}`, type: "git_export", status: "queued", created: new Date().toISOString() };
     db.jobs.unshift(job);
     return HttpResponse.json(job, { status: 202 });
+  }),
+
+  // Integrations (RFC 0005)
+  http.get(`${V}/integrations`, () => HttpResponse.json({ data: db.integrations.map(withQueries) })),
+  http.get(`${V}/integrations/:id`, ({ params }) => {
+    const item = db.integrations.find((i) => i.id === params.id);
+    return item ? HttpResponse.json(withQueries(item)) : notFound();
+  }),
+
+  // Query sources (RFC 0006, RFC 0007)
+  http.get(`${V}/integrations/:id/operations`, ({ params, request }) => {
+    const id = String(params.id);
+    if (!db.integrations.some((i) => i.id === id)) return notFound();
+    if (!queryModels[id]) return problem(400, "bad-request", `${id} does not support query sources (no API model in its manifest)`);
+    return HttpResponse.json({ data: searchOperations(id, new URL(request.url).searchParams.get("q") ?? "") });
+  }),
+  http.get(`${V}/integrations/:id/operations/:operation`, ({ params }) => {
+    const op = findOperation(String(params.id), String(params.operation));
+    return op ? HttpResponse.json(describe(op)) : notFound();
+  }),
+  http.post(`${V}/queries/validate`, async ({ request }) => {
+    const body = (await request.json()) as Parameters<typeof checkQuery>[0];
+    return HttpResponse.json(checkQuery(body));
+  }),
+  http.post(`${V}/queries/dry-run`, async ({ request }) => {
+    const { connection_id, max_items, ...write } = (await request.json()) as Parameters<typeof checkQuery>[0] & {
+      connection_id: string;
+      max_items?: number;
+    };
+    return HttpResponse.json(dryRun(write, connection_id, max_items ?? 50));
+  }),
+  http.get(`${V}/queries`, () => HttpResponse.json({ data: db.queries })),
+  http.get(`${V}/queries/:id`, ({ params }) => {
+    const query = db.queries.find((q) => q.id === params.id);
+    return query ? HttpResponse.json(query) : notFound();
+  }),
+  http.post(`${V}/queries`, async ({ request }) => {
+    const body = (await request.json()) as Parameters<typeof checkQuery>[0];
+    const { query, check } = saveQuery(body, "party--priya-shah");
+    if (query) return HttpResponse.json(query, { status: 201 });
+    if (check.errors.length === 1 && check.errors[0].pointer === "/version") {
+      return problem(409, "query-exists", check.errors[0].detail);
+    }
+    return HttpResponse.json(
+      {
+        type: "urn:ogrl:problem:invalid",
+        title: "the query source does not validate",
+        status: 400,
+        errors: check.errors.map((e) => ({ pointer: e.pointer, detail: e.detail })),
+      },
+      { status: 400, headers: { "Content-Type": "application/problem+json" } },
+    );
+  }),
+  http.delete(`${V}/queries/:id`, ({ params }) => {
+    const query = db.queries.find((q) => q.id === params.id);
+    if (!query) return notFound();
+    const readers = db.tests.filter((t) => !t.revoked && t.run && "source" in t.run && t.run.source === sourceOf(query));
+    if (readers.length) {
+      return problem(409, "query-in-use", `${sourceOf(query)} is read by ${readers.map((t) => t.id).join(", ")}; revoke those tests first`);
+    }
+    db.queries.splice(db.queries.indexOf(query), 1);
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.post(`${V}/integrations`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as { url?: string };
+    if (!body.url?.trim()) return problem(400, "bad-request", "url is required.");
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "integration_install", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+  http.get(`${V}/integrations/:id/versions`, ({ params }) => {
+    if (!db.integrations.some((i) => i.id === params.id)) return notFound();
+    return HttpResponse.json({ data: db.integrationVersions.filter((v) => v.id === params.id) });
+  }),
+  http.post(`${V}/integrations/:id/versions/:version/enable`, ({ params }) => {
+    const integration = db.integrations.find((i) => i.id === params.id);
+    if (!integration || !db.integrationVersions.some((v) => v.id === params.id && v.version === params.version)) {
+      return notFound();
+    }
+    db.integrationVersions = db.integrationVersions.map((v) =>
+      v.id === params.id ? { ...v, enabled: v.version === params.version } : v,
+    );
+    integration.version = params.version as string;
+    return HttpResponse.json(integration);
+  }),
+  http.get(`${V}/integrations/:id/template-updates`, ({ params }) => {
+    if (!db.integrations.some((i) => i.id === params.id)) return notFound();
+    const updates = db.templateUpdates.filter((u) => u.integration_id === params.id);
+    return HttpResponse.json({
+      data: updates.map((u) => {
+        const copy: Partial<typeof u> = { ...u };
+        delete copy.integration_id;
+        return copy;
+      }),
+    });
+  }),
+  http.post(`${V}/integrations/:id/template-updates/:testId/apply`, ({ params, request }) => {
+    const idx = db.templateUpdates.findIndex((u) => u.integration_id === params.id && u.test_id === params.testId);
+    if (idx < 0) return notFound();
+    if (request.headers.get("If-Match") !== db.templateUpdates[idx].modified) {
+      return problem(412, "stale-write", "If-Match does not equal modified.");
+    }
+    db.templateUpdates.splice(idx, 1);
+    const test = db.tests.find((t) => t.id === params.testId);
+    return test ? HttpResponse.json({ ...test, modified: new Date().toISOString() }) : notFound();
+  }),
+  http.post(`${V}/integrations/:id/templates/:name/enable`, ({ params }) => {
+    const integration = db.integrations.find((i) => i.id === params.id);
+    const template = integration?.templates.find((t) => t.name === params.name);
+    if (!integration || !template) return notFound();
+    const now = new Date().toISOString();
+    const test: Test = {
+      type: "test",
+      id: `test--${crypto.randomUUID()}`,
+      spec_version: "0.1.0",
+      created: now,
+      modified: now,
+      name: template.test_name ?? template.name,
+      control_ref: template.control_ref ?? "",
+      method: "automated",
+      interval: "daily",
+      fulfills_ref: template.fulfills_ref,
+      run: { runner: template.runner ?? "rule" },
+      extensions: { "dev.ogrl.integration": { integration: integration.id, version: integration.version, template: template.name } },
+    };
+    db.tests.unshift(test);
+    return HttpResponse.json(test, { status: 201 });
+  }),
+  http.get(`${V}/connections`, () => HttpResponse.json({ data: [...db.connections].sort((a, b) => a.id.localeCompare(b.id)) })),
+  http.get(`${V}/connections/:id`, ({ params }) => {
+    const item = db.connections.find((c) => c.id === params.id);
+    return item ? HttpResponse.json(item) : notFound();
+  }),
+  http.post(`${V}/connections`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as Partial<Connection>;
+    const integration = db.integrations.find((i) => i.id === body.integration_id);
+    if (!integration) return problem(400, "bad-request", "integration_id must name an installed integration.");
+    if (!body.name?.trim()) return problem(400, "bad-request", "name is required.");
+    const now = new Date().toISOString();
+    const connection: Connection = {
+      id: body.id || `connection--${crypto.randomUUID()}`,
+      integration_id: integration.id,
+      name: body.name.trim(),
+      config: body.config ?? {},
+      auth_kind: body.auth_kind ?? "fields",
+      bindings: body.bindings ?? [],
+      state: "pending",
+      secrets_set: [],
+      ...(body.auth_kind === "aws_role" ? { external_id: `ext-${crypto.randomUUID().replaceAll("-", "")}` } : {}),
+      created: now,
+      modified: now,
+    };
+    db.connections.push(connection);
+    return HttpResponse.json(connection, { status: 201 });
+  }),
+  http.patch(`${V}/connections/:id`, async ({ params, request }) => {
+    const idx = db.connections.findIndex((c) => c.id === params.id);
+    if (idx < 0) return notFound();
+    if (request.headers.get("If-Match") !== db.connections[idx].modified) {
+      return problem(412, "stale-write", "If-Match does not equal modified.");
+    }
+    const body = (await request.json().catch(() => ({}))) as Partial<Connection>;
+    const updated = { ...db.connections[idx], ...body, modified: new Date().toISOString() };
+    db.connections[idx] = updated;
+    return HttpResponse.json(updated);
+  }),
+  http.delete(`${V}/connections/:id`, ({ params }) => {
+    const idx = db.connections.findIndex((c) => c.id === params.id);
+    if (idx < 0) return notFound();
+    db.connections.splice(idx, 1);
+    return new HttpResponse(null, { status: 204 });
+  }),
+  http.put(`${V}/connections/:id/secrets/:name`, ({ params }) => {
+    const idx = db.connections.findIndex((c) => c.id === params.id);
+    if (idx < 0) return notFound();
+    const name = params.name as string;
+    const current = db.connections[idx];
+    const updated: Connection = {
+      ...current,
+      secrets_set: Array.from(new Set([...current.secrets_set, name])).sort(),
+      state: "pending",
+      identity: undefined,
+      modified: new Date().toISOString(),
+    };
+    db.connections[idx] = updated;
+    return HttpResponse.json(updated);
+  }),
+  http.post(`${V}/connections/:id/oauth/start`, ({ params }) => {
+    const connection = db.connections.find((c) => c.id === params.id);
+    if (!connection) return notFound();
+    if (connection.auth_kind !== "oauth2") return problem(400, "bad-request", `${connection.id} does not use oauth2`);
+    if (!connection.secrets_set.includes("OAUTH_CLIENT_ID")) {
+      return problem(400, "bad-request", "set OAUTH_CLIENT_ID and OAUTH_CLIENT_SECRET first");
+    }
+    const domain = connection.config.domain ?? "vendor.example";
+    const query = new URLSearchParams({ response_type: "code", state: crypto.randomUUID(), code_challenge_method: "S256" });
+    return HttpResponse.json({
+      authorize_url: `https://${domain}/oauth2/v1/authorize?${query}`,
+      expires: new Date(Date.now() + 10 * 60_000).toISOString(),
+    });
+  }),
+  http.post(`${V}/connections/:id/validate`, ({ params }) => {
+    if (!db.connections.some((c) => c.id === params.id)) return notFound();
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "collection", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+  http.post(`${V}/connections/:id/collections`, ({ params }) => {
+    const connection = db.connections.find((c) => c.id === params.id);
+    if (!connection) return notFound();
+    if (connection.state === "disabled") return problem(400, "bad-request", `${connection.id} is disabled`);
+    const job: Job = { id: `job--${crypto.randomUUID()}`, type: "collection", status: "queued", created: new Date().toISOString() };
+    db.jobs.unshift(job);
+    return HttpResponse.json(job, { status: 202 });
+  }),
+  http.post(`${V}/rules/preview`, async ({ request }) => {
+    const body = (await request.json().catch(() => ({}))) as {
+      run?: Record<string, unknown>;
+      params?: Record<string, string>;
+    };
+    const run = body.run ?? {};
+    const source = String(run.source ?? "");
+    const resource =
+      db.integrations.flatMap((i) => i.resources).find((r) => r.source === source) ??
+      db.queries.filter((q) => sourceOf(q) === source).map((q) => ({ source, name: q.name, fields: schemaFields(q.item_schema) }))[0];
+    const empty = { selected: 0, total: 0, subjects: [], warnings: [], snapshots: [], params: body.params ?? {}, sample: [] };
+    if (!resource) {
+      return HttpResponse.json({
+        ...empty,
+        outcome: "invalid",
+        summary: `no installed integration emits ${source || "that source"}`,
+        errors: [{ pointer: "/run/source", detail: `no installed integration emits ${source || "that source"}` }],
+      });
+    }
+    if (!run.assert && !run.aggregate) {
+      return HttpResponse.json({
+        ...empty,
+        outcome: "invalid",
+        summary: "the rule does not compile",
+        errors: [{ pointer: "/run/assert", detail: "runner rule requires assert, aggregate, or both" }],
+      });
+    }
+    const known = new Set(resource.fields.map((f) => f.name));
+    const warnings = (["select", "assert", "aggregate"] as const).flatMap((field) =>
+      [...String(run[field] ?? "").matchAll(/\bitem\.([A-Za-z_]\w*)/g)]
+        .filter((m) => !known.has(m[1]))
+        .map((m) => ({ pointer: `/run/${field}`, detail: `item.${m[1]}: the resource has no field '${m[1]}'` })),
+    );
+    const items = snapshotItems[source];
+    if (!items) {
+      return HttpResponse.json({
+        ...empty,
+        warnings,
+        errors: [],
+        outcome: "no-data",
+        summary: `no complete snapshot of ${source} from a connection for it; collect one first`,
+      });
+    }
+    const variables = { params: body.params ?? {} };
+    const errors: { pointer: string; detail: string }[] = [];
+    for (const field of ["select", "assert"] as const) {
+      const text = run[field];
+      if (typeof text !== "string" || !text.trim()) continue;
+      try {
+        evaluateCel(text, { ...variables, item: items[0] });
+      } catch (exc) {
+        if (exc instanceof CelError && exc.message.startsWith("Syntax")) errors.push({ pointer: `/run/${field}`, detail: exc.message });
+      }
+    }
+    if (errors.length) {
+      return HttpResponse.json({ ...empty, warnings, errors, outcome: "invalid", summary: "the rule does not compile" });
+    }
+    const snapshot = db.snapshots.find((x) => x.source === source);
+    const connection = db.connections.find((x) => x.id === snapshot?.connection_id);
+    const base = {
+      ...empty,
+      warnings,
+      errors: [],
+      total: items.length,
+      sample: items.slice(0, 3),
+      snapshots: snapshot
+        ? [{ id: snapshot.id, connection_id: snapshot.connection_id, connection_name: connection?.name ?? snapshot.connection_id, collected: snapshot.collected, item_count: items.length }]
+        : [],
+    };
+    if (run.aggregate) {
+      return HttpResponse.json({ ...base, outcome: "error", summary: "mock mode evaluates select and assert only" });
+    }
+    try {
+      const selected = items.filter((item) => !run.select || evaluateCel(String(run.select), { ...variables, item }) === true);
+      if (!selected.length && !run.allow_empty) {
+        return HttpResponse.json({ ...base, outcome: "error", summary: `no items selected from ${source}` });
+      }
+      const failing = selected.filter((item) => evaluateCel(String(run.assert), { ...variables, item }) !== true);
+      return HttpResponse.json({
+        ...base,
+        outcome: failing.length ? "fail" : "pass",
+        summary: `${selected.length - failing.length} of ${selected.length} selected items pass`,
+        selected: selected.length,
+        subjects: failing.map((item) => ({ kind: resource.name, name: String(item.name ?? item.id), external_id: String(item.id) })),
+      });
+    } catch (exc) {
+      return HttpResponse.json({ ...base, outcome: "error", summary: exc instanceof Error ? exc.message : String(exc) });
+    }
+  }),
+  http.get(`${V}/snapshots`, ({ request }) => {
+    const sp = new URL(request.url).searchParams;
+    const out = db.snapshots
+      .filter((s) => !sp.get("connection_id") || s.connection_id === sp.get("connection_id"))
+      .filter((s) => !sp.get("source") || s.source === sp.get("source"))
+      .sort((a, b) => b.collected.localeCompare(a.collected));
+    return HttpResponse.json({ data: out });
+  }),
+  http.get(`${V}/snapshots/:id`, ({ params }) => {
+    const item = db.snapshots.find((s) => s.id === params.id);
+    return item ? HttpResponse.json(item) : notFound();
   }),
 
   list("/jobs", () => db.jobs, { type: eq("type"), status: eq("status") }),

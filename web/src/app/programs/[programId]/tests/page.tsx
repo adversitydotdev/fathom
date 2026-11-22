@@ -5,12 +5,15 @@ import {
   evaluationInstant,
   getControls,
   getImplementations,
+  getIntegrations,
   getProgram,
   getProgramStatus,
   getResults,
   getTests,
 } from "@/lib/data";
 import { isoDate } from "@/lib/format";
+
+import { RuleEditorDialog, ruleSourcesOf } from "@/components/rule-editor-sources";
 
 import { TestCrudDialog } from "./test-crud";
 import { TestsTable, type TestRow, type TestStatus } from "./tests-table";
@@ -30,12 +33,13 @@ export default async function TestsPage({
   const instant = evaluationInstant(atParam);
 
   const program = await getProgram(programId);
-  const [status, controls, impls, tests, results] = await Promise.all([
+  const [status, controls, impls, tests, results, integrations] = await Promise.all([
     getProgramStatus(programId, instant),
     getControls(),
     getImplementations(program.system_ref),
     getTests(),
     getResults(),
+    getIntegrations(),
   ]);
 
   const inBaseline = new Set(status.controls.map((c) => c.control_id));
@@ -81,6 +85,11 @@ export default async function TestsPage({
     return { id: c.control_id, label: `${ctrl?.display_id ?? c.control_id} · ${ctrl?.name ?? ""}`.trim() };
   });
 
+  const ruleSources = ruleSourcesOf(integrations);
+  const fulfillOptions = tests
+    .filter((t) => !t.fulfills_ref && inBaseline.has(t.control_ref))
+    .map((t) => ({ id: t.id, label: t.name ?? t.id, controlId: t.control_ref }));
+
   const passing = rows.filter((r) => r.status === "pass").length;
   const failing = rows.filter((r) => r.status === "fail" || r.status === "error").length;
   const missing = rows.filter((r) => r.status === "missing").length;
@@ -95,6 +104,9 @@ export default async function TestsPage({
             <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
               {rows.length} tests · at <span className="text-foreground">{isoDate(status.at)}</span>
             </p>
+            {ruleSources.length > 0 && (
+              <RuleEditorDialog sources={ruleSources} controls={controlOptions} fulfills={fulfillOptions} />
+            )}
             <TestCrudDialog controls={controlOptions} />
           </div>
         }

@@ -131,3 +131,49 @@ auth_tokens = Table(
     Column("last_used_at", DateTime(timezone=True)),
     Index("auth_tokens_actor", "actor_id"),
 )
+
+# --- Integrations (RFC 0005): connections and snapshot rows. Not RFC 0001 objects. ---
+
+connections = Table(
+    "connections",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("integration_id", Text, nullable=False),
+    Column("modified", DateTime(timezone=True), nullable=False),
+    Column("body", JSONB, nullable=False),
+    Index("connections_integration", "integration_id"),
+)
+
+snapshots = Table(
+    "snapshots",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("connection_id", Text, nullable=False),
+    Column("source", Text, nullable=False),
+    Column("collected", DateTime(timezone=True), nullable=False),
+    Column("complete", Boolean, nullable=False),
+    Column("body", JSONB, nullable=False),
+    Index("snapshots_connection_source_collected", "connection_id", "source", "collected"),
+)
+
+integration_installs = Table(
+    "integration_installs",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("version", Text, primary_key=True),
+    Column("enabled", Boolean, nullable=False, server_default="false"),
+    Column("installed", DateTime(timezone=True), nullable=False),
+    Column("body", JSONB, nullable=False),
+)
+
+# Query sources (RFC 0006): organization-defined resources. Immutable per version.
+queries = Table(
+    "queries",
+    metadata,
+    Column("id", Text, primary_key=True),
+    Column("integration_id", Text, nullable=False),
+    Column("name", Text, nullable=False),
+    Column("version", Integer, nullable=False),
+    Column("body", JSONB, nullable=False),
+    Index("queries_source", "integration_id", "name", "version", unique=True),
+)

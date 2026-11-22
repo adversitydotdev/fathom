@@ -1,0 +1,11 @@
+{
+  "type": "object",
+  "required": ["id", "name", "status"],
+  "properties": {
+    "id": {"type": "string"},
+    "name": {"type": "string"},
+    "status": {"type": "string"},
+    "mfa": {"type": "boolean"},
+    "admin": {"type": "boolean"}
+  }
+}

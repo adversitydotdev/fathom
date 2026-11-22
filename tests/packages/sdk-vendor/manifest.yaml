@@ -1,0 +1,30 @@
+# A test integration built with the SDK, for query sources (RFC 0006). Its vendor is
+# the local emulator in tests/test_query_sources.py; the description is vendor.json.
+# Not under tests/integrations, so other tests do not load it.
+id: dev.ogrl.vendor
+name: Vendor
+version: 0.1.0
+protocol: 1
+publisher: ogrl.dev
+runtime:
+  kind: python
+  entrypoint: vendor_integration:app.run
+config:
+  - name: port
+    label: Emulator port
+    pattern: "^[0-9]+$"
+auth:
+  - kind: fields
+    label: Token
+    fields:
+      - name: VENDOR_TOKEN
+        label: Token
+openapi:
+  description: vendor.json
+  base_url: "http://127.0.0.1:{port}"
+  pagination: link
+  authorization: "Bearer {VENDOR_TOKEN}"
+resources:
+  - name: status
+    version: 1
+    schema: schemas/status.json

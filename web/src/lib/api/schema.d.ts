@@ -1617,7 +1617,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/connectors": {
+    "/integrations": {
         parameters: {
             query?: never;
             header?: never;
@@ -1625,20 +1625,26 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * List connectors installed in this deployment.
-         * @description The registry is empty until a connector is installed beside the API.
-         *     This is not a catalog of cloud products. RFC 0003 defines the port.
+         * List integrations installed in this deployment.
+         * @description RFC 0005 section 3. The registry is empty until a package is installed beside the API.
          */
-        get: operations["listConnectors"];
+        get: operations["listIntegrations"];
         put?: never;
-        post?: never;
+        /**
+         * Install an integration archive from a URL. Returns a job.
+         * @description RFC 0005 section 4. The archive is unpacked and validated, stored in
+         *     object storage, and (with `enable`, the default) enabled. Unsigned
+         *     archives install only with `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A
+         *     version is immutable: reinstalling it with other bytes is refused.
+         */
+        post: operations["installIntegration"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/connectors/{id}/jobs": {
+    "/integrations/archives": {
         parameters: {
             query?: never;
             header?: never;
@@ -1647,8 +1653,500 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Ask a connector to collect evidence. */
-        post: operations["runConnector"];
+        /**
+         * Install an uploaded integration archive. Returns a job.
+         * @description RFC 0005 section 4. Same checks as `POST /integrations`.
+         */
+        post: operations["uploadIntegration"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the installed archive versions of an integration. */
+        get: operations["listIntegrationVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/versions/{version}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enable an installed version: an upgrade or a rollback.
+         * @description Refused with 409 `upgrade-breaks-tests` when an enabled test reads a
+         *     source or check major that version does not provide.
+         */
+        post: operations["enableIntegrationVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/template-updates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tests whose template changed in the enabled version.
+         * @description RFC 0005 section 8. A person accepts or skips each one.
+         */
+        get: operations["listTemplateUpdates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/template-updates/{test_id}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Accept a template update for one test. */
+        post: operations["applyTemplateUpdate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one installed integration. */
+        get: operations["getIntegration"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/templates/{name}/enable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an organization test from an integration's template.
+         * @description RFC 0005 section 8. The test is an ordinary organization test that
+         *     records its origin under `extensions["dev.ogrl.integration"]`. Writing
+         *     a run block needs `tests:define-run`, and agents cannot.
+         */
+        post: operations["enableIntegrationTemplate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List connections to vendor accounts. */
+        get: operations["listConnections"];
+        put?: never;
+        /**
+         * Connect an installed integration to a vendor account.
+         * @description RFC 0005 section 5. Set secrets next, then validate.
+         */
+        post: operations["createConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connections/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one connection. */
+        get: operations["getConnection"];
+        put?: never;
+        post?: never;
+        /**
+         * Remove a connection and its secrets.
+         * @description Connections are deployment configuration, not graph objects, so they
+         *     can be deleted. Results and evidence produced through the connection
+         *     stay.
+         */
+        delete: operations["deleteConnection"];
+        options?: never;
+        head?: never;
+        /**
+         * Rename, reconfigure, rebind, disable, or re-enable a connection.
+         * @description `state: disabled` stops collection; `state: pending` re-enables and asks for validation.
+         */
+        patch: operations["updateConnection"];
+        trace?: never;
+    };
+    "/connections/{id}/secrets/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Write one secret value. Write-only; values are never returned. */
+        put: operations["setConnectionSecret"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connections/{id}/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Check the connection's credentials with the vendor. Returns a job. */
+        post: operations["validateConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connections/{id}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Collect snapshots now. Returns a job.
+         * @description Omit `sources` to collect every resource the integration emits.
+         */
+        post: operations["collectConnection"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/connections/{id}/oauth/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Begin bring-your-own OAuth: the vendor URL to send the operator to.
+         * @description RFC 0005 section 5. Needs `OGRL_PUBLIC_URL`, and the connection's
+         *     `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` secrets. The returned URL
+         *     carries a single-use `state` that expires after ten minutes, and a
+         *     PKCE challenge when the integration asks for one.
+         */
+        post: operations["startConnectionOAuth"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/oauth/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The vendor's redirect after authorization.
+         * @description Public: the vendor redirects the browser here. The single-use `state`
+         *     names the connection. The code is exchanged for a refresh token, which
+         *     is stored as a secret and never returned.
+         */
+        get: operations["finishConnectionOAuth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/rules/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a rule against the latest snapshots without saving or recording anything.
+         * @description Evaluates a `rule` run block (RFC 0001 section 7.6) over the latest
+         *     complete snapshot of its source from each connection: every connection
+         *     of the integration, or only those bound to `implementation_id`. Nothing
+         *     is collected, no freshness window applies, and no result or evidence
+         *     is written. `control_ref` (or the implementation's control) supplies
+         *     `params`; `params` in the body overrides them. Compile errors come back
+         *     as `outcome: invalid`; fields the resource schema lacks come back as
+         *     `warnings`.
+         */
+        post: operations["previewRule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/operations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search an integration's read operations (query sources, RFC 0006).
+         * @description Operations of the bundled OpenAPI description that a query may use, matched by id, path, or summary. At most 100.
+         */
+        get: operations["searchOperations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/integrations/{id}/operations/{operation}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Parameters and the flattened item schema of one operation. */
+        get: operations["describeOperation"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Statically validate a query source definition.
+         * @description RFC 0006 section 6, step one. Needs no vendor call.
+         */
+        post: operations["validateQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries/dry-run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Collect one sample of a query through a connection; nothing is stored.
+         * @description RFC 0006 section 6, step two. Stops after `max_items` items.
+         */
+        post: operations["dryRunQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List query source definitions. */
+        get: operations["listQueries"];
+        put?: never;
+        /**
+         * Save a query source definition (immutable per version).
+         * @description Validates statically first. A taken integration, name, and version is a 409; save changes as a new version.
+         */
+        post: operations["createQuery"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/queries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one query source definition. */
+        get: operations["getQuery"];
+        put?: never;
+        post?: never;
+        /** Delete a query source no test reads. */
+        delete: operations["deleteQuery"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List collected snapshots, newest first. */
+        get: operations["listSnapshots"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/snapshots/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get one snapshot's metadata. */
+        get: operations["getSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/snapshots/{id}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download the snapshot document (RFC 0001 section 7.6). */
+        get: operations["getSnapshotContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Report whether an AI model is configured and which model/provider is active. */
+        get: operations["getAgentStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agent/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run one AI assistant turn as an SSE stream under RFC 0003 §4 write gates. */
+        post: operations["streamAgent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1719,7 +2217,7 @@ export interface components {
             commit?: string;
         };
         /** @enum {string} */
-        JobType: "library_pull" | "provider_import" | "test_run" | "render" | "git_export" | "restore" | "connector";
+        JobType: "library_pull" | "provider_import" | "test_run" | "render" | "git_export" | "restore" | "collection" | "integration_install";
         /** @enum {string} */
         JobStatus: "queued" | "running" | "succeeded" | "failed";
         Job: {
@@ -1740,10 +2238,374 @@ export interface components {
             data: components["schemas"]["Job"][];
             page: components["schemas"]["Page"];
         };
-        Connector: {
+        /** @description An installed integration package (RFC 0005 section 3). */
+        Integration: {
+            /** @example dev.adversity.okta */
             id: string;
             name: string;
+            version: string;
+            publisher: string;
             description?: string;
+            /** @enum {string} */
+            tier: "first-party" | "verified" | "local";
+            digest: string;
+            /** @enum {string} */
+            runtime: "python" | "binary";
+            egress: string[];
+            config: {
+                name: string;
+                label: string;
+                pattern?: string;
+                required: boolean;
+            }[];
+            auth: ({
+                /** @enum {string} */
+                kind: "fields" | "oauth2" | "aws_role";
+                label: string;
+                /** @description False for auth kinds this server cannot run yet. */
+                supported: boolean;
+                fields?: {
+                    name: string;
+                    label: string;
+                    secret?: boolean;
+                }[];
+                scopes?: string[];
+            } & {
+                [key: string]: unknown;
+            })[];
+            resources: {
+                name: string;
+                version: number;
+                source: string;
+                /** @description The item fields a rule can read as `item.<name>`, from the resource's schema. */
+                fields: components["schemas"]["ResourceField"][];
+            }[];
+            checks: {
+                name: string;
+                version: number;
+                check: string;
+                sources: string[];
+            }[];
+            templates: {
+                name: string;
+                fulfills_ref?: string;
+                test_name?: string;
+                control_ref?: string;
+                runner?: string;
+            }[];
+            /**
+             * @description What query sources over this integration are defined against; absent when it supports none.
+             * @enum {string}
+             */
+            query_model?: "openapi" | "smithy";
+            /** @description Saved query sources over this integration (RFC 0006), readable by rules like resources. */
+            queries?: {
+                id: string;
+                name: string;
+                version: number;
+                source: string;
+                operation: string;
+                description?: string;
+                fields: components["schemas"]["ResourceField"][];
+            }[];
+        };
+        InstallRequest: {
+            url: string;
+            /** @description The expected sha-256 of the archive. The install fails on a mismatch. */
+            digest?: string;
+            /** @default true */
+            enable?: boolean;
+        };
+        IntegrationInstall: {
+            id: string;
+            version: string;
+            digest: string;
+            uri: string;
+            /** @enum {string} */
+            tier: "first-party" | "verified" | "local";
+            enabled: boolean;
+            /** Format: date-time */
+            installed: string;
+            installed_by?: string;
+            source?: string;
+        };
+        TemplateUpdate: {
+            test_id: string;
+            test_name: string;
+            template: string;
+            from_version?: string;
+            to_version: string;
+            /** @description Test fields the new template sets differently. */
+            changes: string[];
+            /**
+             * Format: date-time
+             * @description The test's `modified`, for If-Match when applying.
+             */
+            modified: string;
+        };
+        QueryWrite: {
+            integration_id: string;
+            name: string;
+            /** @default 1 */
+            version?: number;
+            description?: string;
+            /** @description An operationId in the integration's bundled OpenAPI description (RFC 0006), or `<service>.<Operation>` in its Smithy models (RFC 0007). */
+            operation: string;
+            params?: {
+                [key: string]: string;
+            };
+            /** @description Dotted path to the list in the response body; empty when the body is the list. */
+            items?: string;
+            /** @description Output field to the dotted path it reads in each item. Must include id and name. */
+            fields?: {
+                [key: string]: string;
+            };
+            /** @description Smithy query sources (RFC 0007) over regional services: region codes, or "*" for the connection's `regions` config. Each item gains `region`. */
+            regions?: string[] | "*";
+            for_each?: components["schemas"]["ForEach"];
+        };
+        /** @description Smithy query sources (RFC 0007 section 4): call the query's operation once per item that `operation` lists. Items gain `error`, the AWS error code when a call failed. */
+        ForEach: {
+            /** @description A list operation in the same service, as `<service>.<Operation>`. */
+            operation: string;
+            /** @description The query operation's parameter to the path it reads in each listed item. */
+            bind: {
+                [key: string]: string;
+            };
+            params?: {
+                [key: string]: string;
+            };
+            items?: string;
+            /** @default 1000 */
+            limit?: number;
+        };
+        DryRunRequest: components["schemas"]["QueryWrite"] & {
+            connection_id: string;
+            /** @default 50 */
+            max_items?: number;
+        };
+        QueryCheck: {
+            valid: boolean;
+            source: string;
+            errors: components["schemas"]["PreviewProblem"][];
+            warnings: components["schemas"]["PreviewProblem"][];
+            item_schema?: {
+                [key: string]: unknown;
+            };
+            fields: components["schemas"]["ResourceField"][];
+        };
+        DryRun: {
+            check: components["schemas"]["QueryCheck"];
+            items: {
+                [key: string]: unknown;
+            }[];
+            count: number;
+            warnings: components["schemas"]["PreviewProblem"][];
+            error?: string;
+        };
+        QueryDefinition: {
+            id: string;
+            integration_id: string;
+            name: string;
+            version: number;
+            description?: string;
+            operation: string;
+            params: {
+                [key: string]: string;
+            };
+            items: string;
+            fields: {
+                [key: string]: string;
+            };
+            /** @description Smithy query sources (RFC 0007) over regional services: region codes, or "*" for the connection's `regions` config. Each item gains `region`. */
+            regions?: string[] | "*";
+            for_each?: components["schemas"]["ForEach"];
+            item_schema: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            created: string;
+            created_by_ref?: string;
+        };
+        Operation: {
+            id: string;
+            method: string;
+            path: string;
+            summary: string;
+            /** @description Smithy operations only, the AWS wire protocol (such as ec2Query). */
+            protocol?: string;
+            /** @description Smithy operations only, whether the service is collected once per region. */
+            regional?: boolean;
+            /** @description Whether a query source can use this operation; `reason` says why not. */
+            queryable?: boolean;
+            reason?: string;
+            /** @description Where the list is in the response, when described. */
+            items?: string;
+            parameters: {
+                name: string;
+                /**
+                 * @description OpenAPI: path or query. Smithy: value (a string) or json (JSON text, for lists and structures).
+                 * @enum {string}
+                 */
+                in: "path" | "query" | "value" | "json";
+                required: boolean;
+                type: string;
+                description?: string;
+            }[];
+            /** @description The flattened item schema, when the response holds a list. `items` names where the list is. */
+            fields?: {
+                path: string;
+                type: string;
+                description?: string;
+                items: string;
+            }[];
+        };
+        ResourceField: {
+            name: string;
+            /**
+             * @example string
+             * @example boolean
+             * @example integer
+             * @example array of string
+             */
+            type: string;
+            nullable: boolean;
+            required: boolean;
+            description?: string;
+        };
+        RulePreviewRequest: {
+            /** @description The rule fields of a run block (`source`, `select`, `assert`, `aggregate`, `subject`, `allow_empty`). `runner` is implied. */
+            run: {
+                [key: string]: unknown;
+            };
+            control_ref?: string;
+            implementation_id?: string;
+            params?: {
+                [key: string]: string;
+            };
+            /**
+             * @description At most this many failing subjects are returned.
+             * @default 50
+             */
+            limit?: number;
+            /** @description Evaluate these items (a dry run's sample) instead of stored snapshots. */
+            items?: {
+                [key: string]: unknown;
+            }[];
+            query?: components["schemas"]["QueryWrite"];
+        };
+        PreviewProblem: {
+            pointer: string;
+            detail: string;
+        };
+        RulePreview: {
+            /** @enum {string} */
+            outcome: "pass" | "fail" | "error" | "invalid" | "no-data";
+            summary: string;
+            selected: number;
+            total: number;
+            subjects: {
+                kind: string;
+                name: string;
+                external_id?: string;
+            }[];
+            errors: components["schemas"]["PreviewProblem"][];
+            warnings: components["schemas"]["PreviewProblem"][];
+            snapshots: {
+                id: string;
+                connection_id: string;
+                connection_name: string;
+                /** Format: date-time */
+                collected: string;
+                item_count: number;
+            }[];
+            params: {
+                [key: string]: string;
+            };
+            /** @description Up to three items of the snapshot, to see real values while writing. */
+            sample: {
+                [key: string]: unknown;
+            }[];
+        };
+        TemplateEnable: {
+            id?: string;
+            system_refs?: string[];
+        };
+        /** @enum {string} */
+        ConnectionState: "pending" | "active" | "failing" | "disabled";
+        /**
+         * @description An installed integration linked to one vendor account (RFC 0005
+         *     section 5). Not an RFC 0001 object. Secret values are never returned;
+         *     `secrets_set` names the ones that have a value.
+         */
+        Connection: {
+            id: string;
+            integration_id: string;
+            name: string;
+            config: {
+                [key: string]: string;
+            };
+            auth_kind: string;
+            /** @description Component and system ids this vendor account serves. */
+            bindings: string[];
+            state: components["schemas"]["ConnectionState"];
+            identity?: string;
+            granted_scopes?: string[];
+            /** Format: date-time */
+            last_validated?: string;
+            last_error?: string;
+            secrets_set: string[];
+            /** @description For `aws_role`, the ExternalId the IAM role's trust policy must require. */
+            external_id?: string;
+            /** Format: date-time */
+            created: string;
+            /** Format: date-time */
+            modified: string;
+            created_by_ref?: string;
+        };
+        ConnectionWrite: {
+            id?: string;
+            integration_id: string;
+            name: string;
+            config?: {
+                [key: string]: string;
+            };
+            auth_kind: string;
+            bindings?: string[];
+        };
+        ConnectionPatch: {
+            name?: string;
+            config?: {
+                [key: string]: string;
+            };
+            bindings?: string[];
+            /** @enum {string} */
+            state?: "disabled" | "pending";
+        };
+        OAuthStart: {
+            /** Format: uri */
+            authorize_url: string;
+            /** Format: date-time */
+            expires: string;
+        };
+        CollectionRequest: {
+            sources?: string[];
+        };
+        /** @description One stored snapshot document (RFC 0001 section 7.6, RFC 0005 section 6). */
+        Snapshot: {
+            id: string;
+            connection_id: string;
+            source: string;
+            /** Format: date-time */
+            collected: string;
+            complete: boolean;
+            reason?: string;
+            item_count: number;
+            size: number;
+            uri: string;
+            digest: string;
+            job_id?: string;
+            warnings?: string[];
         };
         RenderRequest: {
             /**
@@ -1994,9 +2856,20 @@ export interface components {
             procedure_ref?: string;
             run?: components["schemas"]["Run"];
         };
+        /**
+         * @description RFC 0001 section 7.6. Which fields apply depends on `runner`: `shell`
+         *     takes command, timeout, env, and evidence; `rule` takes source,
+         *     select, assert, aggregate, subject, and allow_empty; `integration`
+         *     takes check, sources, with, and timeout.
+         */
         Run: {
+            /**
+             * @example shell
+             * @example rule
+             * @example integration
+             */
             runner: string;
-            command: string;
+            command?: string;
             timeout?: string;
             env?: string[];
             evidence?: {
@@ -2004,6 +2877,25 @@ export interface components {
                 name: string;
                 media_type: string;
             }[];
+            /**
+             * @description `<integration>/<resource>@<major>`
+             * @example dev.adversity.okta/users@1
+             */
+            source?: string;
+            /** @description CEL over `item`. */
+            select?: string;
+            /** @description CEL over `item`. */
+            assert?: string;
+            /** @description CEL over `items`. */
+            aggregate?: string;
+            subject?: string;
+            allow_empty?: boolean;
+            /** @example dev.adversity.github/branch-protection@1 */
+            check?: string;
+            sources?: string[];
+            with?: {
+                [key: string]: string;
+            };
         };
         TestWrite: {
             id?: string;
@@ -5960,7 +6852,7 @@ export interface operations {
             };
         };
     };
-    listConnectors: {
+    listIntegrations: {
         parameters: {
             query?: never;
             header?: never;
@@ -5969,21 +6861,63 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The installed connectors. */
+            /** @description The installed integrations. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data: components["schemas"]["Connector"][];
+                        data: components["schemas"]["Integration"][];
                     };
                 };
             };
             401: components["responses"]["Unauthorized"];
         };
     };
-    runConnector: {
+    installIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRequest"];
+            };
+        };
+        responses: {
+            202: components["responses"]["AcceptedJob"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    uploadIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    digest?: string;
+                    /** @default true */
+                    enable?: boolean;
+                };
+            };
+        };
+        responses: {
+            202: components["responses"]["AcceptedJob"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    listIntegrationVersions: {
         parameters: {
             query?: never;
             header?: never;
@@ -5992,19 +6926,789 @@ export interface operations {
             };
             cookie?: never;
         };
+        requestBody?: never;
+        responses: {
+            /** @description The versions, oldest first. At most one is enabled. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["IntegrationInstall"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enableIntegrationVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+                version: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The integration, now at that version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listTemplateUpdates: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The pending updates. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["TemplateUpdate"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    applyTemplateUpdate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The object's current `modified` timestamp. */
+                "If-Match": components["parameters"]["ifMatch"];
+            };
+            path: {
+                id: components["parameters"]["id"];
+                test_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The updated test. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Test"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    getIntegration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The integration. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Integration"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    enableIntegrationTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TemplateEnable"];
+            };
+        };
+        responses: {
+            /** @description The test. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Test"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listConnections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connections, ordered by id. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Connection"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionWrite"];
+            };
+        };
+        responses: {
+            /** @description The connection, in state `pending`. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateConnection: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The object's current `modified` timestamp. */
+                "If-Match": components["parameters"]["ifMatch"];
+            };
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConnectionPatch"];
+            };
+        };
+        responses: {
+            /** @description The connection. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            412: components["responses"]["PreconditionFailed"];
+        };
+    };
+    setConnectionSecret: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+                /** @description A secret field the connection's auth kind declares, such as `OKTA_API_TOKEN`. */
+                name: string;
+            };
+            cookie?: never;
+        };
         requestBody: {
             content: {
                 "application/json": {
-                    system_id?: string;
-                    component_id?: string;
-                    implementation_id?: string;
+                    value: string;
                 };
             };
         };
         responses: {
+            /** @description The connection, back in state `pending` until validated. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Connection"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    validateConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
             202: components["responses"]["AcceptedJob"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    collectConnection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CollectionRequest"];
+            };
+        };
+        responses: {
+            202: components["responses"]["AcceptedJob"];
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    startConnectionOAuth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Where to send the operator. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthStart"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    finishConnectionOAuth: {
+        parameters: {
+            query?: {
+                state?: string;
+                code?: string;
+                error?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page saying the connection is authorized. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description A page saying why authorization failed. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+        };
+    };
+    previewRule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RulePreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description The preview. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RulePreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description The caller cannot author tests. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    searchOperations: {
+        parameters: {
+            query?: {
+                q?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Matching operations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Operation"][];
+                    };
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    describeOperation: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+                operation: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The operation, with `fields` when its response holds a list. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Operation"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    validateQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryWrite"];
+            };
+        };
+        responses: {
+            /** @description Errors and warnings by pointer, and the derived item schema. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryCheck"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    dryRunQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DryRunRequest"];
+            };
+        };
+        responses: {
+            /** @description The sample, or the error that stopped it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DryRun"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listQueries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The definitions. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["QueryDefinition"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["QueryWrite"];
+            };
+        };
+        responses: {
+            /** @description The definition. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryDefinition"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The definition. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QueryDefinition"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteQuery: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listSnapshots: {
+        parameters: {
+            query?: {
+                connection_id?: string;
+                source?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshots. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Snapshot"][];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSnapshot: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Snapshot"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSnapshotContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The snapshot document. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/vnd.ogrl.snapshot+json": Record<string, never>;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getAgentStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Agent configuration status. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        enabled: boolean;
+                        model?: string | null;
+                        provider?: string | null;
+                        actor_id: string;
+                        hint?: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    streamAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    message: string;
+                    history?: {
+                        role: string;
+                        content: string;
+                    }[];
+                    context?: {
+                        program_id?: string;
+                        system_id?: string;
+                        control_id?: string;
+                        route?: string;
+                    };
+                };
+            };
+        };
+        responses: {
+            /** @description Server-Sent Events stream of delta, tool_call, tool_result, draft, and done events. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/event-stream": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
 }

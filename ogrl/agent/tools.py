@@ -8,8 +8,16 @@ from typing import Any
 from pydantic_ai import Agent, RunContext
 
 from ogrl.agent.deps import AgentDeps
+from ogrl.errors import OGRLError
 from ogrl.operations import types as t
+from ogrl.operations.integrations import (
+    DryRunRequest,
+    QueryWrite,
+    RulePreviewRequest,
+)
 from ogrl.operations.pagination import PageRequest
+
+SAMPLE_ITEMS = 20  # items a dry run or preview hands back to the model
 
 
 def register_tools(agent: Agent[AgentDeps, str]) -> None:
@@ -287,3 +295,146 @@ def register_tools(agent: Agent[AgentDeps, str]) -> None:
             }
         )
         return created.body()
+
+    # --- Query sources (RFC 0006 section 9) ----------------------------------------
+    # The agent may search, describe, validate, sample, and preview, but cannot save a
+    # query definition or a test with a run block (tests:define-run). It proposes a
+    # draft that opens in the query editor, where a person reviews and saves it.
+
+    @agent.tool
+    async def list_integrations(ctx: RunContext[AgentDeps]) -> dict[str, Any]:
+        """Installed integrations, what each collects, its query model, and its connections."""
+        service = ctx.deps.container.integrations
+        integrations = await service.list_integrations(ctx.deps.principal)
+        connections = await service.list_connections(ctx.deps.principal)
+        return {
+            "integrations": [
+                {
+                    "id": i.id,
+                    "name": i.name,
+                    "query_model": i.query_model,
+                    "resources": [
+                        {"source": r["source"], "fields": [f["name"] for f in r["fields"]]}
+                        for r in i.resources
+                    ],
+                    "query_sources": [q["source"] for q in i.queries],
+                }
+                for i in integrations
+            ],
+            "connections": [
+                {"id": c.id, "name": c.name, "integration_id": c.integration_id, "state": c.state}
+                for c in connections
+            ],
+        }
+
+    @agent.tool
+    async def search_operations(
+        ctx: RunContext[AgentDeps], integration_id: str, text: str
+    ) -> list[dict[str, Any]]:
+        """Read operations in an integration's API model whose name, path, or summary match."""
+        try:
+            found = await ctx.deps.container.integrations.search_operations(
+                ctx.deps.principal, integration_id, text
+            )
+        except OGRLError as exc:
+            return [{"error": exc.detail}]
+        return [
+            o.model_dump(exclude_none=True, exclude={"parameters", "fields"}) for o in found[:25]
+        ]
+
+    @agent.tool
+    async def describe_operation(
+        ctx: RunContext[AgentDeps], integration_id: str, operation: str
+    ) -> dict[str, Any]:
+        """One operation: its parameters, where its list is, and every item field with its type."""
+        try:
+            view = await ctx.deps.container.integrations.describe_operation(
+                ctx.deps.principal, integration_id, operation
+            )
+        except OGRLError as exc:
+            return {"error": exc.detail}
+        return view.model_dump(exclude_none=True)
+
+    @agent.tool
+    async def validate_query(
+        ctx: RunContext[AgentDeps], definition: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Statically check a query definition (integration_id, name, version, operation,
+        params, items, fields, and for AWS regions and for_each). Problems carry JSON pointers
+        into the definition; fix them and validate again."""
+        try:
+            write = QueryWrite.model_validate(definition)
+        except ValueError as exc:
+            return {"valid": False, "errors": [{"pointer": "", "detail": str(exc)}]}
+        check = await ctx.deps.container.integrations.validate_query(ctx.deps.principal, write)
+        return check.model_dump(exclude_none=True)
+
+    @agent.tool
+    async def dry_run_query(
+        ctx: RunContext[AgentDeps], definition: dict[str, Any], connection_id: str
+    ) -> dict[str, Any]:
+        """Sample a query definition through a connection. Nothing is stored. Warnings name
+        fields that came back empty, which usually means a wrong path."""
+        try:
+            request = DryRunRequest.model_validate(
+                {**definition, "connection_id": connection_id, "max_items": SAMPLE_ITEMS}
+            )
+        except ValueError as exc:
+            return {"error": str(exc)}
+        try:
+            run = await ctx.deps.container.integrations.dry_run(ctx.deps.principal, request)
+        except OGRLError as exc:
+            return {"error": exc.detail}
+        return run.model_dump(exclude_none=True)
+
+    @agent.tool
+    async def preview_rule(
+        ctx: RunContext[AgentDeps],
+        run: dict[str, Any],
+        items: list[dict[str, Any]] | None = None,
+        definition: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Evaluate a rule run block (source, select, assert, aggregate) over the latest
+        snapshots, or over `items` from a dry run of the unsaved `definition`."""
+        try:
+            request = RulePreviewRequest.model_validate(
+                {
+                    "run": run,
+                    **({"items": items} if items is not None else {}),
+                    **({"query": definition} if definition else {}),
+                    "limit": SAMPLE_ITEMS,
+                }
+            )
+            preview = await ctx.deps.container.integrations.preview_rule(
+                ctx.deps.principal, request
+            )
+        except (ValueError, OGRLError) as exc:
+            return {"error": getattr(exc, "detail", str(exc))}
+        return preview.model_dump(exclude_none=True)
+
+    @agent.tool
+    async def propose_query_source(
+        ctx: RunContext[AgentDeps],
+        definition: dict[str, Any],
+        rule: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Hand a validated query definition (and optionally the rule run block that reads
+        it) to the person as a draft in the query editor. This saves nothing: a person
+        reviews the draft, its sample, and its preview, and saves it."""
+        try:
+            write = QueryWrite.model_validate(definition)
+        except ValueError as exc:
+            return {"proposed": False, "errors": [{"pointer": "", "detail": str(exc)}]}
+        check = await ctx.deps.container.integrations.validate_query(ctx.deps.principal, write)
+        if not check.valid:
+            return {"proposed": False, "errors": [e.model_dump() for e in check.errors]}
+        ctx.deps.created_drafts.append(
+            {
+                "object_type": "query_source",
+                "id": check.source,
+                "label": f"Draft query source: {check.source}",
+                "definition": write.model_dump(exclude_none=True),
+                **({"rule": rule} if rule else {}),
+            }
+        )
+        return {"proposed": True, "source": check.source}

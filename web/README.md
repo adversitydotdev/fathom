@@ -1,6 +1,6 @@
 # OGRL web
 
-The web frontend from [RFC 0003 section 8](../docs/rfcs/0003-application.md). Next.js, TypeScript, Tailwind v4, [Spectrum UI](https://ui.spectrumhq.in/) components, and shadcn/ui on Radix underneath them. It renders what the API returns and never computes status itself.
+The web frontend from [RFC 0003 section 8](https://tools.adversity.dev/rfcs/0003-application/#8-web-application). Next.js, TypeScript, Tailwind v4, [Spectrum UI](https://ui.spectrumhq.in/) components, and shadcn/ui on Radix underneath them. It renders what the API returns and never computes status itself.
 
 ## Run against fixtures
 

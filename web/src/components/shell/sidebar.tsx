@@ -12,6 +12,7 @@ import {
   Paperclip,
   PauseCircle,
   Play,
+  Plug,
   Server,
   ShieldCheck,
   Users,
@@ -55,6 +56,7 @@ export function Sidebar() {
       items: [
         { label: "Systems", icon: Server, href: `${base}/systems` },
         { label: "Parties", icon: Users, href: `${base}/parties` },
+        { label: "Integrations", icon: Plug, href: `${base}/integrations` },
         { label: "Library", icon: BookOpen, href: `${base}/library` },
         { label: "Jobs", icon: Play, href: `${base}/jobs` },
       ],

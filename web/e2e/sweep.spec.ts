@@ -20,6 +20,7 @@ const ROUTES: [string, string][] = [
   ["policies", `/programs/${PROGRAM_171}/policies`],
   ["systems", `/programs/${PROGRAM_171}/systems`],
   ["parties", `/programs/${PROGRAM_171}/parties`],
+  ["integrations", `/programs/${PROGRAM_171}/integrations`],
   ["library", `/programs/${PROGRAM_171}/library`],
   ["jobs", `/programs/${PROGRAM_171}/jobs`],
   ...Object.entries(CONTROL).map(([k, id]): [string, string] => [`control-${k}`, `/programs/${PROGRAM_171}/controls/${id}`]),

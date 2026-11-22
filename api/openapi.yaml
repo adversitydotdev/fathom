@@ -49,7 +49,10 @@ tags:
   - name: Mapping reviews
   - name: Providers
   - name: Jobs
-  - name: Connectors
+  - name: Integrations
+  - name: Connections
+  - name: Snapshots
+  - name: Queries
 security:
   - bearerAuth: []
 paths:
@@ -2973,17 +2976,15 @@ paths:
               schema:
                 $ref: "#/components/schemas/Problem"
 
-  /connectors:
+  /integrations:
     get:
-      tags: [Connectors]
-      operationId: listConnectors
-      summary: List connectors installed in this deployment.
-      description: |
-        The registry is empty until a connector is installed beside the API.
-        This is not a catalog of cloud products. RFC 0003 defines the port.
+      tags: [Integrations]
+      operationId: listIntegrations
+      summary: List integrations installed in this deployment.
+      description: RFC 0005 section 3. The registry is empty until a package is installed beside the API.
       responses:
         "200":
-          description: The installed connectors.
+          description: The installed integrations.
           content:
             application/json:
               schema:
@@ -2993,32 +2994,739 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: "#/components/schemas/Connector"
+                      $ref: "#/components/schemas/Integration"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /connectors/{id}/jobs:
     post:
-      tags: [Connectors]
-      operationId: runConnector
-      summary: Ask a connector to collect evidence.
+      tags: [Integrations]
+      operationId: installIntegration
+      summary: Install an integration archive from a URL. Returns a job.
+      description: |
+        RFC 0005 section 4. The archive is unpacked and validated, stored in
+        object storage, and (with `enable`, the default) enabled. Unsigned
+        archives install only with `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A
+        version is immutable: reinstalling it with other bytes is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InstallRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /integrations/archives:
+    post:
+      tags: [Integrations]
+      operationId: uploadIntegration
+      summary: Install an uploaded integration archive. Returns a job.
+      description: RFC 0005 section 4. Same checks as `POST /integrations`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                digest:
+                  type: string
+                  pattern: "^[0-9a-f]{64}$"
+                enable:
+                  type: boolean
+                  default: true
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /integrations/{id}/versions:
+    get:
+      tags: [Integrations]
+      operationId: listIntegrationVersions
+      summary: List the installed archive versions of an integration.
       parameters:
         - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The versions, oldest first. At most one is enabled.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/IntegrationInstall"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/versions/{version}/enable:
+    post:
+      tags: [Integrations]
+      operationId: enableIntegrationVersion
+      summary: "Enable an installed version: an upgrade or a rollback."
+      description: |
+        Refused with 409 `upgrade-breaks-tests` when an enabled test reads a
+        source or check major that version does not provide.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The integration, now at that version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Integration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /integrations/{id}/template-updates:
+    get:
+      tags: [Integrations]
+      operationId: listTemplateUpdates
+      summary: Tests whose template changed in the enabled version.
+      description: RFC 0005 section 8. A person accepts or skips each one.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The pending updates.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/TemplateUpdate"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/template-updates/{test_id}/apply:
+    post:
+      tags: [Integrations]
+      operationId: applyTemplateUpdate
+      summary: Accept a template update for one test.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: test_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: "#/components/parameters/ifMatch"
+      responses:
+        "200":
+          description: The updated test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+  /integrations/{id}:
+    get:
+      tags: [Integrations]
+      operationId: getIntegration
+      summary: Get one installed integration.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The integration.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Integration"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/templates/{name}/enable:
+    post:
+      tags: [Integrations]
+      operationId: enableIntegrationTemplate
+      summary: Create an organization test from an integration's template.
+      description: |
+        RFC 0005 section 8. The test is an ordinary organization test that
+        records its origin under `extensions["dev.ogrl.integration"]`. Writing
+        a run block needs `tests:define-run`, and agents cannot.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TemplateEnable"
+      responses:
+        "201":
+          description: The test.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Test"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /connections:
+    get:
+      tags: [Connections]
+      operationId: listConnections
+      summary: List connections to vendor accounts.
+      responses:
+        "200":
+          description: The connections, ordered by id.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Connections]
+      operationId: createConnection
+      summary: Connect an installed integration to a vendor account.
+      description: RFC 0005 section 5. Set secrets next, then validate.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionWrite"
+      responses:
+        "201":
+          description: The connection, in state `pending`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /connections/{id}:
+    get:
+      tags: [Connections]
+      operationId: getConnection
+      summary: Get one connection.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Connections]
+      operationId: updateConnection
+      summary: Rename, reconfigure, rebind, disable, or re-enable a connection.
+      description: "`state: disabled` stops collection; `state: pending` re-enables and asks for validation."
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - $ref: "#/components/parameters/ifMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConnectionPatch"
+      responses:
+        "200":
+          description: The connection.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+    delete:
+      tags: [Connections]
+      operationId: deleteConnection
+      summary: Remove a connection and its secrets.
+      description: |
+        Connections are deployment configuration, not graph objects, so they
+        can be deleted. Results and evidence produced through the connection
+        stay.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: Removed.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /connections/{id}/secrets/{name}:
+    put:
+      tags: [Connections]
+      operationId: setConnectionSecret
+      summary: Write one secret value. Write-only; values are never returned.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: name
+          in: path
+          required: true
+          description: A secret field the connection's auth kind declares, such as `OKTA_API_TOKEN`.
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
+              required: [value]
+              additionalProperties: false
               properties:
-                system_id:
+                value:
                   type: string
-                component_id:
-                  type: string
-                implementation_id:
-                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          description: The connection, back in state `pending` until validated.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Connection"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /connections/{id}/validate:
+    post:
+      tags: [Connections]
+      operationId: validateConnection
+      summary: Check the connection's credentials with the vendor. Returns a job.
+      parameters:
+        - $ref: "#/components/parameters/id"
       responses:
         "202":
           $ref: "#/components/responses/AcceptedJob"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /connections/{id}/collections:
+    post:
+      tags: [Connections]
+      operationId: collectConnection
+      summary: Collect snapshots now. Returns a job.
+      description: Omit `sources` to collect every resource the integration emits.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CollectionRequest"
+      responses:
+        "202":
+          $ref: "#/components/responses/AcceptedJob"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /connections/{id}/oauth/start:
+    post:
+      tags: [Connections]
+      operationId: startConnectionOAuth
+      summary: "Begin bring-your-own OAuth: the vendor URL to send the operator to."
+      description: |
+        RFC 0005 section 5. Needs `OGRL_PUBLIC_URL`, and the connection's
+        `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` secrets. The returned URL
+        carries a single-use `state` that expires after ten minutes, and a
+        PKCE challenge when the integration asks for one.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: Where to send the operator.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuthStart"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /oauth/callback:
+    get:
+      tags: [Connections]
+      operationId: finishConnectionOAuth
+      summary: The vendor's redirect after authorization.
+      description: |
+        Public: the vendor redirects the browser here. The single-use `state`
+        names the connection. The code is exchanged for a refresh token, which
+        is stored as a secret and never returned.
+      security: []
+      parameters:
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: code
+          in: query
+          schema:
+            type: string
+        - name: error
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: A page saying the connection is authorized.
+          content:
+            text/html:
+              schema:
+                type: string
+        "400":
+          description: A page saying why authorization failed.
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /rules/preview:
+    post:
+      tags: [Tests]
+      operationId: previewRule
+      summary: Try a rule against the latest snapshots without saving or recording anything.
+      description: |
+        Evaluates a `rule` run block (RFC 0001 section 7.6) over the latest
+        complete snapshot of its source from each connection: every connection
+        of the integration, or only those bound to `implementation_id`. Nothing
+        is collected, no freshness window applies, and no result or evidence
+        is written. `control_ref` (or the implementation's control) supplies
+        `params`; `params` in the body overrides them. Compile errors come back
+        as `outcome: invalid`; fields the resource schema lacks come back as
+        `warnings`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RulePreviewRequest"
+      responses:
+        "200":
+          description: The preview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RulePreview"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The caller cannot author tests.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/Problem"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /integrations/{id}/operations:
+    get:
+      tags: [Queries]
+      operationId: searchOperations
+      summary: Search an integration's read operations (query sources, RFC 0006).
+      description: Operations of the bundled OpenAPI description that a query may use, matched by id, path, or summary. At most 100.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: q
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching operations.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Operation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /integrations/{id}/operations/{operation}:
+    get:
+      tags: [Queries]
+      operationId: describeOperation
+      summary: Parameters and the flattened item schema of one operation.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: operation
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The operation, with `fields` when its response holds a list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Operation"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /queries/validate:
+    post:
+      tags: [Queries]
+      operationId: validateQuery
+      summary: Statically validate a query source definition.
+      description: RFC 0006 section 6, step one. Needs no vendor call.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryWrite"
+      responses:
+        "200":
+          description: Errors and warnings by pointer, and the derived item schema.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryCheck"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /queries/dry-run:
+    post:
+      tags: [Queries]
+      operationId: dryRunQuery
+      summary: Collect one sample of a query through a connection; nothing is stored.
+      description: RFC 0006 section 6, step two. Stops after `max_items` items.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DryRunRequest"
+      responses:
+        "200":
+          description: The sample, or the error that stopped it.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DryRun"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /queries:
+    get:
+      tags: [Queries]
+      operationId: listQueries
+      summary: List query source definitions.
+      responses:
+        "200":
+          description: The definitions.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/QueryDefinition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Queries]
+      operationId: createQuery
+      summary: Save a query source definition (immutable per version).
+      description: Validates statically first. A taken integration, name, and version is a 409; save changes as a new version.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryWrite"
+      responses:
+        "201":
+          description: The definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryDefinition"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /queries/{id}:
+    get:
+      tags: [Queries]
+      operationId: getQuery
+      summary: Get one query source definition.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryDefinition"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Queries]
+      operationId: deleteQuery
+      summary: Delete a query source no test reads.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "204":
+          description: Deleted.
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /snapshots:
+    get:
+      tags: [Snapshots]
+      operationId: listSnapshots
+      summary: List collected snapshots, newest first.
+      parameters:
+        - name: connection_id
+          in: query
+          schema:
+            type: string
+        - name: source
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The snapshots.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Snapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /snapshots/{id}:
+    get:
+      tags: [Snapshots]
+      operationId: getSnapshot
+      summary: Get one snapshot's metadata.
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The snapshot.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Snapshot"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /snapshots/{id}/content:
+    get:
+      tags: [Snapshots]
+      operationId: getSnapshotContent
+      summary: Download the snapshot document (RFC 0001 section 7.6).
+      parameters:
+        - $ref: "#/components/parameters/id"
+      responses:
+        "200":
+          description: The snapshot document.
+          content:
+            application/vnd.ogrl.snapshot+json:
+              schema:
+                type: object
         "401":
           $ref: "#/components/responses/Unauthorized"
         "404":
@@ -3285,7 +3993,7 @@ components:
           description: The snapshot commit, when `url` is a git remote. Defaults to the head of the default branch.
     JobType:
       type: string
-      enum: [library_pull, provider_import, test_run, render, git_export, restore, connector]
+      enum: [library_pull, provider_import, test_run, render, git_export, restore, collection, integration_install]
     JobStatus:
       type: string
       enum: [queued, running, succeeded, failed]
@@ -3325,16 +4033,722 @@ components:
             $ref: "#/components/schemas/Job"
         page:
           $ref: "#/components/schemas/Page"
-    Connector:
+    Integration:
       type: object
-      required: [id, name]
+      description: An installed integration package (RFC 0005 section 3).
+      required: [id, name, version, publisher, tier, digest, runtime, egress, config, auth, resources, checks, templates]
       properties:
         id:
           type: string
+          examples: [dev.adversity.okta]
         name:
+          type: string
+        version:
+          type: string
+        publisher:
           type: string
         description:
           type: string
+        tier:
+          type: string
+          enum: [first-party, verified, local]
+        digest:
+          type: string
+        runtime:
+          type: string
+          enum: [python, binary]
+        egress:
+          type: array
+          items:
+            type: string
+        config:
+          type: array
+          items:
+            type: object
+            required: [name, label, required]
+            properties:
+              name:
+                type: string
+              label:
+                type: string
+              pattern:
+                type: string
+              required:
+                type: boolean
+        auth:
+          type: array
+          items:
+            type: object
+            required: [kind, label, supported]
+            properties:
+              kind:
+                type: string
+                enum: [fields, oauth2, aws_role]
+              label:
+                type: string
+              supported:
+                type: boolean
+                description: False for auth kinds this server cannot run yet.
+              fields:
+                type: array
+                items:
+                  type: object
+                  required: [name, label]
+                  properties:
+                    name:
+                      type: string
+                    label:
+                      type: string
+                    secret:
+                      type: boolean
+              scopes:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        resources:
+          type: array
+          items:
+            type: object
+            required: [name, version, source, fields]
+            properties:
+              name:
+                type: string
+              version:
+                type: integer
+              source:
+                type: string
+              fields:
+                type: array
+                description: The item fields a rule can read as `item.<name>`, from the resource's schema.
+                items:
+                  $ref: "#/components/schemas/ResourceField"
+        checks:
+          type: array
+          items:
+            type: object
+            required: [name, version, check, sources]
+            properties:
+              name:
+                type: string
+              version:
+                type: integer
+              check:
+                type: string
+              sources:
+                type: array
+                items:
+                  type: string
+        templates:
+          type: array
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:
+                type: string
+              fulfills_ref:
+                type: string
+              test_name:
+                type: string
+              control_ref:
+                type: string
+              runner:
+                type: string
+        query_model:
+          type: string
+          enum: [openapi, smithy]
+          description: What query sources over this integration are defined against; absent when it supports none.
+        queries:
+          type: array
+          description: Saved query sources over this integration (RFC 0006), readable by rules like resources.
+          items:
+            type: object
+            required: [id, name, version, source, operation, fields]
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              version:
+                type: integer
+              source:
+                type: string
+              operation:
+                type: string
+              description:
+                type: string
+              fields:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ResourceField"
+    InstallRequest:
+      type: object
+      required: [url]
+      additionalProperties: false
+      properties:
+        url:
+          type: string
+        digest:
+          type: string
+          pattern: "^[0-9a-f]{64}$"
+          description: The expected sha-256 of the archive. The install fails on a mismatch.
+        enable:
+          type: boolean
+          default: true
+    IntegrationInstall:
+      type: object
+      required: [id, version, digest, uri, tier, enabled, installed]
+      properties:
+        id:
+          type: string
+        version:
+          type: string
+        digest:
+          type: string
+        uri:
+          type: string
+        tier:
+          type: string
+          enum: [first-party, verified, local]
+        enabled:
+          type: boolean
+        installed:
+          type: string
+          format: date-time
+        installed_by:
+          type: string
+        source:
+          type: string
+    TemplateUpdate:
+      type: object
+      required: [test_id, test_name, template, to_version, changes, modified]
+      properties:
+        test_id:
+          type: string
+        test_name:
+          type: string
+        template:
+          type: string
+        from_version:
+          type: string
+        to_version:
+          type: string
+        changes:
+          type: array
+          description: Test fields the new template sets differently.
+          items:
+            type: string
+        modified:
+          type: string
+          format: date-time
+          description: The test's `modified`, for If-Match when applying.
+    QueryWrite:
+      type: object
+      required: [integration_id, name, operation]
+      additionalProperties: false
+      properties:
+        integration_id:
+          type: string
+        name:
+          type: string
+          pattern: "^[a-z0-9-]+$"
+        version:
+          type: integer
+          minimum: 1
+          default: 1
+        description:
+          type: string
+        operation:
+          type: string
+          description: >
+            An operationId in the integration's bundled OpenAPI description (RFC 0006), or
+            `<service>.<Operation>` in its Smithy models (RFC 0007).
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        items:
+          type: string
+          description: Dotted path to the list in the response body; empty when the body is the list.
+        fields:
+          type: object
+          description: Output field to the dotted path it reads in each item. Must include id and name.
+          additionalProperties:
+            type: string
+        regions:
+          description: >
+            Smithy query sources (RFC 0007) over regional services: region codes, or "*" for
+            the connection's `regions` config. Each item gains `region`.
+          oneOf:
+            - type: array
+              items:
+                type: string
+                pattern: "^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$"
+            - type: string
+              enum: ["*"]
+        for_each:
+          $ref: "#/components/schemas/ForEach"
+    ForEach:
+      type: object
+      description: >
+        Per-item calls (RFC 0006 section 3): call the query's operation once per item that
+        `operation` lists. Items gain `error`, the vendor's error code when a call failed.
+      required: [operation, bind]
+      additionalProperties: false
+      properties:
+        operation:
+          type: string
+          description: A read operation that returns a list (for Smithy, in the same service).
+        bind:
+          type: object
+          description: The query operation's parameter to the path it reads in each listed item.
+          additionalProperties:
+            type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        items:
+          type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 5000
+          default: 1000
+    DryRunRequest:
+      allOf:
+        - $ref: "#/components/schemas/QueryWrite"
+        - type: object
+          required: [connection_id]
+          properties:
+            connection_id:
+              type: string
+            max_items:
+              type: integer
+              minimum: 1
+              maximum: 500
+              default: 50
+    QueryCheck:
+      type: object
+      required: [valid, source, errors, warnings, fields]
+      properties:
+        valid:
+          type: boolean
+        source:
+          type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        item_schema:
+          type: object
+          additionalProperties: true
+        fields:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceField"
+    DryRun:
+      type: object
+      required: [check, items, count, warnings]
+      properties:
+        check:
+          $ref: "#/components/schemas/QueryCheck"
+        items:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        count:
+          type: integer
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        error:
+          type: string
+    QueryDefinition:
+      type: object
+      required: [id, integration_id, name, version, operation, params, items, fields, item_schema, created]
+      properties:
+        id:
+          type: string
+        integration_id:
+          type: string
+        name:
+          type: string
+        version:
+          type: integer
+        description:
+          type: string
+        operation:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        items:
+          type: string
+        fields:
+          type: object
+          additionalProperties:
+            type: string
+        regions:
+          description: >
+            Smithy query sources (RFC 0007) over regional services: region codes, or "*" for
+            the connection's `regions` config. Each item gains `region`.
+          oneOf:
+            - type: array
+              items:
+                type: string
+                pattern: "^[a-z]{2}(-[a-z]+)+-[0-9]{1,2}$"
+            - type: string
+              enum: ["*"]
+        for_each:
+          $ref: "#/components/schemas/ForEach"
+        item_schema:
+          type: object
+          additionalProperties: true
+        created:
+          type: string
+          format: date-time
+        created_by_ref:
+          type: string
+    Operation:
+      type: object
+      required: [id, method, path, summary, parameters]
+      properties:
+        id:
+          type: string
+        method:
+          type: string
+        path:
+          type: string
+        summary:
+          type: string
+        protocol:
+          type: string
+          description: Smithy operations only, the AWS wire protocol (such as ec2Query).
+        regional:
+          type: boolean
+          description: Smithy operations only, whether the service is collected once per region.
+        queryable:
+          type: boolean
+          description: Whether a query source can use this operation; `reason` says why not.
+        reason:
+          type: string
+        items:
+          type: string
+          description: Where the list is in the response, when described.
+        parameters:
+          type: array
+          items:
+            type: object
+            required: [name, in, required, type]
+            properties:
+              name:
+                type: string
+              in:
+                type: string
+                description: >
+                  OpenAPI: path or query. Smithy: value (a string) or json (JSON text, for
+                  lists and structures).
+                enum: [path, query, value, json]
+              required:
+                type: boolean
+              type:
+                type: string
+              description:
+                type: string
+        fields:
+          type: array
+          description: The flattened item schema, when the response holds a list. `items` names where the list is.
+          items:
+            type: object
+            required: [path, type, items]
+            properties:
+              path:
+                type: string
+              type:
+                type: string
+              description:
+                type: string
+              items:
+                type: string
+    ResourceField:
+      type: object
+      required: [name, type, nullable, required]
+      properties:
+        name:
+          type: string
+        type:
+          type: string
+          examples: [string, boolean, integer, array of string]
+        nullable:
+          type: boolean
+        required:
+          type: boolean
+        description:
+          type: string
+    RulePreviewRequest:
+      type: object
+      required: [run]
+      additionalProperties: false
+      properties:
+        run:
+          type: object
+          description: The rule fields of a run block (`source`, `select`, `assert`, `aggregate`, `subject`, `allow_empty`). `runner` is implied.
+          additionalProperties: true
+        control_ref:
+          type: string
+        implementation_id:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 500
+          default: 50
+          description: At most this many failing subjects are returned.
+        items:
+          type: array
+          description: Evaluate these items (a dry run's sample) instead of stored snapshots.
+          items:
+            type: object
+            additionalProperties: true
+        query:
+          $ref: "#/components/schemas/QueryWrite"
+    PreviewProblem:
+      type: object
+      required: [pointer, detail]
+      properties:
+        pointer:
+          type: string
+        detail:
+          type: string
+    RulePreview:
+      type: object
+      required: [outcome, summary, selected, total, subjects, errors, warnings, snapshots, params, sample]
+      properties:
+        outcome:
+          type: string
+          enum: [pass, fail, error, invalid, no-data]
+        summary:
+          type: string
+        selected:
+          type: integer
+        total:
+          type: integer
+        subjects:
+          type: array
+          items:
+            type: object
+            required: [kind, name]
+            properties:
+              kind:
+                type: string
+              name:
+                type: string
+              external_id:
+                type: string
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        warnings:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreviewProblem"
+        snapshots:
+          type: array
+          items:
+            type: object
+            required: [id, connection_id, connection_name, collected, item_count]
+            properties:
+              id:
+                type: string
+              connection_id:
+                type: string
+              connection_name:
+                type: string
+              collected:
+                type: string
+                format: date-time
+              item_count:
+                type: integer
+        params:
+          type: object
+          additionalProperties:
+            type: string
+        sample:
+          type: array
+          description: Up to three items of the snapshot, to see real values while writing.
+          items:
+            type: object
+            additionalProperties: true
+    TemplateEnable:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        system_refs:
+          type: array
+          items:
+            type: string
+    ConnectionState:
+      type: string
+      enum: [pending, active, failing, disabled]
+    Connection:
+      type: object
+      description: |
+        An installed integration linked to one vendor account (RFC 0005
+        section 5). Not an RFC 0001 object. Secret values are never returned;
+        `secrets_set` names the ones that have a value.
+      required: [id, integration_id, name, config, auth_kind, bindings, state, secrets_set, created, modified]
+      properties:
+        id:
+          type: string
+        integration_id:
+          type: string
+        name:
+          type: string
+        config:
+          type: object
+          additionalProperties:
+            type: string
+        auth_kind:
+          type: string
+        bindings:
+          type: array
+          description: Component and system ids this vendor account serves.
+          items:
+            type: string
+        state:
+          $ref: "#/components/schemas/ConnectionState"
+        identity:
+          type: string
+        granted_scopes:
+          type: array
+          items:
+            type: string
+        last_validated:
+          type: string
+          format: date-time
+        last_error:
+          type: string
+        secrets_set:
+          type: array
+          items:
+            type: string
+        external_id:
+          type: string
+          description: For `aws_role`, the ExternalId the IAM role's trust policy must require.
+        created:
+          type: string
+          format: date-time
+        modified:
+          type: string
+          format: date-time
+        created_by_ref:
+          type: string
+    ConnectionWrite:
+      type: object
+      required: [integration_id, name, auth_kind]
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+        integration_id:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        config:
+          type: object
+          additionalProperties:
+            type: string
+        auth_kind:
+          type: string
+        bindings:
+          type: array
+          items:
+            type: string
+    ConnectionPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          type: string
+          minLength: 1
+        config:
+          type: object
+          additionalProperties:
+            type: string
+        bindings:
+          type: array
+          items:
+            type: string
+        state:
+          type: string
+          enum: [disabled, pending]
+    OAuthStart:
+      type: object
+      required: [authorize_url, expires]
+      properties:
+        authorize_url:
+          type: string
+          format: uri
+        expires:
+          type: string
+          format: date-time
+    CollectionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        sources:
+          type: array
+          items:
+            type: string
+    Snapshot:
+      type: object
+      description: One stored snapshot document (RFC 0001 section 7.6, RFC 0005 section 6).
+      required: [id, connection_id, source, collected, complete, item_count, size, uri, digest]
+      properties:
+        id:
+          type: string
+        connection_id:
+          type: string
+        source:
+          type: string
+        collected:
+          type: string
+          format: date-time
+        complete:
+          type: boolean
+        reason:
+          type: string
+        item_count:
+          type: integer
+        size:
+          type: integer
+        uri:
+          type: string
+        digest:
+          type: string
+        job_id:
+          type: string
+        warnings:
+          type: array
+          items:
+            type: string
     RenderRequest:
       type: object
       required: [view]
@@ -3819,10 +5233,16 @@ components:
               $ref: "#/components/schemas/Run"
     Run:
       type: object
-      required: [runner, command]
+      description: |
+        RFC 0001 section 7.6. Which fields apply depends on `runner`: `shell`
+        takes command, timeout, env, and evidence; `rule` takes source,
+        select, assert, aggregate, subject, and allow_empty; `integration`
+        takes check, sources, with, and timeout.
+      required: [runner]
       properties:
         runner:
           type: string
+          examples: [shell, rule, integration]
         command:
           type: string
         timeout:
@@ -3843,6 +5263,34 @@ components:
                 type: string
               media_type:
                 type: string
+        source:
+          type: string
+          description: "`<integration>/<resource>@<major>`"
+          examples: [dev.adversity.okta/users@1]
+        select:
+          type: string
+          description: CEL over `item`.
+        assert:
+          type: string
+          description: CEL over `item`.
+        aggregate:
+          type: string
+          description: CEL over `items`.
+        subject:
+          type: string
+        allow_empty:
+          type: boolean
+        check:
+          type: string
+          examples: [dev.adversity.github/branch-protection@1]
+        sources:
+          type: array
+          items:
+            type: string
+        with:
+          type: object
+          additionalProperties:
+            type: string
     TestWrite:
       type: object
       required: [name, control_ref, method]

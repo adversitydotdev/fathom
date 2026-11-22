@@ -1,12 +1,18 @@
 """Plugin registry. In-tree plugins register here at startup in the composition root.
 
-Out-of-tree runners and connectors are subprocesses (RFC 0003 section 6);
-their adapter is an ordinary `Runner` or `Connector` registered here.
+Out-of-tree runners are subprocesses (RFC 0003 section 6); their adapter is an
+ordinary `Runner` registered here. Installed integration packages (RFC 0005)
+are registered under `integrations`.
 """
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from ogrl.plugins.ports import Connector, Importer, Renderer, Runner
+from ogrl.plugins.ports import Importer, Renderer, Runner
+
+if TYPE_CHECKING:
+    from ogrl.integrations.manifest import Package
+    from ogrl.operations.catalog import PackageCatalog
 
 
 class Registry[T]:
@@ -31,4 +37,7 @@ class Plugins:
     importers: Registry[Importer] = field(default_factory=lambda: Registry("importer"))
     renderers: Registry[Renderer] = field(default_factory=lambda: Registry("renderer"))
     runners: Registry[Runner] = field(default_factory=lambda: Registry("runner"))
-    connectors: Registry[Connector] = field(default_factory=lambda: Registry("connector"))
+    # A PackageCatalog in the application; any Registry-shaped holder works in tests.
+    integrations: "Registry[Package] | PackageCatalog" = field(
+        default_factory=lambda: Registry("integration")
+    )

@@ -222,11 +222,33 @@ class RunEvidence(Part):
 
 
 class Run(Part):
+    """A test's `run` block. Which fields apply depends on `runner` (RFC 0001 section 7.6)."""
+
     runner: str
+    # shell
     command: str | None = None
     timeout: str | None = None
     env: list[str] | None = None
     evidence: list[RunEvidence] | None = None
+    # rule
+    source: str | None = None
+    select: str | None = None
+    assert_: str | None = Field(default=None, alias="assert")
+    aggregate: str | None = None
+    subject: str | None = None
+    allow_empty: bool | None = None
+    # integration
+    check: str | None = None
+    sources: list[str] | None = None
+    with_: dict[str, str] | None = Field(default=None, alias="with")
+
+    def sources_read(self) -> list[str]:
+        """Every source the run evaluates, in the order the test lists them."""
+        if self.runner == "rule":
+            return [self.source] if self.source else []
+        if self.runner == "integration":
+            return list(self.sources or [])
+        return []
 
 
 class Test(Envelope):

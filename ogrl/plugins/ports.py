@@ -1,17 +1,20 @@
-"""The four ports from RFC 0003 section 5.
+"""The ports from RFC 0003 section 5, and the integration host from RFC 0005.
 
 The kernel calls these; it does not implement them. Status, parameter
 resolution, and mapping semantics are deliberately not ports: a plugin that
 changed them would make two installations disagree about one bundle.
 """
 
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Envelope, Implementation, Program, Test
+
+if TYPE_CHECKING:
+    from ogrl.integrations.manifest import Package
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,13 +88,26 @@ class RunRequest:
 
 
 @dataclass(frozen=True)
+class StoredArtifact:
+    """Bytes already in object storage, such as a snapshot, cited without a second upload."""
+
+    name: str
+    media_type: str
+    uri: str
+    digest: str
+    collected: datetime
+
+
+@dataclass(frozen=True)
 class RunReport:
-    """The harness turns this into one `result` and one `evidence` per file."""
+    """The harness turns this into one `result` and one `evidence` per file or artifact."""
 
     outcome: Literal["pass", "fail", "error"]
     summary: str
     observed: datetime
     files: Sequence[CollectedFile] = ()
+    artifacts: Sequence[StoredArtifact] = ()
+    subjects: Sequence[Mapping[str, str]] = ()
 
 
 class Runner(Protocol):
@@ -102,17 +118,95 @@ class Runner(Protocol):
         ...
 
 
+# --- Integrations (RFC 0005) --------------------------------------------------------------------
+
+
+class IntegrationError(Exception):
+    """A failed integration operation. `kind` is one of RFC 0005 section 7's error kinds,
+    or `protocol` when the process misbehaved (crash, timeout, malformed output)."""
+
+    def __init__(self, kind: str, message: str, retry_after: int | None = None) -> None:
+        super().__init__(message)
+        self.kind = kind
+        self.message = message
+        self.retry_after = retry_after
+
+
 @dataclass(frozen=True)
-class CollectionRequest:
-    system_id: str | None
-    component_id: str | None
-    implementation: Implementation | None
+class ValidateReport:
+    identity: str
+    granted_scopes: Sequence[str] = ()
+    warnings: Sequence[str] = ()
 
 
-class Connector(Protocol):
-    name: str
-    description: str
+@dataclass(frozen=True)
+class CollectReport:
+    items: Sequence[Mapping[str, Any]]
+    complete: bool
+    reason: str | None = None
 
-    def collect(self, request: CollectionRequest) -> AsyncIterator[CollectedFile]:
-        """Yields files that become `evidence`. Shipped as a subprocess speaking RFC 0001 JSON."""
+
+@dataclass(frozen=True)
+class CheckReport:
+    outcome: Literal["pass", "fail", "error"]
+    summary: str
+    subjects: Sequence[Mapping[str, str]] = ()
+
+
+class IntegrationHost(Protocol):
+    """Runs one operation of an installed package. Failures raise IntegrationError."""
+
+    async def validate(
+        self, package: "Package", config: Mapping[str, str], env: Mapping[str, str]
+    ) -> ValidateReport: ...
+
+    async def collect(
+        self,
+        package: "Package",
+        resource: str,
+        version: int,
+        config: Mapping[str, str],
+        env: Mapping[str, str],
+        query: Mapping[str, Any] | None = None,
+    ) -> CollectReport: ...
+
+    async def check(
+        self,
+        package: "Package",
+        check: str,
+        version: int,
+        args: Mapping[str, str],
+        params: Mapping[str, str],
+        snapshots: Mapping[str, bytes],
+        time_limit: int,
+    ) -> CheckReport: ...
+
+
+class SecretVault(Protocol):
+    """Writable secrets for integration connections (RFC 0005 section 5).
+
+    Names look like `integrations/<connection id>/<NAME>`. Values never reach
+    the database, an API response, or a log line.
+    """
+
+    def get(self, name: str) -> str | None: ...
+
+    def put(self, name: str, value: str) -> None: ...
+
+    def delete(self, name: str) -> None: ...
+
+
+class OAuthClient(Protocol):
+    """Talks to a vendor's OAuth token endpoint (RFC 0005 section 5)."""
+
+    async def token(self, token_url: str, form: Mapping[str, str]) -> Mapping[str, Any]:
+        """POST a form to the token endpoint. Raises IntegrationError("auth_failed", ...)."""
+        ...
+
+
+class RoleAssumer(Protocol):
+    """Assumes an organization's read-only IAM role for one operation (RFC 0005 section 5)."""
+
+    async def assume(self, role_arn: str, external_id: str, session_name: str) -> Mapping[str, str]:
+        """Returns AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_SESSION_TOKEN."""
         ...

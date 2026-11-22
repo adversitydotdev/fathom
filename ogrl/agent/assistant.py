@@ -34,7 +34,13 @@ SYSTEM_PROMPT = (
     "objects (`implementation` with `status: planned`, `policy` with `status: draft`, `risk` "
     "with `status: open`, or `mapping` with `review_status: draft`) so humans can review and "
     "attest them directly in the UI. Be concise, cite exact control display IDs and requirement "
-    "IDs, and never claim a control is met or implemented on a human's behalf."
+    "IDs, and never claim a control is met or implemented on a human's behalf. "
+    "To test something an integration does not collect yet, define a query source: "
+    "list_integrations, search_operations and describe_operation to find the read operation and "
+    "its item fields, validate_query until it is valid, dry_run_query through a connection to "
+    "check the fields come back filled, preview_rule over the sample items, then "
+    "propose_query_source with the definition and the rule. You cannot save query sources or "
+    "tests with a run block; the person reviews the draft in the query editor and saves it."
 )
 
 

@@ -92,6 +92,175 @@ export async function triggerLibraryPull(version: string): Promise<ActionState> 
   return { jobId: data.id };
 }
 
+// Integrations (RFC 0005) --------------------------------------------------
+
+export async function createConnection(
+  body: S["ConnectionWrite"],
+  secrets: Record<string, string>,
+): Promise<ActionState> {
+  const { data, error } = await api.POST("/connections", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't create connection.") };
+  for (const [name, value] of Object.entries(secrets)) {
+    if (!value) continue;
+    const res = await api.PUT("/connections/{id}/secrets/{name}", {
+      params: { path: { id: data.id, name } },
+      body: { value },
+    });
+    if (res.error) {
+      refresh();
+      return { id: data.id, error: formatError(res.error, `Couldn't store ${name}.`) };
+    }
+  }
+  refresh();
+  return { id: data.id };
+}
+
+export async function setConnectionState(
+  id: string,
+  ifMatch: string,
+  state: "disabled" | "pending",
+): Promise<ActionState> {
+  const { data, error } = await api.PATCH("/connections/{id}", {
+    params: { path: { id }, header: { "If-Match": ifMatch } },
+    body: { state },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't update connection.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function deleteConnection(id: string): Promise<ActionState> {
+  const { error, response } = await api.DELETE("/connections/{id}", { params: { path: { id } } });
+  if (error || !response.ok) return { error: formatError(error, "Couldn't remove connection.") };
+  refresh();
+  return { id };
+}
+
+export async function validateConnection(id: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/connections/{id}/validate", { params: { path: { id } } });
+  if (error || !data) return { error: formatError(error, "Couldn't queue validation.") };
+  refresh();
+  return { jobId: data.id };
+}
+
+export async function collectConnection(id: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/connections/{id}/collections", {
+    params: { path: { id } },
+    body: {},
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't queue collection.") };
+  refresh();
+  return { jobId: data.id };
+}
+
+export async function startOAuth(id: string): Promise<{ url?: string; error?: string }> {
+  const { data, error } = await api.POST("/connections/{id}/oauth/start", { params: { path: { id } } });
+  if (error || !data) return { error: formatError(error, "Couldn't start authorization.") };
+  return { url: data.authorize_url };
+}
+
+export async function installIntegration(url: string, digest?: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations", {
+    body: { url, ...(digest ? { digest } : {}), enable: true },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't queue install.") };
+  refresh();
+  return { jobId: data.id };
+}
+
+export async function enableIntegrationVersion(id: string, version: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations/{id}/versions/{version}/enable", {
+    params: { path: { id, version } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't enable that version.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function applyTemplateUpdate(id: string, testId: string, ifMatch: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations/{id}/template-updates/{test_id}/apply", {
+    params: { path: { id, test_id: testId }, header: { "If-Match": ifMatch } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't apply the update.") };
+  refresh();
+  return { id: data.id };
+}
+
+export type RulePreview = S["RulePreview"];
+
+export async function previewRule(body: S["RulePreviewRequest"]): Promise<{ preview?: RulePreview; error?: string }> {
+  const { data, error } = await api.POST("/rules/preview", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't preview the rule.") };
+  return { preview: data };
+}
+
+export async function createRuleTest(body: S["TestWrite"]): Promise<ActionState> {
+  const { data, error } = await api.POST("/tests", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't create the test.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function enableTemplate(integrationId: string, name: string): Promise<ActionState> {
+  const { data, error } = await api.POST("/integrations/{id}/templates/{name}/enable", {
+    params: { path: { id: integrationId, name } },
+    body: {},
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't enable template.") };
+  refresh();
+  return { id: data.id };
+}
+
+// Query sources (RFC 0006, 0007) ------------------------------------------
+
+export async function searchOperations(
+  integrationId: string,
+  q: string,
+): Promise<{ operations?: S["Operation"][]; error?: string }> {
+  const { data, error } = await api.GET("/integrations/{id}/operations", {
+    params: { path: { id: integrationId }, query: { q } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't search operations.") };
+  return { operations: data.data };
+}
+
+export async function describeOperation(
+  integrationId: string,
+  operation: string,
+): Promise<{ operation?: S["Operation"]; error?: string }> {
+  const { data, error } = await api.GET("/integrations/{id}/operations/{operation}", {
+    params: { path: { id: integrationId, operation } },
+  });
+  if (error || !data) return { error: formatError(error, "Couldn't describe the operation.") };
+  return { operation: data };
+}
+
+export async function validateQuery(body: S["QueryWrite"]): Promise<{ check?: S["QueryCheck"]; error?: string }> {
+  const { data, error } = await api.POST("/queries/validate", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't validate the query.") };
+  return { check: data };
+}
+
+export async function dryRunQuery(body: S["DryRunRequest"]): Promise<{ run?: S["DryRun"]; error?: string }> {
+  const { data, error } = await api.POST("/queries/dry-run", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't run the query.") };
+  return { run: data };
+}
+
+export async function createQuery(body: S["QueryWrite"]): Promise<ActionState> {
+  const { data, error } = await api.POST("/queries", { body });
+  if (error || !data) return { error: formatError(error, "Couldn't save the query source.") };
+  refresh();
+  return { id: data.id };
+}
+
+export async function deleteQuery(id: string): Promise<ActionState> {
+  const { error } = await api.DELETE("/queries/{id}", { params: { path: { id } } });
+  if (error) return { error: formatError(error, "Couldn't remove the query source.") };
+  refresh();
+  return {};
+}
+
 // Controls -----------------------------------------------------------------
 
 export async function createControl(body: S["ControlWrite"]): Promise<ActionState> {

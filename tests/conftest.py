@@ -79,6 +79,18 @@ def postgres_store():
     return PostgresStore(engine=engine)
 
 
+INTEGRATIONS_DIR = Path(__file__).parent / "integrations"
+
+
+def connection_store(store: Any) -> Any:
+    from ogrl.persistence.memory import MemoryConnections
+    from ogrl.persistence.postgres import PostgresConnections, PostgresStore
+
+    if isinstance(store, PostgresStore):
+        return PostgresConnections(store.engine)
+    return MemoryConnections()
+
+
 def s3_blobs():
     from ogrl.adapters.s3 import S3Blobs
 
@@ -329,9 +341,12 @@ def make_app(
     library_dir: Path, secrets: StaticSecrets, tmp_path: Path, backend: str
 ) -> Callable[..., Any]:
     def make(**overrides: Any) -> tuple[TestClient, container.Container]:
+        store = MemoryStore() if backend == "memory" else postgres_store()
         kwargs: dict[str, Any] = {
             "authenticator": Tokens(PRINCIPALS),
-            "store": MemoryStore() if backend == "memory" else postgres_store(),
+            "store": store,
+            "connections": connection_store(store),
+            "integrations_dir": INTEGRATIONS_DIR,
             "blobs": MemoryBlobs() if backend == "memory" else s3_blobs(),
             "library_source": DirectoryLibrary(library_dir, commit="c0ffee"),
             "secrets": secrets,

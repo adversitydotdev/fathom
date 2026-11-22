@@ -37,7 +37,14 @@ class ProviderPin(BaseModel):
 
 
 JobType = Literal[
-    "library_pull", "provider_import", "test_run", "render", "git_export", "restore", "connector"
+    "library_pull",
+    "provider_import",
+    "test_run",
+    "render",
+    "git_export",
+    "restore",
+    "collection",
+    "integration_install",
 ]
 JobStatus = Literal["queued", "running", "succeeded", "failed"]
 

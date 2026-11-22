@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from ogrl.access import ActorKind, Principal, Role
 from ogrl.operations import types as t
@@ -55,4 +55,4 @@ async def ensure_agent_party(container: Container, actor_id: str = DEFAULT_AGENT
 class AgentDeps:
     container: Container
     principal: Principal
-    created_drafts: list[dict[str, str]] = field(default_factory=list)
+    created_drafts: list[dict[str, Any]] = field(default_factory=list)

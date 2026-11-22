@@ -17,9 +17,75 @@ async function mockStream(body: StreamReq): Promise<Response> {
   const ctx = body.context ?? {};
 
   const events: unknown[] = [];
-  const drafts: Array<{ object_type: string; id: string; control_ref?: string; label: string }> = [];
+  const drafts: Array<{
+    object_type: string;
+    id: string;
+    control_ref?: string;
+    label: string;
+    definition?: Record<string, unknown>;
+    rule?: Record<string, unknown>;
+  }> = [];
+  const mockApi = async (path: string, payload?: unknown) => {
+    const res = await handleMockRequest(
+      new Request(`http://ogrl.mock/v1${path}`, {
+        method: payload === undefined ? "GET" : "POST",
+        headers: { "Content-Type": "application/json" },
+        ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
+      }),
+    );
+    return (await res.json()) as Record<string, unknown>;
+  };
 
-  if (msg.includes("policy")) {
+  if (msg.includes("security group") || msg.includes("query source")) {
+    // RFC 0006 section 9: search, describe, validate, fix, sample, then propose a draft.
+    const aws = "dev.adversity.aws";
+    const definition = {
+      integration_id: aws,
+      name: "internet-open-groups",
+      version: 1,
+      description: "Security groups with an inbound rule from 0.0.0.0/0.",
+      operation: "ec2.DescribeSecurityGroups",
+      params: { Filters: '[{"Name": "ip-permission.cidr", "Values": ["0.0.0.0/0"]}]' },
+      regions: "*",
+      fields: { id: "GroupId", name: "GroupName", vpc: "VpcId", rules: "IpPermissions" },
+    };
+    const rule = { source: `${aws}/internet-open-groups@1`, assert: "item.rules == []" };
+    const step = async (name: string, args: Record<string, unknown>, run: () => Promise<unknown>) => {
+      events.push({ type: "tool_call", name, args });
+      const out = await run();
+      events.push({ type: "tool_result", name });
+      return out;
+    };
+    await step("list_integrations", {}, () => mockApi("/integrations"));
+    await step("search_operations", { integration_id: aws, text: "security groups" }, () =>
+      mockApi(`/integrations/${aws}/operations?q=security%20groups`),
+    );
+    await step("describe_operation", { integration_id: aws, operation: definition.operation }, () =>
+      mockApi(`/integrations/${aws}/operations/${definition.operation}`),
+    );
+    const misspelt = { ...definition, fields: { ...definition.fields, id: "GroupID" } };
+    await step("validate_query", { definition: misspelt }, () => mockApi("/queries/validate", misspelt));
+    await step("validate_query", { definition }, () => mockApi("/queries/validate", definition));
+    const sample = (await step("dry_run_query", { definition, connection_id: "connection--aws-prod" }, () =>
+      mockApi("/queries/dry-run", { ...definition, connection_id: "connection--aws-prod", max_items: 20 }),
+    )) as { count?: number };
+    await step("propose_query_source", { definition, rule }, async () => ({ proposed: true }));
+    const draft = {
+      object_type: "query_source",
+      id: rule.source,
+      label: `Draft query source: ${rule.source}`,
+      definition,
+      rule,
+    };
+    drafts.push(draft);
+    events.push({ type: "draft", ...draft });
+    const text =
+      `I drafted **internet-open-groups@1** over \`ec2.DescribeSecurityGroups\`, filtered to inbound rules from 0.0.0.0/0, in every connected region. ` +
+      `My first draft read \`GroupID\`; validation pointed at \`GroupId\` and I fixed it. A dry run through AWS production returned ${sample.count ?? 0} items. ` +
+      "Agents cannot save query sources, so review the draft in the query editor and save it, then add the rule `item.rules == []`.";
+    events.push({ type: "delta", text });
+    events.push({ type: "done", text, drafts });
+  } else if (msg.includes("policy")) {
     events.push({ type: "tool_call", name: "draft_policy", args: { name: "AI-Drafted Acceptable Use Policy" } });
     const res = await handleMockRequest(
       new Request("http://ogrl.mock/v1/policies", {

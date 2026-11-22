@@ -14,6 +14,7 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Control, Envelope, Origin
 from ogrl.kernel.timeutil import later_than, now
+from ogrl.operations.connections import Connection, InstallRecord, QueryDefinition, Snapshot
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -219,3 +220,84 @@ class MemoryBlobs:
 
     async def get(self, uri: str) -> bytes | None:
         return self._blobs.get(uri)
+
+
+class MemoryConnections:
+    """Connections and snapshot rows (RFC 0005) for tests and local runs."""
+
+    def __init__(self) -> None:
+        self._connections: dict[str, Connection] = {}
+        self._snapshots: dict[str, Snapshot] = {}
+        self._installs: dict[tuple[str, str], InstallRecord] = {}
+        self._queries: dict[str, QueryDefinition] = {}
+
+    async def get_connection(self, connection_id: str) -> Connection | None:
+        return self._connections.get(connection_id)
+
+    async def list_connections(self) -> list[Connection]:
+        return [self._connections[k] for k in sorted(self._connections)]
+
+    async def insert_connection(self, connection: Connection) -> None:
+        if connection.id in self._connections:
+            raise Conflict(f"{connection.id} already exists")
+        self._connections[connection.id] = connection
+
+    async def replace_connection(self, connection: Connection, expected_modified: datetime) -> None:
+        current = self._connections.get(connection.id)
+        if current is None or current.modified != expected_modified:
+            raise PreconditionFailed(f"{connection.id} changed since {expected_modified}")
+        self._connections[connection.id] = connection
+
+    async def delete_connection(self, connection_id: str) -> None:
+        self._connections.pop(connection_id, None)
+
+    async def insert_snapshot(self, snapshot: Snapshot) -> None:
+        self._snapshots[snapshot.id] = snapshot
+
+    async def get_snapshot(self, snapshot_id: str) -> Snapshot | None:
+        return self._snapshots.get(snapshot_id)
+
+    async def list_snapshots(
+        self, connection_id: str | None = None, source: str | None = None
+    ) -> list[Snapshot]:
+        found = [
+            s
+            for s in self._snapshots.values()
+            if (connection_id is None or s.connection_id == connection_id)
+            and (source is None or s.source == source)
+        ]
+        return sorted(found, key=lambda s: (s.collected, s.id), reverse=True)
+
+    async def latest_snapshot(
+        self, connection_id: str, source: str, not_before: datetime, not_after: datetime
+    ) -> Snapshot | None:
+        for snapshot in await self.list_snapshots(connection_id, source):
+            if snapshot.complete and not_before <= snapshot.collected <= not_after:
+                return snapshot
+        return None
+
+    async def list_installs(self) -> list[InstallRecord]:
+        return sorted(self._installs.values(), key=lambda r: (r.id, r.installed))
+
+    async def put_install(self, record: InstallRecord) -> None:
+        if (record.id, record.version) in self._installs:
+            raise Conflict(f"{record.id} {record.version} is already installed")
+        self._installs[(record.id, record.version)] = record
+
+    async def enable_install(self, integration_id: str, version: str) -> None:
+        if (integration_id, version) not in self._installs:
+            raise Conflict(f"{integration_id} {version} is not installed")
+        for key, record in self._installs.items():
+            if key[0] == integration_id:
+                self._installs[key] = record.model_copy(update={"enabled": key[1] == version})
+
+    async def list_queries(self) -> list[QueryDefinition]:
+        return sorted(self._queries.values(), key=lambda q: (q.integration_id, q.name, q.version))
+
+    async def put_query(self, query: QueryDefinition) -> None:
+        if any(q.source == query.source for q in self._queries.values()):
+            raise Conflict(f"{query.source} already exists", slug="query-exists")
+        self._queries[query.id] = query
+
+    async def delete_query(self, query_id: str) -> None:
+        self._queries.pop(query_id, None)

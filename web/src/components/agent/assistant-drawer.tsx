@@ -36,6 +36,9 @@ type CreatedDraft = {
   id: string;
   control_ref?: string;
   label: string;
+  /** query_source drafts (RFC 0006 section 9): the unsaved definition, and the rule that reads it. */
+  definition?: Record<string, unknown>;
+  rule?: Record<string, unknown>;
 };
 
 type ChatMessage = {
@@ -190,6 +193,8 @@ export function AgentProvider({
               id?: string;
               control_ref?: string;
               label?: string;
+              definition?: Record<string, unknown>;
+              rule?: Record<string, unknown>;
               drafts?: CreatedDraft[];
             };
 
@@ -226,6 +231,8 @@ export function AgentProvider({
                 id: ev.id,
                 control_ref: ev.control_ref,
                 label: ev.label ?? ev.id,
+                definition: ev.definition,
+                rule: ev.rule,
               };
               setMessages((prev) =>
                 prev.map((m) =>
@@ -297,6 +304,11 @@ export function AgentProvider({
     }
     if (d.object_type === "risk") {
       return `/programs/${programId}/risks${q}`;
+    }
+    if (d.object_type === "query_source" && d.definition) {
+      // Nothing is saved: the draft travels in the URL and opens in the query editor.
+      const draft = encodeURIComponent(JSON.stringify({ definition: d.definition, rule: d.rule }));
+      return `/programs/${programId}/integrations?draft=${draft}${at ? `&at=${at}` : ""}`;
     }
     if (d.object_type === "mapping" && d.control_ref) {
       return `/programs/${programId}/controls/${d.control_ref}${q}`;

@@ -113,11 +113,5 @@ class Health(BaseModel):
     version: str
 
 
-class Connector(BaseModel):
-    id: str
-    name: str
-    description: str | None = None
-
-
 class DataList[T](BaseModel):
     data: list[T]

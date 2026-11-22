@@ -23,6 +23,7 @@ from ogrl.kernel.timeutil import format_timestamp
 OWNED_TOP_LEVEL = frozenset(
     {
         "bundle.yaml",
+        "ogrl-app",  # application records that travel with the program (RFC 0006 section 8)
         "party",
         "component",
         "system",

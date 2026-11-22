@@ -6,10 +6,16 @@
 #   - Idempotent local dev seeder (pulls ogrl-library v0.2.0 + starter Acme Platform;
 #     set `OGRL_SKIP_SEED=true` to boot an empty workspace)
 #   - OGRL Next.js Web UI (`http://localhost:3000`)
+#   - Integrations (RFC 0005): the seeder installs the first-party Okta, AWS, and GitHub
+#     releases. Connection secrets persist in the `secrets` volume.
 #
 # Quickstart:
 #   docker compose up --build
 #   open http://localhost:3000
+#
+# AWS connections assume your read-only role with the credentials in AWS_* when compose
+# starts. With an `aws login` session:
+#   eval "$(aws configure export-credentials --format env)" && docker compose up -d api
 
 name: ogrl
 
@@ -17,9 +23,18 @@ x-api-env: &api-env
   OGRL_DATABASE_URL: postgresql://ogrl:ogrl@postgres:5432/ogrl
   OGRL_S3_ENDPOINT: http://s3:8333
   OGRL_S3_BUCKET: ogrl
-  AWS_ACCESS_KEY_ID: ogrl
-  AWS_SECRET_ACCESS_KEY: ogrl-secret
-  AWS_DEFAULT_REGION: us-east-1
+  OGRL_S3_ACCESS_KEY_ID: ogrl
+  OGRL_S3_SECRET_ACCESS_KEY: ogrl-secret
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  # For AWS connections only: the identity that assumes each connection's role.
+  AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+  AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+  AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
+  # Integrations (RFC 0005). Releases are unsigned until the registry ships.
+  OGRL_ALLOW_LOCAL_INTEGRATIONS: "true"
+  OGRL_SECRETS_FILE: /var/lib/ogrl/secrets.json
+  OGRL_PUBLIC_URL: http://localhost:8080
+  OGRL_RUN_SCHEDULER: "true"
   OGRL_API_TOKENS: '{"ogrl_pat_local_dev_admin":{"actor_id":"party--local-admin","roles":["administrator"],"kind":"person"}}'
   OGRL_ALLOWED_ORIGINS: http://localhost:3000
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
@@ -96,6 +111,8 @@ services:
       s3-bucket:
         condition: service_completed_successfully
     environment: *api-env
+    volumes:
+      - secrets:/var/lib/ogrl
     ports:
       - "8080:8080"
     healthcheck:
@@ -140,3 +157,4 @@ services:
 volumes:
   postgres:
   s3:
+  secrets:

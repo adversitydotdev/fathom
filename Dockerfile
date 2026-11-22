@@ -7,6 +7,11 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=0
 
+# git: ogrl-integration (the integration SDK) is a git dependency until it is on PyPI.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
 COPY pyproject.toml uv.lock README.md ./
@@ -26,7 +31,8 @@ RUN apt-get update \
     && groupadd --system ogrl \
     && useradd --system --gid ogrl --create-home ogrl \
     && groupadd --system ogrl-harness \
-    && useradd --system --gid ogrl-harness --no-create-home ogrl-harness
+    && useradd --system --gid ogrl-harness --no-create-home ogrl-harness \
+    && install -d -o ogrl -g ogrl /var/lib/ogrl
 
 WORKDIR /app
 COPY --from=builder --chown=ogrl:ogrl /app/.venv /app/.venv

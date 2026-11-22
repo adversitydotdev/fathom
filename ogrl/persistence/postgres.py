@@ -25,6 +25,13 @@ from ogrl.errors import Conflict, PreconditionFailed
 from ogrl.kernel.graph import Graph
 from ogrl.kernel.models import Envelope, parse
 from ogrl.kernel.timeutil import later_than, now
+from ogrl.operations.connections import (
+    Connection,
+    InstallRecord,
+    QueryDefinition,
+    Snapshot,
+    connection_body,
+)
 from ogrl.operations.records import (
     LIBRARY,
     ORGANIZATION,
@@ -35,11 +42,15 @@ from ogrl.operations.records import (
 )
 from ogrl.operations.store import ProjectionChange, Row
 from ogrl.persistence.tables import (
+    connections,
+    integration_installs,
     jobs,
     objects,
     provider_pins,
+    queries,
     revisions,
     settings,
+    snapshots,
     store_state,
 )
 
@@ -372,3 +383,189 @@ class PostgresStore:
     async def object_count(self) -> int:
         async with self._engine.connect() as conn:
             return (await conn.execute(select(func.count()).select_from(objects))).scalar_one()
+
+
+class PostgresConnections:
+    """Connections and snapshot rows (RFC 0005) in the organization database."""
+
+    def __init__(self, engine: AsyncEngine) -> None:
+        self._engine = engine
+
+    async def get_connection(self, connection_id: str) -> Connection | None:
+        async with self._engine.connect() as conn:
+            body = (
+                await conn.execute(
+                    select(connections.c.body).where(connections.c.id == connection_id)
+                )
+            ).scalar_one_or_none()
+        return Connection.model_validate(body) if body else None
+
+    async def list_connections(self) -> list[Connection]:
+        async with self._engine.connect() as conn:
+            result = await conn.execute(select(connections.c.body).order_by(connections.c.id))
+            return [Connection.model_validate(r.body) for r in result]
+
+    async def insert_connection(self, connection: Connection) -> None:
+        async with self._engine.begin() as conn:
+            inserted = await conn.execute(
+                insert(connections)
+                .values(
+                    id=connection.id,
+                    integration_id=connection.integration_id,
+                    modified=connection.modified,
+                    body=connection_body(connection),
+                )
+                .on_conflict_do_nothing(index_elements=["id"])
+                .returning(connections.c.id)
+            )
+            if inserted.first() is None:
+                raise Conflict(f"{connection.id} already exists")
+
+    async def replace_connection(self, connection: Connection, expected_modified: datetime) -> None:
+        async with self._engine.begin() as conn:
+            updated = await conn.execute(
+                update(connections)
+                .where(
+                    and_(
+                        connections.c.id == connection.id,
+                        connections.c.modified == expected_modified,
+                    )
+                )
+                .values(modified=connection.modified, body=connection_body(connection))
+                .returning(connections.c.id)
+            )
+            if updated.first() is None:
+                raise PreconditionFailed(f"{connection.id} changed since {expected_modified}")
+
+    async def delete_connection(self, connection_id: str) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(connections.delete().where(connections.c.id == connection_id))
+
+    async def insert_snapshot(self, snapshot: Snapshot) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(
+                insert(snapshots).values(
+                    id=snapshot.id,
+                    connection_id=snapshot.connection_id,
+                    source=snapshot.source,
+                    collected=snapshot.collected,
+                    complete=snapshot.complete,
+                    body=snapshot.model_dump(mode="json", exclude_none=True),
+                )
+            )
+
+    async def get_snapshot(self, snapshot_id: str) -> Snapshot | None:
+        async with self._engine.connect() as conn:
+            body = (
+                await conn.execute(select(snapshots.c.body).where(snapshots.c.id == snapshot_id))
+            ).scalar_one_or_none()
+        return Snapshot.model_validate(body) if body else None
+
+    async def list_snapshots(
+        self, connection_id: str | None = None, source: str | None = None
+    ) -> list[Snapshot]:
+        query = select(snapshots.c.body)
+        if connection_id is not None:
+            query = query.where(snapshots.c.connection_id == connection_id)
+        if source is not None:
+            query = query.where(snapshots.c.source == source)
+        query = query.order_by(snapshots.c.collected.desc(), snapshots.c.id.desc())
+        async with self._engine.connect() as conn:
+            return [Snapshot.model_validate(r.body) for r in await conn.execute(query)]
+
+    async def latest_snapshot(
+        self, connection_id: str, source: str, not_before: datetime, not_after: datetime
+    ) -> Snapshot | None:
+        query = (
+            select(snapshots.c.body)
+            .where(
+                and_(
+                    snapshots.c.connection_id == connection_id,
+                    snapshots.c.source == source,
+                    snapshots.c.complete.is_(True),
+                    snapshots.c.collected >= not_before,
+                    snapshots.c.collected <= not_after,
+                )
+            )
+            .order_by(snapshots.c.collected.desc(), snapshots.c.id.desc())
+            .limit(1)
+        )
+        async with self._engine.connect() as conn:
+            body = (await conn.execute(query)).scalar_one_or_none()
+        return Snapshot.model_validate(body) if body else None
+
+    async def list_installs(self) -> list[InstallRecord]:
+        query = select(integration_installs.c.body).order_by(
+            integration_installs.c.id, integration_installs.c.installed
+        )
+        async with self._engine.connect() as conn:
+            return [InstallRecord.model_validate(r.body) for r in await conn.execute(query)]
+
+    async def put_install(self, record: InstallRecord) -> None:
+        async with self._engine.begin() as conn:
+            inserted = await conn.execute(
+                insert(integration_installs)
+                .values(
+                    id=record.id,
+                    version=record.version,
+                    enabled=record.enabled,
+                    installed=record.installed,
+                    body=record.model_dump(mode="json", exclude_none=True),
+                )
+                .on_conflict_do_nothing(index_elements=["id", "version"])
+                .returning(integration_installs.c.id)
+            )
+            if inserted.first() is None:
+                raise Conflict(f"{record.id} {record.version} is already installed")
+
+    async def enable_install(self, integration_id: str, version: str) -> None:
+        async with self._engine.begin() as conn:
+            rows = (
+                await conn.execute(
+                    select(integration_installs.c.version, integration_installs.c.body)
+                    .where(integration_installs.c.id == integration_id)
+                    .with_for_update()
+                )
+            ).all()
+            if version not in {r.version for r in rows}:
+                raise Conflict(f"{integration_id} {version} is not installed")
+            for row in rows:
+                enabled = row.version == version
+                await conn.execute(
+                    update(integration_installs)
+                    .where(
+                        and_(
+                            integration_installs.c.id == integration_id,
+                            integration_installs.c.version == row.version,
+                        )
+                    )
+                    .values(enabled=enabled, body={**row.body, "enabled": enabled})
+                )
+
+    async def list_queries(self) -> list[QueryDefinition]:
+        query = select(queries.c.body).order_by(
+            queries.c.integration_id, queries.c.name, queries.c.version
+        )
+        async with self._engine.connect() as conn:
+            return [QueryDefinition.model_validate(r.body) for r in await conn.execute(query)]
+
+    async def put_query(self, query: QueryDefinition) -> None:
+        async with self._engine.begin() as conn:
+            inserted = await conn.execute(
+                insert(queries)
+                .values(
+                    id=query.id,
+                    integration_id=query.integration_id,
+                    name=query.name,
+                    version=query.version,
+                    body=query.model_dump(mode="json", exclude_none=True),
+                )
+                .on_conflict_do_nothing()
+                .returning(queries.c.id)
+            )
+            if inserted.first() is None:
+                raise Conflict(f"{query.source} already exists", slug="query-exists")
+
+    async def delete_query(self, query_id: str) -> None:
+        async with self._engine.begin() as conn:
+            await conn.execute(queries.delete().where(queries.c.id == query_id))

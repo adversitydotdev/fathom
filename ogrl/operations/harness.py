@@ -9,6 +9,7 @@ never edits the test. A second run is a new result.
 
 from collections.abc import Callable
 from datetime import datetime, timedelta
+from typing import TYPE_CHECKING
 
 from pydantic import BaseModel
 
@@ -27,9 +28,20 @@ from ogrl.plugins import Plugins
 from ogrl.plugins.ports import RunReport, SecretHandle
 from ogrl.plugins.ports import RunRequest as RunnerRequest
 
+if TYPE_CHECKING:
+    from ogrl.operations.integrations import IntegrationService
+
 
 class RunRequest(BaseModel):
     implementation_id: str
+
+
+SNAPSHOT_RUNNERS = frozenset({"rule", "integration"})
+
+
+def snapshot_valid_until(test: Test, collected: datetime):
+    """RFC 0001 7.6: the UTC date of `collected` plus the test's freshness window."""
+    return collected.date() + timedelta(days=FRESHNESS_DAYS.get(test.interval or "", 1))
 
 
 def valid_until(test: Test, observed: datetime):
@@ -46,7 +58,9 @@ class HarnessService:
         jobs: JobService,
         plugins: Plugins,
         clock: Callable[[], datetime] = now,
+        integrations: "IntegrationService | None" = None,
     ) -> None:
+        self._integrations = integrations
         self._objects = objects
         self._blobs = blobs
         self._authorizer = authorizer
@@ -68,8 +82,9 @@ class HarnessService:
                 f"{test_id} has no run block; record a manual result with POST /results",
                 errors=[FieldError("the test has no run block", "/run")],
             )
+        snapshot_run = test.run.runner in SNAPSHOT_RUNNERS and self._integrations is not None
         runner = self._plugins.runners.get(test.run.runner)
-        if runner is None:
+        if runner is None and not snapshot_run:
             raise Invalid(
                 errors=[FieldError(f"no runner {test.run.runner!r} is installed", "/run/runner")]
             )
@@ -94,6 +109,12 @@ class HarnessService:
                 for k, v in (control_values(control, impl, {}) if control else {}).items()
                 if v is not None
             }
+            if snapshot_run:
+                assert self._integrations is not None
+                report = await self._integrations.evaluate(test, impl, parameters, graph)
+                result_id = await self.record(principal, test, impl, report)
+                return JobOutcome(result_id=result_id, report={"outcome": report.outcome})
+            assert runner is not None
             report: RunReport = await runner.run(
                 RunnerRequest(
                     test=test,
@@ -142,6 +163,27 @@ class HarnessService:
             )
             await self._objects.store_as(evidence, principal.actor_id)
             evidence_ids.append(evidence_id)
+        for artifact in report.artifacts:  # snapshots: already stored, cited by uri and digest
+            collected = utc(artifact.collected)
+            evidence = Evidence(
+                id=ids.mint("evidence"),
+                created=stamp,
+                modified=stamp,
+                created_by_ref=principal.actor_id,
+                name=artifact.name,
+                method="automated",
+                collected=collected,
+                valid_from=collected.date(),
+                valid_until=snapshot_valid_until(test, collected),
+                implementation_ref=impl.id,
+                resource={
+                    "uri": artifact.uri,
+                    "media_type": artifact.media_type,
+                    "digest": {"algorithm": "sha-256", "value": artifact.digest},
+                },
+            )
+            await self._objects.store_as(evidence, principal.actor_id)
+            evidence_ids.append(evidence.id)
         result = Result(
             id=ids.mint("result"),
             created=stamp,
@@ -154,6 +196,7 @@ class HarnessService:
             summary=report.summary or None,
             objective_refs=list(test.objective_refs) if test.objective_refs else None,
             evidence_refs=evidence_ids or None,
+            subjects=[dict(s) for s in report.subjects] or None,
         )
         await self._objects.store_as(result, principal.actor_id)
         return result.id

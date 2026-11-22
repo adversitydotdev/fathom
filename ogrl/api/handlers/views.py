@@ -1,4 +1,4 @@
-"""Handlers for computed views, content, library, providers, jobs, and connectors."""
+"""Handlers for computed views, content, library, providers, and jobs."""
 
 from datetime import datetime
 from typing import Annotated
@@ -10,7 +10,6 @@ from ogrl.api.paths import views as v
 from ogrl.api.registrar import CurrentPrincipal, Registrar
 from ogrl.container import Container
 from ogrl.operations import types as t
-from ogrl.operations.connectors import ConnectorRunRequest
 from ogrl.operations.harness import RunRequest
 from ogrl.operations.jobs import JobQuery
 from ogrl.operations.library import LibraryPullRequest
@@ -137,14 +136,3 @@ def register(registrar: Registrar, c: Container) -> None:
     registrar.handle(v.LIST_JOBS, list_jobs)
     registrar.handle(v.GET_JOB, get_job)
     registrar.handle(v.GET_JOB_FILE, get_job_file)
-
-    # --- connectors ------------------------------------------------------------------------------
-
-    async def list_connectors(principal: CurrentPrincipal):
-        return {"data": await c.connectors.list(principal)}
-
-    async def run_connector(id: str, body: ConnectorRunRequest, principal: CurrentPrincipal):
-        return await c.connectors.run(principal, id, body)
-
-    registrar.handle(v.LIST_CONNECTORS, list_connectors)
-    registrar.handle(v.RUN_CONNECTOR, run_connector)

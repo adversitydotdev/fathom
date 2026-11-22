@@ -22,11 +22,20 @@ class S3Blobs:
         prefix: str = "",
         endpoint_url: str | None = None,
         region: str | None = None,
+        access_key: str | None = None,
+        secret_key: str | None = None,
     ) -> None:
         self._bucket = bucket
         self._prefix = prefix.strip("/")
         self._endpoint_url = endpoint_url
         self._region = region
+        # Keys for an S3-compatible server only. Without them boto3's default chain is used,
+        # which leaves AWS_* free for the credentials that assume integration roles.
+        self._keys = (
+            {"aws_access_key_id": access_key, "aws_secret_access_key": secret_key}
+            if access_key and secret_key
+            else {}
+        )
 
     @cached_property
     def _client(self):  # noqa: ANN202 - boto3 clients are untyped
@@ -34,6 +43,7 @@ class S3Blobs:
             "s3",
             endpoint_url=self._endpoint_url,
             region_name=self._region,
+            **self._keys,
             config=Config(
                 retries={"max_attempts": 5, "mode": "standard"},
                 # Path-style addressing works with S3 and every local stand-in.

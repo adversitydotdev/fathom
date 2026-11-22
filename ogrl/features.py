@@ -1,4 +1,4 @@
-"""Feature switches for optional modules (agents, connectors, git export).
+"""Feature switches for optional modules (agents, git export).
 
 A deployment with no model configured runs without agents (RFC 0003 section 4).
 An endpoint that names a feature returns 404-like `feature-disabled` when off.
@@ -13,7 +13,6 @@ from ogrl.access import Principal
 
 class Feature(StrEnum):
     AGENTS = "agents"
-    CONNECTORS = "connectors"
     GIT_EXPORT = "git_export"
 
 
