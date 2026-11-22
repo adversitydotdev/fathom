@@ -114,12 +114,53 @@ def iso_ts(offset: int) -> str:
     return (datetime.now(UTC) + timedelta(days=offset)).strftime("%Y-%m-%dT09:00:00Z")
 
 
+# First-party integration releases (RFC 0005 section 4), pinned to their published sha-256.
+INTEGRATIONS = [
+    (
+        "dev.adversity.okta",
+        "0.1.4",
+        "https://github.com/adversitydotdev/ogrl-okta/releases/download/v0.1.4/dev.adversity.okta-0.1.4.tar.gz",
+        "d6d6a16eed701c58d2dc6bcabeb51c81ca1220515a7afbe295c79424802e8a95",
+    ),
+    (
+        "dev.adversity.aws",
+        "0.3.0",
+        "https://github.com/adversitydotdev/ogrl-aws/releases/download/v0.3.0/dev.adversity.aws-0.3.0.tar.gz",
+        "13dd1dd94be32c7e75c762adbc0c4b42956d664d5ca5b8fc2ff1e10b83d66033",
+    ),
+    (
+        "dev.adversity.github",
+        "0.1.2",
+        "https://github.com/adversitydotdev/ogrl-github/releases/download/v0.1.2/dev.adversity.github-0.1.2.tar.gz",
+        "d5542667c8f5a35c4551f1e5864c79967597d28bfb6dcbf1849b1fbc06658f8e",
+    ),
+]
+
+
+def install_integrations() -> None:
+    """Install each release not already installed. A failure is reported, not fatal."""
+    if os.environ.get("OGRL_SEED_INTEGRATIONS", "true").lower() in {"0", "false", "no"}:
+        return
+    installed = {(i["id"], i["version"]) for i in req("GET", "/v1/integrations").get("data", [])}
+    for integration_id, version, url, digest in INTEGRATIONS:
+        if (integration_id, version) in installed:
+            print(f"seed: {integration_id} {version} is installed.")
+            continue
+        try:
+            job = req("POST", "/v1/integrations", {"url": url, "digest": digest, "enable": True})
+            wait_for_job(job["id"])
+            print(f"seed: installed {integration_id} {version}.")
+        except RuntimeError as exc:
+            print(f"seed: could not install {integration_id} {version}: {exc}", file=sys.stderr)
+
+
 def main() -> int:
     if os.environ.get("OGRL_SKIP_SEED", "").lower() in {"1", "true", "yes"}:
         print("seed: OGRL_SKIP_SEED is set; skipping local seed.")
         return 0
 
     wait_for_health()
+    install_integrations()
 
     existing = req("GET", "/v1/programs?limit=1")
     if existing.get("data"):

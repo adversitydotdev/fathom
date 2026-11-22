@@ -17,6 +17,8 @@ OGRL_DATABASE_URL        Postgres URL (`postgresql://...`). If unset, assembled 
                             If neither is set, uses an ephemeral in-memory store.
 OGRL_S3_BUCKET           Bucket for evidence bytes, document bodies, and render files.
 OGRL_S3_ENDPOINT         Only for an S3-compatible server, such as the compose stack.
+OGRL_S3_ACCESS_KEY_ID / OGRL_S3_SECRET_ACCESS_KEY   That server's keys. They keep AWS_* free
+                            for the credentials that assume integration roles (RFC 0005).
 OGRL_S3_PREFIX           Key prefix inside the bucket. Optional.
 OGRL_BLOB_DIR            A directory instead of S3. Unset with no bucket: memory.
 OGRL_EXPORT_REMOTE       Git remote for the snapshot. Unset: export is disabled.
@@ -213,6 +215,8 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
             bucket,
             prefix=env.get("OGRL_S3_PREFIX", ""),
             endpoint_url=env.get("OGRL_S3_ENDPOINT") or None,
+            access_key=env.get("OGRL_S3_ACCESS_KEY_ID") or None,
+            secret_key=env.get("OGRL_S3_SECRET_ACCESS_KEY") or None,
             region=region,
         )
     elif blob_dir:
