@@ -12,7 +12,7 @@ dependencies = [
     "boto3>=1.43.127",
     "fastapi>=0.162.2",
     "httpx>=0.28.1",
-    "ogrl-rs==0.1.0",
+    "ogrl-rs==0.2.0",
     "pydantic-ai-slim[anthropic,openai]>=1.0.0",
     "python-multipart>=0.0.33",
     "pyyaml>=6.0.3",
@@ -34,11 +34,11 @@ environments = [
 
 [tool.uv.sources]
 ogrl-rs = [
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-macosx_11_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-macosx_10_12_x86_64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'x86_64'" },
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-manylinux_2_28_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-manylinux_2_28_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.1.0/ogrl_rs-0.1.0-cp313-abi3-win_amd64.whl", marker = "sys_platform == 'win32' and platform_machine == 'AMD64'" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_11_0_arm64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'arm64'" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_10_12_x86_64.whl", marker = "sys_platform == 'darwin' and platform_machine == 'x86_64'" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_x86_64.whl", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_aarch64.whl", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-win_amd64.whl", marker = "sys_platform == 'win32' and platform_machine == 'AMD64'" },
 ]
 
 [project.scripts]
