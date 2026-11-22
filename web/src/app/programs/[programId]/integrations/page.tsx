@@ -30,7 +30,7 @@ import {
   NewConnectionDialog,
   RemoveQueryButton,
 } from "./integration-actions";
-import { QueryEditorDialog } from "./query-editor";
+import { QueryEditorDialog, type QueryDraft } from "./query-editor";
 
 export const metadata: Metadata = { title: "Integrations" };
 
@@ -43,8 +43,26 @@ const STATE: Record<Connection["state"], { tone: StatusTone; icon: typeof Circle
 
 const TIER_TONE: Record<string, StatusTone> = { "first-party": "met", verified: "contribution", local: "waived" };
 
-export default async function IntegrationsPage({ params }: { params: Promise<{ programId: string }> }) {
+/** An assistant's query source draft (RFC 0006 section 9), passed in the URL; nothing is saved yet. */
+function parseDraft(raw: string | string[] | undefined): QueryDraft | undefined {
+  if (typeof raw !== "string") return undefined;
+  try {
+    const value = JSON.parse(raw) as QueryDraft;
+    return typeof value?.definition?.integration_id === "string" ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export default async function IntegrationsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ programId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { programId } = await params;
+  const draft = parseDraft((await searchParams).draft);
   const program = await getProgram(programId);
   const [integrations, connections, snapshots, components, systems] = await Promise.all([
     getIntegrations(),
@@ -223,8 +241,10 @@ export default async function IntegrationsPage({ params }: { params: Promise<{ p
                         Query sources · {i.query_model === "smithy" ? "AWS models" : "OpenAPI"}
                       </span>
                       <QueryEditorDialog
+                        key={draft?.definition.integration_id === i.id ? JSON.stringify(draft) : "new"}
                         integration={i}
                         connections={connections.filter((c) => c.integration_id === i.id)}
+                        draft={draft?.definition.integration_id === i.id ? draft : undefined}
                       />
                     </div>
                     {(i.queries ?? []).length === 0 ? (

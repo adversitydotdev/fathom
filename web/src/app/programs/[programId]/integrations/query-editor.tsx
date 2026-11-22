@@ -1,7 +1,7 @@
 "use client";
 
-import { CircleCheck, FileWarning, Play, Plus, Search, ShieldCheck, X } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { CircleCheck, FileWarning, Play, Plus, Search, ShieldCheck, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 
 import { CrudDialog, Field, FormActions, FormError, Select, Textarea } from "@/components/crud";
 import { LoadingButton } from "@/components/spectrumui/loading-button-dependencies";
@@ -18,6 +18,9 @@ import {
 import type { Connection, DryRun, Integration, Operation, QueryCheck, QueryWrite } from "@/lib/api/types";
 
 type Row = { key: string; path: string };
+
+/** What the assistant proposes (RFC 0006 section 9): an unsaved definition and the rule that reads it. */
+export type QueryDraft = { definition: QueryWrite; rule?: { source?: string; select?: string; assert?: string; aggregate?: string } };
 
 const START: Row[] = [
   { key: "id", path: "" },
@@ -39,30 +42,55 @@ function fieldName(path: string): string {
  * integration's API model, set its parameters, pick the fields to keep, check it, and
  * sample it through a connection before saving. Every check runs on the server.
  */
-export function QueryEditorDialog({ integration, connections }: { integration: Integration; connections: Connection[] }) {
-  const [open, setOpen] = useState(false);
+export function QueryEditorDialog({
+  integration,
+  connections,
+  draft,
+}: {
+  integration: Integration;
+  connections: Connection[];
+  draft?: QueryDraft;
+}) {
+  const initial = draft?.definition;
+  const [open, setOpen] = useState(Boolean(draft));
   const [error, setError] = useState<string>();
   const [searching, search] = useTransition();
   const [checking, startCheck] = useTransition();
   const [running, startRun] = useTransition();
   const [saving, save] = useTransition();
 
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initial?.operation ?? "");
   const [found, setFound] = useState<Operation[]>();
   const [operation, setOperation] = useState<Operation>();
-  const [name, setName] = useState("");
-  const [version, setVersion] = useState("1");
-  const [description, setDescription] = useState("");
-  const [params, setParams] = useState<Record<string, string>>({});
-  const [regions, setRegions] = useState("*");
-  const [items, setItems] = useState("");
-  const [rows, setRows] = useState<Row[]>(START);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [version, setVersion] = useState(String(initial?.version ?? 1));
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [params, setParams] = useState<Record<string, string>>(initial?.params ?? {});
+  const [regions, setRegions] = useState(
+    Array.isArray(initial?.regions) ? initial.regions.join(", ") : (initial?.regions ?? "*"),
+  );
+  const [items, setItems] = useState(initial?.items ?? "");
+  const [rows, setRows] = useState<Row[]>(
+    initial?.fields ? Object.entries(initial.fields).map(([key, path]) => ({ key, path })) : START,
+  );
   const [focused, setFocused] = useState<number>();
   const [check, setCheck] = useState<QueryCheck>();
   const [run, setRun] = useState<DryRun>();
   const [connectionId, setConnectionId] = useState(connections[0]?.id ?? "");
 
   const smithy = integration.query_model === "smithy";
+
+  // A draft names its operation; describe it once so parameters and item fields show.
+  useEffect(() => {
+    if (!initial?.operation) return;
+    let active = true;
+    void describeOperation(integration.id, initial.operation).then((res) => {
+      if (active && res.operation) setOperation(res.operation);
+    });
+    return () => {
+      active = false;
+    };
+  }, [integration.id, initial?.operation]);
   const problems = useMemo(() => {
     const by = new Map<string, string[]>();
     for (const p of [...(check?.errors ?? []), ...(run?.warnings ?? [])]) by.set(p.pointer, [...(by.get(p.pointer) ?? []), p.detail]);
@@ -197,6 +225,20 @@ export function QueryEditorDialog({ integration, connections }: { integration: I
       <form onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
         <div className="flex min-w-0 flex-col gap-4">
           <FormError error={error} />
+          {draft && (
+            <div className="flex flex-col gap-1 rounded-xl border border-agent/35 bg-agent/8 px-3 py-2 text-xs" aria-label="Assistant draft">
+              <span className="flex items-center gap-1.5 font-medium">
+                <Sparkles className="size-3.5 text-agent" aria-hidden />
+                Drafted by the assistant. Nothing is saved until you save it.
+              </span>
+              <span className="text-muted-foreground">Check it and run a sample before saving.</span>
+              {draft.rule?.assert && (
+                <span>
+                  Suggested rule: <code className="font-mono">{draft.rule.assert}</code>
+                </span>
+              )}
+            </div>
+          )}
           <Field
             label="Operation"
             htmlFor="query-search"

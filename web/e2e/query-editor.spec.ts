@@ -117,3 +117,37 @@ test("a query source nothing reads can be removed", async ({ page }) => {
   await sources.getByRole("button", { name: "Confirm" }).click();
   await expect(sources.getByText(`${name}@1`)).toHaveCount(0);
 });
+
+test("the assistant drafts a query source into the editor; a person saves it", async ({ page, shot }) => {
+  await page.goto(PAGE);
+  await page.getByRole("button", { name: "AI", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "OGRL AI Assistant" });
+  await drawer.getByRole("textbox").fill("Write a query source for security groups open to the internet");
+  await drawer.getByRole("textbox").press("Enter");
+  for (const tool of ["search_operations", "describe_operation", "validate_query", "dry_run_query", "propose_query_source"]) {
+    await expect(drawer.getByText(tool).first()).toBeVisible();
+  }
+  await expect(drawer.getByText(/validation pointed at/)).toBeVisible();
+  await shot("assistant-query-draft");
+  await drawer.getByRole("link", { name: /Draft query source: dev.adversity.aws\/internet-open-groups@1/ }).click();
+
+  const dialog = page.getByRole("dialog", { name: "New query source on AWS" });
+  await expect(dialog.getByLabel("Assistant draft")).toContainText("item.rules == []");
+  await expect(dialog.getByLabel(/^Name/)).toHaveValue("internet-open-groups");
+  await expect(dialog.getByLabel("Chosen operation").getByText("ec2.DescribeSecurityGroups")).toBeVisible();
+  await expect(dialog.getByLabel(/^Filters/)).toHaveValue('[{"Name": "ip-permission.cidr", "Values": ["0.0.0.0/0"]}]');
+  await expect(dialog.getByRole("textbox", { name: "Path of id" })).toHaveValue("GroupId");
+
+  const check = dialog.getByRole("region", { name: "Check" });
+  await check.getByRole("button", { name: "Validate" }).click();
+  await expect(check.getByText("valid", { exact: true })).toBeVisible();
+  await shot("query-editor-draft");
+  await dialog.getByRole("button", { name: "Save query source" }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByLabel("AWS query sources").getByText("internet-open-groups@1")).toBeVisible();
+
+  // Clean up so the next run can draft the same name.
+  await page.getByLabel("AWS query sources").getByRole("button", { name: "Remove dev.adversity.aws/internet-open-groups@1" }).click();
+  await page.getByLabel("AWS query sources").getByRole("button", { name: "Confirm" }).click();
+  await expect(page.getByLabel("AWS query sources").getByText("internet-open-groups@1")).toHaveCount(0);
+});

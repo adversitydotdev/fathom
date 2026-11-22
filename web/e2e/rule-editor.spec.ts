@@ -14,6 +14,11 @@ test("write a rule by clicking fields, preview it, and save it as a test", async
   await expect(fields.getByText("TOTP, hardware token, or phishing-resistant.")).toBeVisible();
   await dialog.getByRole("textbox", { name: "Select", exact: true }).click();
   await fields.getByRole("button", { name: "Insert status" }).click();
+  // The insert moves the caret on the next frame; type only once it has landed.
+  await expect(dialog.getByRole("textbox", { name: "Select", exact: true })).toHaveValue("item.status");
+  await expect
+    .poll(() => dialog.getByRole("textbox", { name: "Select", exact: true }).evaluate((el: HTMLTextAreaElement) => el.selectionStart))
+    .toBe("item.status".length);
   await dialog.getByRole("textbox", { name: "Select", exact: true }).pressSequentially(' == "ACTIVE"');
   await dialog.getByRole("textbox", { name: "Assert", exact: true }).click();
   await fields.getByRole("button", { name: "Insert strong_mfa" }).click();
