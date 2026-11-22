@@ -53,7 +53,7 @@ smithy:
 
 - **Services** are keyed by a short name, which prefixes operations: `ec2.DescribeSecurityGroups`.
 - **Models** are Smithy 2.0 JSON AST files from `aws/api-models-aws`, pinned to the package version. `pack` trims each to its read operations and the shapes they reach, and drops documentation. EC2's model shrinks from about 7 MB to a fraction of that.
-- **Endpoints** are declared, not derived. An endpoint with `{region}` is regional; one without is global and signs for `signing_region`. Smithy endpoint rulesets (FIPS, dual-stack, other partitions) are not evaluated in this revision.
+- **Endpoints** are declared, not derived. An `awsJson` service whose `X-Amz-Target` predates its Smithy shape name declares `target_prefix`. An endpoint with `{region}` is regional; one without is global and signs for `signing_region`. Smithy endpoint rulesets (FIPS, dual-stack, other partitions) are not evaluated in this revision.
 - **Authentication** is SigV4 with the connection's credentials (`aws_role`, RFC 0005 section 5), signing for the model's `aws.auth#sigv4` name. SigV4 moves from the AWS integration into the SDK.
 
 ## 3. What is a read
@@ -70,9 +70,15 @@ The connection's IAM role is the backstop: the recommended AWS-managed `Security
 
 **Input.** `params` names top-level members of the operation's input structure. A scalar member (string, number, boolean, enum, timestamp) takes its value as a string. A list or structure member, such as EC2 `Filters`, takes JSON text, validated against the member's shape. Members bound to HTTP headers or payloads cannot be set. Pagination members (`inputToken`, `pageSize`) are reserved for the paginator.
 
-**Items.** For a paginated operation, `items` defaults to the `@paginated` trait's `items` member and may be omitted. Otherwise it names the list member of the output.
+**Items.** For a paginated operation, `items` defaults to the `@paginated` trait's `items` member and may be omitted. Otherwise it names a list member of the output; left empty, the output structure itself is the one item, as for `ec2.GetEbsEncryptionByDefault`.
 
-**Fields.** Paths use the model's member names (`GroupId`, `IpPermissions`, `Encrypted`), dotted through structures. Types map as: string, enum, and blob to string; byte, short, integer, long, and intEnum to integer; float, double, and bigDecimal to number; boolean to boolean; timestamp to an RFC 3339 string; list and set to array; structure, map, and document to object. A member is required in the derived schema when `@required` holds at every level of its path.
+**Fields.** Paths use the model's member names (`GroupId`, `IpPermissions`, `Encrypted`), dotted through structures. Types map as: string, enum, and blob to string; byte, short, integer, long, and intEnum to integer; float, double, and bigDecimal to number; boolean to boolean; timestamp to an RFC 3339 string; list and set to array; structure, map, and document to object. A member is required in the derived schema when `@required` holds at every level of its path. Two paths are reserved: `.` is the item itself, for lists of strings or numbers such as GuardDuty's detector IDs, and `$region` is the item's region, which names the single item of a regional operation:
+
+```yaml
+operation: ec2.GetEbsEncryptionByDefault
+regions: "*"
+fields: {id: $region, name: $region, enabled: EbsEncryptionByDefault}
+```
 
 **Regions.** `regions` is a list of region codes, or `"*"` for the connection's `regions` config. A regional operation is collected once per region and items gain a `region` field; a global operation ignores `regions`.
 
@@ -88,7 +94,9 @@ The SDK serializes requests and deserializes responses from the model's shapes. 
 | `ec2Query` | EC2 | `POST /`, form with `@ec2QueryName` keys (`Filter.1.Value.1`) | XML without a `Result` wrapper, `item` lists |
 | `restXml` | S3, CloudFront, Route 53 | `@http` method and URI | XML, `@xmlName`, `@xmlFlattened` |
 
-**Pagination** follows the `@paginated` trait, merged with the service's default: the output token is sent back as the input token until it is empty. Operations without the trait return one page.
+**Pagination** follows the `@paginated` trait, merged with the service's default: the output token is sent back as the input token until it is empty or repeats. Operations without the trait return one page.
+
+**Errors.** The AWS error code and message are added to the collection error. Throttling codes (`Throttling`, `ThrottlingException`, `RequestLimitExceeded`, and similar) are retried like HTTP 429, and access-denied codes are permission errors whatever their HTTP status.
 
 ## 6. Validation feedback
 
