@@ -94,10 +94,10 @@ checks:
     args: {}
 templates:
   - name: mfa-enforcement
-    fulfills_ref: test--ogrl-ia-01-mfa-enforcement
+    fulfills_ref: test--ogrl-ac-05-mfa-enforcement
     test:
       name: Every active Okta user is enrolled in MFA
-      control_ref: control--ogrl-ia-01
+      control_ref: control--ogrl-ac-05
       method: automated
       interval: daily
       run:
