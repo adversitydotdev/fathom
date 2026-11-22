@@ -161,8 +161,10 @@ def _mapping(c: _Checker, m: Mapping) -> None:
         for other in c.others(Mapping):
             if other.combined_with_refs and members & {other.id, *other.combined_with_refs}:
                 c.fail("/combined_with_refs", f"a mapping here is already in the set on {other.id}")
-    if c.origin == "organization":
+    if c.origin == "organization" and not m.is_revoked:
         for other in c.others(Mapping):
+            if other.is_revoked:
+                continue
             if (
                 c.graph.is_organization(other.id)
                 and other.source_ref == m.source_ref
@@ -326,6 +328,17 @@ def _implementation(c: _Checker, i: Implementation) -> None:
     c.ref("/subservice_ref", i.subservice_ref, "party")
     if i.responsibility == "subservice" and not i.subservice_ref and not i.is_provider:
         c.fail("/subservice_ref", "responsibility subservice names the party in subservice_ref")
+    # OGRL provider bundles (control_ref). OSCAL imports speak via requirement_ref and may omit.
+    if (
+        i.is_provider
+        and i.control_ref
+        and i.responsibility in ("shared", "customer")
+        and not i.customer_responsibility
+    ):
+        c.fail(
+            "/customer_responsibility",
+            f"responsibility {i.responsibility} on a provider row includes customer_responsibility",
+        )
     if i.is_revoked or not i.control_ref:
         return
     for other in c.others(Implementation):

@@ -4883,6 +4883,9 @@ components:
           properties:
             display_id:
               type: string
+            citation:
+              type: string
+              description: Official upstream citation, e.g. SOC 2 criterion wording reference.
             framework_ref:
               type: string
             class:

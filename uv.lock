@@ -858,11 +858,11 @@ dependencies = [
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "ogrl-integration" },
-    { name = "ogrl-rs", version = "0.2.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "ogrl-rs", version = "0.2.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "ogrl-rs", version = "0.2.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform == 'linux'" },
-    { name = "ogrl-rs", version = "0.2.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "ogrl-rs", version = "0.2.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform == 'linux'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
     { name = "pydantic-ai-slim", extra = ["anthropic", "openai"] },
     { name = "python-multipart" },
     { name = "pyyaml" },
@@ -895,12 +895,12 @@ requires-dist = [
     { name = "jsonschema", specifier = ">=4.23" },
     { name = "logfire", extras = ["fastapi", "sqlalchemy", "httpx"], marker = "extra == 'telemetry'", specifier = ">=3.0.0" },
     { name = "ogrl-integration", git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a12" },
-    { name = "ogrl-rs", marker = "(platform_machine != 'AMD64' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64') or (platform_machine == 'AMD64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'AMD64' and sys_platform == 'linux') or (platform_machine == 'arm64' and sys_platform == 'linux') or (platform_machine == 'aarch64' and sys_platform == 'win32') or (platform_machine == 'arm64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')", specifier = "==0.2.0" },
-    { name = "ogrl-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_11_0_arm64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_10_12_x86_64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_aarch64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_x86_64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-win_amd64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine != 'AMD64' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' or platform_machine == 'AMD64' and (sys_platform == 'darwin' or sys_platform == 'linux') or platform_machine == 'aarch64' and (sys_platform == 'darwin' or sys_platform == 'win32') or platform_machine == 'arm64' and (sys_platform == 'linux' or sys_platform == 'win32') or platform_machine == 'x86_64' and sys_platform == 'win32' or sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==0.3.0" },
+    { name = "ogrl-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" },
     { name = "pydantic-ai-slim", extras = ["anthropic", "openai"], specifier = ">=1.0.0" },
     { name = "python-multipart", specifier = ">=0.0.33" },
     { name = "pyyaml", specifier = ">=6.0.3" },
@@ -924,62 +924,62 @@ source = { git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0
 
 [[package]]
 name = "ogrl-rs"
-version = "0.2.0"
-source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_10_12_x86_64.whl" }
+version = "0.3.0"
+source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" }
 resolution-markers = [
     "python_full_version >= '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
     "python_full_version < '3.15' and platform_machine == 'x86_64' and sys_platform == 'darwin'",
 ]
 wheels = [
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_10_12_x86_64.whl", hash = "sha256:279041c2dfcb8871517bc12be5ffa2b9aee5036bf7dfa8ab7412ef14e1d3b6eb" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl", hash = "sha256:f8c430c90058e23971865b8362287d51990ced7cfb6a2625cfe8876c8aa66e8c" },
 ]
 
 [[package]]
 name = "ogrl-rs"
-version = "0.2.0"
-source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_11_0_arm64.whl" }
+version = "0.3.0"
+source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" }
 resolution-markers = [
     "python_full_version >= '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin'",
     "python_full_version < '3.15' and platform_machine == 'arm64' and sys_platform == 'darwin'",
 ]
 wheels = [
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-macosx_11_0_arm64.whl", hash = "sha256:86563687af74dd8a77d0fc211a807e14eb7d43cc50e8fe6be519f18481151e4f" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl", hash = "sha256:74b10923ea42e40c4b5aa24454c04acd4b4d3045cfd5ffe9de7aed601cce92f5" },
 ]
 
 [[package]]
 name = "ogrl-rs"
-version = "0.2.0"
-source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_aarch64.whl" }
+version = "0.3.0"
+source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" }
 resolution-markers = [
     "python_full_version >= '3.15' and platform_machine == 'aarch64' and sys_platform == 'linux'",
     "python_full_version < '3.15' and platform_machine == 'aarch64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:27947d7996adeb63c684ad6eaf3004e325079bdd304996964387db2ca57889be" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:e33e2f1b340386ff5e881fdcddebbd2d18d04a9c357820c03137179c65913f63" },
 ]
 
 [[package]]
 name = "ogrl-rs"
-version = "0.2.0"
-source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_x86_64.whl" }
+version = "0.3.0"
+source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" }
 resolution-markers = [
     "python_full_version >= '3.15' and platform_machine == 'x86_64' and sys_platform == 'linux'",
     "python_full_version < '3.15' and platform_machine == 'x86_64' and sys_platform == 'linux'",
 ]
 wheels = [
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:4fee85fc63849bb0dade01263ce6c9eb5c4e2bd854ce39ebe57587fea10dc500" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:8af854870fc7e84c54e5b1f7ce23a112c64d7dce1abd90d100ccb5fe30fc1160" },
 ]
 
 [[package]]
 name = "ogrl-rs"
-version = "0.2.0"
-source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-win_amd64.whl" }
+version = "0.3.0"
+source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" }
 resolution-markers = [
     "python_full_version >= '3.15' and platform_machine == 'AMD64' and sys_platform == 'win32'",
     "python_full_version < '3.15' and platform_machine == 'AMD64' and sys_platform == 'win32'",
 ]
 wheels = [
-    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.2.0/ogrl_rs-0.2.0-cp313-abi3-win_amd64.whl", hash = "sha256:57a6d83350a80e5b71740973e3431cc48e4a5f9daac41d0f408e3898773fdf9e" },
+    { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.3.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl", hash = "sha256:50f326132b255c2096116e69faf4f23b7afe61b324a64d4201c7a09a61623632" },
 ]
 
 [[package]]

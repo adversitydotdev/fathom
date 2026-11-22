@@ -3,7 +3,7 @@
 #   - SeaweedFS S3 + bucket init (evidence & render blobs)
 #   - Alembic migration runner
 #   - OGRL FastAPI server (`http://localhost:8080`)
-#   - Idempotent local dev seeder (pulls ogrl-library v0.2.0 + starter Acme Platform;
+#   - Idempotent local dev seeder (pulls ogrl-library v0.4.1 + starter Acme Platform;
 #     set `OGRL_SKIP_SEED=true` to boot an empty workspace)
 #   - OGRL Next.js Web UI (`http://localhost:3000`)
 #   - Integrations (RFC 0005): the seeder installs the first-party Okta, AWS, and GitHub
