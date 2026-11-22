@@ -7,7 +7,11 @@ import type { Operation, QueryDefinition } from "@/lib/api/types";
  * describe return, plus `sample`, the raw items a dry run projects. The real server
  * validates with the SDK; the mock handlers apply a small subset of the same rules.
  */
-export type MockOperation = Operation & { sample: Record<string, unknown>[] };
+export type MockOperation = Operation & {
+  sample: Record<string, unknown>[];
+  /** Per bound value, for for_each: other sample items, or the vendor error code the call fails with. */
+  sampleBy?: Record<string, Record<string, unknown>[] | { error: string }>;
+};
 
 const OKTA = "dev.adversity.okta";
 const AWS = "dev.adversity.aws";
@@ -84,6 +88,24 @@ export const apiOperations: Record<string, MockOperation[]> = {
         { id: "00g2admins", type: "OKTA_GROUP", profile: { name: "Okta admins" } },
       ],
     },
+    {
+      id: "listGroupUsers",
+      method: "GET",
+      path: "/api/v1/groups/{groupId}/users",
+      summary: "List all member users of a group",
+      queryable: true,
+      parameters: [{ name: "groupId", in: "path", required: true, type: "string" }],
+      items: "",
+      fields: [f("id", "string"), f("status", "string"), f("profile.login", "string"), f("lastLogin", "string")],
+      sample: [{ id: "00u1ada", status: "ACTIVE", profile: { login: "ada@acme.test" }, lastLogin: "2026-11-19T08:00:00.000Z" }],
+      sampleBy: {
+        "00g1eng": [
+          { id: "00u1ada", status: "ACTIVE", profile: { login: "ada@acme.test" }, lastLogin: "2026-11-19T08:00:00.000Z" },
+          { id: "00u2ben", status: "ACTIVE", profile: { login: "ben@acme.test" }, lastLogin: "2026-11-18T08:00:00.000Z" },
+        ],
+        "00g2admins": [{ id: "00u4dee", status: "ACTIVE", profile: { login: "dee@acme.test" }, lastLogin: null }],
+      },
+    },
   ],
   [AWS]: [
     {
@@ -134,6 +156,23 @@ export const apiOperations: Record<string, MockOperation[]> = {
         { Name: "acme-evidence", BucketArn: "arn:aws:s3:::acme-evidence", BucketRegion: "us-east-1", CreationDate: "2022-03-04T10:00:00Z" },
         { Name: "acme-logs", BucketArn: "arn:aws:s3:::acme-logs", BucketRegion: "us-east-1", CreationDate: "2022-03-04T10:05:00Z" },
       ],
+    },
+    {
+      id: "s3.GetBucketEncryption",
+      method: "GET",
+      path: "/{Bucket}?encryption",
+      summary: "Returns the default encryption configuration for an Amazon S3 bucket.",
+      protocol: "restXml",
+      regional: true,
+      queryable: true,
+      parameters: [{ name: "Bucket", in: "value", required: true, type: "string" }],
+      items: "",
+      fields: [
+        f("ServerSideEncryptionConfiguration", "object"),
+        f("ServerSideEncryptionConfiguration.Rules", "array of object"),
+      ],
+      sample: [{ ServerSideEncryptionConfiguration: { Rules: [{ ApplyServerSideEncryptionByDefault: { SSEAlgorithm: "aws:kms" } }] } }],
+      sampleBy: { "acme-logs": { error: "ServerSideEncryptionConfigurationNotFoundError" } },
     },
     {
       id: "iam.ListRoles",

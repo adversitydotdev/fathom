@@ -70,7 +70,7 @@ class Snapshot(BaseModel):
 
 
 class ForEach(BaseModel):
-    """Per-item calls (RFC 0007 section 4): `operation` once per item a list operation returns."""
+    """Per-item calls (RFC 0006 section 3): `operation` once per item a list operation returns."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -96,7 +96,7 @@ class QueryDefinition(BaseModel):
     items: str = ""
     fields: dict[str, str]
     regions: list[str] | Literal["*"] | None = None  # Smithy: region codes, or the connection's
-    for_each: ForEach | None = None  # Smithy: one call per listed item
+    for_each: ForEach | None = None  # one call per listed item
     item_schema: dict[str, Any]  # derived from the API model when saved
     created: datetime
     created_by_ref: str | None = None

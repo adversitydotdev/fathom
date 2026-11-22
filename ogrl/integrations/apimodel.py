@@ -21,7 +21,7 @@ class QuerySpec:
     items: str = ""
     fields: dict[str, str] = field(default_factory=dict)
     regions: list[str] | Literal["*"] | None = None
-    for_each: dict[str, Any] | None = None  # RFC 0007 section 4
+    for_each: dict[str, Any] | None = None  # RFC 0006 section 3
 
 
 class ApiModel(Protocol):
@@ -102,14 +102,16 @@ class OpenApiModel:
     def validate(
         self, spec: QuerySpec, name: str | None = None
     ) -> tuple[list[Problem], dict[str, Any] | None]:
-        query = openapi.Query(spec.operation, spec.params, spec.items, spec.fields)
+        query = openapi.Query(
+            spec.operation,
+            spec.params,
+            spec.items,
+            spec.fields,
+            for_each=openapi.ForEach.from_json(spec.for_each) if spec.for_each else None,
+        )
         problems, schema = openapi.validate(self.description, self.settings, query, name=name)
         if spec.regions:
             problems.append(Problem("/regions", "regions apply to AWS (Smithy) query sources only"))
-        if spec.for_each:
-            problems.append(
-                Problem("/for_each", "for_each applies to AWS (Smithy) query sources only")
-            )
         return problems, schema
 
 

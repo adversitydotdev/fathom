@@ -135,9 +135,33 @@ export function checkQuery(write: QueryWrite): QueryCheck {
   }
 
   const declared = new Map(op.parameters.map((p) => [p.name, p]));
+  const fe = write.for_each;
+  const bound = new Set(Object.keys(fe?.bind ?? {}));
+  let parent: MockOperation | undefined;
+  if (fe) {
+    parent = findOperation(write.integration_id, fe.operation);
+    if (!parent) {
+      errors.push({ pointer: "/for_each/operation", detail: `no queryable operation '${fe.operation}'; search for one` });
+    } else if (model === "smithy" && parent.id.split(".")[0] !== op.id.split(".")[0]) {
+      errors.push({ pointer: "/for_each/operation", detail: `list from ${op.id.split(".")[0]}, the service ${op.id} is in` });
+      parent = undefined;
+    }
+    if (bound.size === 0) errors.push({ pointer: "/for_each/bind", detail: `bind at least one parameter of ${op.id}` });
+    const parentPaths = (parent?.fields ?? []).map((x) => x.path);
+    for (const [key, path] of Object.entries(fe.bind ?? {})) {
+      if (!declared.has(key)) {
+        errors.push({ pointer: `/for_each/bind/${key}`, detail: `${op.id} has no parameter '${key}'` });
+      } else if (parent && !parentPaths.includes(path)) {
+        const hint = closest(path, parentPaths);
+        errors.push({ pointer: `/for_each/bind/${key}`, detail: `items have no '${path}'${hint ? `; did you mean '${hint}'?` : ""}` });
+      }
+    }
+  }
   for (const [key, value] of Object.entries(write.params ?? {})) {
     const param = declared.get(key);
-    if (!param) {
+    if (bound.has(key)) {
+      errors.push({ pointer: `/params/${key}`, detail: `for_each binds ${key}; leave it out of params` });
+    } else if (!param) {
       errors.push({ pointer: `/params/${key}`, detail: `${op.id} has no parameter '${key}'` });
     } else if (param.type === "integer" && !/^-?\d+$/.test(value)) {
       errors.push({ pointer: `/params/${key}`, detail: `${key} is an integer` });
@@ -150,7 +174,7 @@ export function checkQuery(write: QueryWrite): QueryCheck {
     }
   }
   for (const param of op.parameters) {
-    if (param.required && !(param.name in (write.params ?? {}))) {
+    if (param.required && !(param.name in (write.params ?? {})) && !bound.has(param.name)) {
       errors.push({ pointer: `/params/${param.name}`, detail: `${op.id} needs ${param.name}` });
     }
   }
@@ -173,6 +197,17 @@ export function checkQuery(write: QueryWrite): QueryCheck {
       properties[key] = { type: ["string"] };
       continue;
     }
+    if (fe && key === "error") {
+      errors.push({ pointer: `/fields/${key}`, detail: "error is added to every item of this query" });
+      continue;
+    }
+    if (path.startsWith("$parent.")) {
+      const type = new Map((parent?.fields ?? []).map((x) => [x.path, x.type])).get(path.slice("$parent.".length));
+      if (!fe) errors.push({ pointer: `/fields/${key}`, detail: "$parent reads the listed item of a for_each query" });
+      else if (parent && !type) errors.push({ pointer: `/fields/${key}`, detail: `listed items have no '${path.slice("$parent.".length)}'` });
+      else if (type) properties[key] = { type: [baseType(type), "null"] };
+      continue;
+    }
     const type = paths.get(path);
     if (!type) {
       const hint = closest(path, [...paths.keys()]);
@@ -182,12 +217,13 @@ export function checkQuery(write: QueryWrite): QueryCheck {
     properties[key] = { type: [baseType(type), "null"] };
   }
   if (regional) properties.region = { type: ["string"] };
+  if (fe) properties.error = { type: ["string", "null"] };
   if (db.queries.some((q) => sourceOf(q) === source)) {
     errors.push({ pointer: "/version", detail: `${source} exists; versions are immutable, so save it as a new version` });
   }
   return done({
     type: "object",
-    required: [...Object.keys(fields), ...(regional ? ["region"] : [])].sort(),
+    required: [...Object.keys(fields), ...(regional ? ["region"] : []), ...(fe ? ["error"] : [])].sort(),
     properties,
   });
 }
@@ -218,14 +254,34 @@ export function dryRun(write: QueryWrite, connectionId: string, maxItems: number
       ? (connection.config.regions ?? "us-east-1").split(",")
       : (write.regions ?? [])
     : [undefined];
-  const items = regions.flatMap((region) =>
-    op.sample.map((raw) => ({
-      ...Object.fromEntries(
-        Object.entries(write.fields ?? {}).map(([key, path]) => [key, path === "$region" ? region : (get(raw, path) ?? null)]),
-      ),
-      ...(region ? { region } : {}),
-    })),
-  ).slice(0, maxItems);
+  const fe = write.for_each;
+  const project = (region: string | undefined, raw: unknown, parent?: unknown, error?: string | null) => ({
+    ...Object.fromEntries(
+      Object.entries(write.fields ?? {}).map(([key, path]) => [
+        key,
+        path === "$region"
+          ? region
+          : path.startsWith("$parent.")
+            ? (get(parent, path.slice("$parent.".length)) ?? null)
+            : raw === null
+              ? null
+              : (get(raw, path) ?? null),
+      ]),
+    ),
+    ...(region ? { region } : {}),
+    ...(fe ? { error: error ?? null } : {}),
+  });
+  const perItem = (region: string | undefined) => {
+    const parentOp = findOperation(write.integration_id, fe!.operation)!;
+    const [, path] = Object.entries(fe!.bind)[0];
+    return parentOp.sample.flatMap((parent) => {
+      const child = op.sampleBy?.[String(get(parent, path))] ?? op.sample;
+      return "error" in child ? [project(region, null, parent, child.error)] : child.map((raw) => project(region, raw, parent));
+    });
+  };
+  const items = regions
+    .flatMap((region) => (fe ? perItem(region) : op.sample.map((raw) => project(region, raw))))
+    .slice(0, maxItems);
   const warnings = Object.keys(write.fields ?? {})
     .filter((key) => items.length > 0 && items.every((i) => (i as Record<string, unknown>)[key] === null))
     .map((key) => ({ pointer: `/fields/${key}`, detail: `${key} is empty in all ${items.length} items; check the path` }));

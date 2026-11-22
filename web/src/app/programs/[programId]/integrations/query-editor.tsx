@@ -18,6 +18,7 @@ import {
 import type { Connection, DryRun, Integration, Operation, QueryCheck, QueryWrite } from "@/lib/api/types";
 
 type Row = { key: string; path: string };
+type Bind = { param: string; path: string };
 
 /** What the assistant proposes (RFC 0006 section 9): an unsaved definition and the rule that reads it. */
 export type QueryDraft = { definition: QueryWrite; rule?: { source?: string; select?: string; assert?: string; aggregate?: string } };
@@ -78,6 +79,21 @@ export function QueryEditorDialog({
   const [run, setRun] = useState<DryRun>();
   const [connectionId, setConnectionId] = useState(connections[0]?.id ?? "");
 
+  // for_each (RFC 0006 section 3): a list operation, and the parameters each listed item fills.
+  const initialEach = initial?.for_each;
+  const [each, setEach] = useState(Boolean(initialEach));
+  const [listText, setListText] = useState(initialEach?.operation ?? "");
+  const [listFound, setListFound] = useState<Operation[]>();
+  const [listOperation, setListOperation] = useState<Operation>();
+  const [listParams, setListParams] = useState<Record<string, string>>(initialEach?.params ?? {});
+  const [listItems, setListItems] = useState(initialEach?.items ?? "");
+  const [binds, setBinds] = useState<Bind[]>(
+    initialEach ? Object.entries(initialEach.bind).map(([param, path]) => ({ param, path })) : [],
+  );
+  const [limit, setLimit] = useState(String(initialEach?.limit ?? 1000));
+  const [bindFocus, setBindFocus] = useState<number>();
+  const boundParams = new Set(each ? binds.map((b) => b.param).filter(Boolean) : []);
+
   const smithy = integration.query_model === "smithy";
 
   // A draft names its operation; describe it once so parameters and item fields show.
@@ -91,6 +107,16 @@ export function QueryEditorDialog({
       active = false;
     };
   }, [integration.id, initial?.operation]);
+  useEffect(() => {
+    if (!initialEach?.operation) return;
+    let active = true;
+    void describeOperation(integration.id, initialEach.operation).then((res) => {
+      if (active && res.operation) setListOperation(res.operation);
+    });
+    return () => {
+      active = false;
+    };
+  }, [integration.id, initialEach?.operation]);
   const problems = useMemo(() => {
     const by = new Map<string, string[]>();
     for (const p of [...(check?.errors ?? []), ...(run?.warnings ?? [])]) by.set(p.pointer, [...(by.get(p.pointer) ?? []), p.detail]);
@@ -106,13 +132,66 @@ export function QueryEditorDialog({
       version: Number(version) || 1,
       ...(description.trim() ? { description: description.trim() } : {}),
       operation: operation?.id ?? text.trim(),
-      params: set(params),
+      params: set(Object.fromEntries(Object.entries(params).filter(([k]) => !boundParams.has(k)))),
       items: items.trim(),
       fields: Object.fromEntries(rows.filter((r) => r.key.trim()).map((r) => [r.key.trim(), r.path.trim()])),
       ...(regional
         ? { regions: regions.trim() === "*" ? "*" : regions.split(",").map((r) => r.trim()).filter(Boolean) }
         : {}),
+      ...(each
+        ? {
+            for_each: {
+              operation: listOperation?.id ?? listText.trim(),
+              params: set(listParams),
+              items: listItems.trim(),
+              bind: Object.fromEntries(binds.filter((b) => b.param).map((b) => [b.param, b.path.trim()])),
+              limit: Number(limit) || 1000,
+            },
+          }
+        : {}),
     };
+  }
+
+  /** The parameters a listed item should fill: the required ones nothing else sets. */
+  function defaultBinds(op: Operation | undefined): Bind[] {
+    const required = (op?.parameters ?? []).filter((p) => p.required && !params[p.name]);
+    return (required.length ? required : (op?.parameters ?? []).slice(0, 1)).map((p) => ({ param: p.name, path: "" }));
+  }
+
+  function runListSearch() {
+    setError(undefined);
+    search(async () => {
+      const res = await searchOperations(integration.id, listText.trim());
+      if (res.error) setError(res.error);
+      setListFound(res.operations ?? []);
+    });
+  }
+
+  function chooseList(id: string) {
+    setError(undefined);
+    search(async () => {
+      const res = await describeOperation(integration.id, id);
+      if (res.error || !res.operation) {
+        setError(res.error);
+        return;
+      }
+      setListOperation(res.operation);
+      setListText(res.operation.id);
+      setListFound(undefined);
+      setListParams({});
+      setListItems("");
+      if (binds.length === 0) setBinds(defaultBinds(operation));
+    });
+  }
+
+  /** A listed item's field fills the focused binding, or becomes a `$parent.` field. */
+  function pickParent(path: string) {
+    if (bindFocus !== undefined && bindFocus < binds.length) {
+      setBinds(binds.map((b, i) => (i === bindFocus ? { ...b, path } : b)));
+      setBindFocus(undefined);
+      return;
+    }
+    pick(`$parent.${path}`);
   }
 
   function reset() {
@@ -129,6 +208,14 @@ export function QueryEditorDialog({
     setCheck(undefined);
     setRun(undefined);
     setError(undefined);
+    setEach(false);
+    setListText("");
+    setListFound(undefined);
+    setListOperation(undefined);
+    setListParams({});
+    setListItems("");
+    setBinds([]);
+    setLimit("1000");
   }
 
   function runSearch() {
@@ -158,12 +245,15 @@ export function QueryEditorDialog({
   }
 
   function pick(path: string) {
+    const taken = new Set(rows.map((r) => r.key));
+    const derived = fieldName(path);
+    const key = !taken.has(derived) ? derived : path.startsWith("$parent.") ? `parent_${derived}` : `${derived}_2`;
     const at = focused ?? rows.findIndex((r) => !r.path);
     if (at === -1 || at === undefined || at >= rows.length) {
-      setRows([...rows, { key: fieldName(path), path }]);
+      setRows([...rows, { key, path }]);
       return;
     }
-    setRows(rows.map((r, i) => (i === at ? { key: r.key || fieldName(path), path } : r)));
+    setRows(rows.map((r, i) => (i === at ? { key: r.key || key, path } : r)));
     setFocused(undefined);
   }
 
@@ -202,8 +292,21 @@ export function QueryEditorDialog({
 
   const columns = run?.items.length ? Object.keys(run.items[0]) : [];
   const general = (check?.errors ?? []).filter(
-    (p) => !p.pointer.startsWith("/params/") && !p.pointer.startsWith("/fields/") && p.pointer !== "/regions",
+    (p) =>
+      !p.pointer.startsWith("/params/") &&
+      !p.pointer.startsWith("/fields/") &&
+      !p.pointer.startsWith("/for_each") &&
+      p.pointer !== "/regions",
   );
+  const eachProblems = (check?.errors ?? []).filter(
+    (p) => p.pointer.startsWith("/for_each") && !p.pointer.startsWith("/for_each/bind/") && !p.pointer.startsWith("/for_each/params/"),
+  );
+  const problemText = (pointer: string) =>
+    problems.get(pointer)?.map((d) => (
+      <span key={d} className="text-[11px] text-gap-ink">
+        {d}
+      </span>
+    ));
 
   return (
     <CrudDialog
@@ -314,6 +417,13 @@ export function QueryEditorDialog({
               {operation.parameters.map((p) => {
                 const id = `query-param-${p.name}`;
                 const json = p.in === "json";
+                if (boundParams.has(p.name)) {
+                  return (
+                    <Field key={p.name} label={p.name} htmlFor={id} required={p.required} hint="Filled from each listed item (For each, below).">
+                      <Input id={id} disabled value={`from ${binds.find((b) => b.param === p.name)?.path || "each listed item"}`} className="font-mono text-xs" />
+                    </Field>
+                  );
+                }
                 return (
                   <Field key={p.name} label={p.name} htmlFor={id} required={p.required} hint={json ? `JSON (${p.type})` : (p.description ?? p.type)}>
                     {json ? (
@@ -353,6 +463,143 @@ export function QueryEditorDialog({
                 </span>
               ))}
             </Field>
+          )}
+          {operation && (
+            <fieldset aria-label="For each listed item" className="flex flex-col gap-3 rounded-xl border p-3">
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={each}
+                  onChange={(e) => {
+                    setEach(e.target.checked);
+                    if (e.target.checked && binds.length === 0) setBinds(defaultBinds(operation));
+                  }}
+                />
+                Call once for each item another operation lists
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                For settings read one resource at a time, such as each bucket&apos;s encryption or each group&apos;s members.
+                Items gain <span className="font-mono">error</span> when a call fails.
+              </p>
+              {each && (
+                <>
+                  <Field label="List operation" htmlFor="query-list-search" required>
+                    <div className="flex gap-2">
+                      <Input
+                        id="query-list-search"
+                        value={listText}
+                        onChange={(e) => setListText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            runListSearch();
+                          }
+                        }}
+                        placeholder={smithy ? "s3 buckets" : "groups"}
+                      />
+                      <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5" onClick={runListSearch} aria-label="Search list operations">
+                        <Search className="size-3.5" aria-hidden />
+                        Search
+                      </Button>
+                    </div>
+                  </Field>
+                  {listFound && (
+                    <ul aria-label="List operations" className="flex max-h-48 flex-col divide-y overflow-auto rounded-xl border bg-card">
+                      {listFound.length === 0 && <li className="px-3 py-2 text-xs text-muted-foreground">No read operations match.</li>}
+                      {listFound.map((o) => (
+                        <li key={o.id}>
+                          <button
+                            type="button"
+                            onClick={() => chooseList(o.id)}
+                            className="flex w-full flex-col gap-0.5 px-3 py-2 text-left hover:bg-muted/30"
+                            aria-label={`List with ${o.id}`}
+                          >
+                            <span className="font-mono text-xs">{o.id}</span>
+                            <span className="text-[11px] text-muted-foreground">{o.summary}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {eachProblems.map((p) => (
+                    <span key={p.pointer + p.detail} className="text-[11px] text-gap-ink">
+                      {p.detail}
+                    </span>
+                  ))}
+                  {listOperation?.parameters.map((p) => (
+                    <Field
+                      key={p.name}
+                      label={`${p.name} (list)`}
+                      htmlFor={`query-list-param-${p.name}`}
+                      required={p.required}
+                      hint={smithy && operation.regional ? "$region fills in the region being collected." : p.type}
+                    >
+                      <Input
+                        id={`query-list-param-${p.name}`}
+                        value={listParams[p.name] ?? ""}
+                        onChange={(e) => setListParams({ ...listParams, [p.name]: e.target.value })}
+                        className="font-mono text-xs"
+                      />
+                      {problemText(`/for_each/params/${p.name}`)}
+                    </Field>
+                  ))}
+                  <Field
+                    label="List items"
+                    htmlFor="query-list-items"
+                    hint={listOperation?.items ? `Empty uses ${listOperation.items}.` : "Dotted path to the list. Empty when the response is the list."}
+                  >
+                    <Input id="query-list-items" value={listItems} onChange={(e) => setListItems(e.target.value)} className="font-mono" placeholder={listOperation?.items ?? ""} />
+                  </Field>
+                  <div className="flex flex-col gap-2" aria-label="Bindings">
+                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Each listed item fills</span>
+                    {binds.map((b, i) => (
+                      <div key={i} className="flex flex-col gap-1">
+                        <div className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-2">
+                          <Select
+                            aria-label={`Bound parameter ${i + 1}`}
+                            value={b.param}
+                            onChange={(e) => setBinds(binds.map((x, n) => (n === i ? { ...x, param: e.target.value } : x)))}
+                          >
+                            <option value="">— parameter —</option>
+                            {operation.parameters.map((p) => (
+                              <option key={p.name} value={p.name}>
+                                {p.name}
+                              </option>
+                            ))}
+                          </Select>
+                          <Input
+                            aria-label={`Listed item path for ${b.param || `binding ${i + 1}`}`}
+                            value={b.path}
+                            onChange={(e) => setBinds(binds.map((x, n) => (n === i ? { ...x, path: e.target.value } : x)))}
+                            onFocus={() => setBindFocus(i)}
+                            aria-invalid={problems.has(`/for_each/bind/${b.param}`)}
+                            placeholder="path in each listed item"
+                            className="font-mono text-xs"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={`Remove binding ${b.param || i + 1}`}
+                            onClick={() => setBinds(binds.filter((_, n) => n !== i))}
+                          >
+                            <X className="size-3.5" aria-hidden />
+                          </Button>
+                        </div>
+                        {problemText(`/for_each/bind/${b.param}`)}
+                      </div>
+                    ))}
+                    <Button type="button" variant="outline" size="xs" className="self-start" onClick={() => setBinds([...binds, { param: "", path: "" }])}>
+                      <Plus className="size-3.5" aria-hidden />
+                      Add binding
+                    </Button>
+                  </div>
+                  <Field label="Limit" htmlFor="query-list-limit" hint="At most this many listed items; more makes the collection incomplete.">
+                    <Input id="query-list-limit" type="number" min={1} max={5000} value={limit} onChange={(e) => setLimit(e.target.value)} className="w-32" />
+                  </Field>
+                </>
+              )}
+            </fieldset>
           )}
           <Field
             label="Items"
@@ -544,6 +791,27 @@ export function QueryEditorDialog({
                   </li>
                 ))}
               </ul>
+            )}
+            {each && listOperation && (
+              <>
+                <span className="mt-2 font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Listed item fields</span>
+                <p className="text-[11px] text-muted-foreground">Fills the focused binding, or adds a field read from the listed item.</p>
+                <ul aria-label="Listed item fields" className="flex max-h-56 flex-col divide-y overflow-auto rounded-xl border bg-card">
+                  {(listOperation.fields ?? []).map((f) => (
+                    <li key={f.path}>
+                      <button
+                        type="button"
+                        onClick={() => pickParent(f.path)}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted/30"
+                        aria-label={`Use $parent.${f.path}`}
+                      >
+                        <span className="font-mono text-xs">$parent.{f.path}</span>
+                        <span className="font-mono text-[10px] text-muted-foreground">{f.type}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </aside>
         </div>

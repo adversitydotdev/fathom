@@ -67,6 +67,10 @@ class Emulator(BaseHTTPRequestHandler):
                 link = f'<http://127.0.0.1:{port}/api/apps?page=2>; rel="next"'
                 return self._send(200, rows[:2], {"Link": link})
             return self._send(200, rows[2:] if page == 2 else rows)
+        if url.path == "/api/groups":
+            return self._send(200, [{"id": "g1", "name": "Admins"}, {"id": "gone", "name": "Old"}])
+        if url.path == "/api/groups/gone/members":
+            return self._send(404, {"errorCode": "E0000007", "errorSummary": "Not found"})
         if url.path.startswith("/api/groups/") and url.path.endswith("/members"):
             return self._send(200, {"value": [{"id": "u1", "login": "ada@acme.test"}]})
         return self._send(404, {"error": "not found"})
@@ -144,7 +148,8 @@ QUERY = {
 def test_operations_search_and_describe(world):
     api = world["api"]
     found = api.get(f"/integrations/{VENDOR}/operations?q=list")["data"]
-    assert [o["id"] for o in found] == ["listApps", "listMembers"]  # createApp is a write
+    # createApp is a write, so it is not listed
+    assert [o["id"] for o in found] == ["listApps", "listMembers", "listGroups"]
     members = api.get(f"/integrations/{VENDOR}/operations/listMembers")
     assert members["parameters"] == [
         {"name": "groupId", "in": "path", "required": True, "type": "string"}
@@ -324,3 +329,26 @@ def test_query_definitions_travel_with_the_git_export(make_app, tmp_path):
     assert job["status"] == "succeeded", job
     assert job["report"]["queries"] == 1
     assert restorer.get(f"/queries/{saved['id']}") == admin.get(f"/queries/{saved['id']}")
+
+
+def test_for_each_over_openapi(world):
+    api = world["api"]
+    per_group = {
+        "integration_id": VENDOR,
+        "name": "group-members",
+        "operation": "listMembers",
+        "items": "value",
+        "for_each": {"operation": "listGroups", "bind": {"groupId": "id"}},
+        "fields": {"id": "id", "name": "login", "group": "$parent.name"},
+    }
+    check = api.post("/queries/validate", per_group, expect=200)
+    assert check["valid"], check["errors"]
+    run = api.post(
+        "/queries/dry-run", {**per_group, "connection_id": world["connection"]}, expect=200
+    )
+    assert run.get("error") is None, run
+    assert run["items"] == [
+        {"id": "u1", "name": "ada@acme.test", "group": "Admins", "error": None},
+        {"id": None, "name": None, "group": "Old", "error": "E0000007"},
+    ]
+    assert api.post("/queries", per_group, expect=201)["for_each"]["bind"] == {"groupId": "id"}

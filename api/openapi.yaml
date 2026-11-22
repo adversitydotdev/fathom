@@ -4292,14 +4292,14 @@ components:
     ForEach:
       type: object
       description: >
-        Smithy query sources (RFC 0007 section 4): call the query's operation once per item
-        that `operation` lists. Items gain `error`, the AWS error code when a call failed.
+        Per-item calls (RFC 0006 section 3): call the query's operation once per item that
+        `operation` lists. Items gain `error`, the vendor's error code when a call failed.
       required: [operation, bind]
       additionalProperties: false
       properties:
         operation:
           type: string
-          description: A list operation in the same service, as `<service>.<Operation>`.
+          description: A read operation that returns a list (for Smithy, in the same service).
         bind:
           type: object
           description: The query operation's parameter to the path it reads in each listed item.
