@@ -1,6 +1,6 @@
 # OGRL
 
-OGRL (Open GRC Language) is an open language for a security program, and later a self-hosted application for running one.
+OGRL (Open Governance Reference Language) is an open language for a security program, and later a self-hosted application for running one.
 
 A company runs one program. SOC 2, ISO 27001, HIPAA, NIST, and CMMC ask overlapping questions under different identifiers. That overlap usually lives in a vendor's private control library, so the program cannot leave the tool, and two tools cannot agree about the same evidence. OGRL publishes the library and the mapping rules. A control, a mapping, or a piece of evidence can move on its own. A tool can implement part of the model and still interoperate.
 
