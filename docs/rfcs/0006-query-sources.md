@@ -162,7 +162,7 @@ Permissions: reading needs `programs:read`; validating, dry runs, and previews n
 
 ## 12. Open questions
 
-1. **Non-OpenAPI vendors.** AWS publishes Smithy models, not OpenAPI. A Smithy-backed variant of Section 4 would bring query sources to AWS; until then AWS resources stay built in.
+1. **Non-OpenAPI vendors.** AWS publishes Smithy models, not OpenAPI. [RFC 0007](0007-smithy-query-sources.md) specifies Smithy-backed query sources.
 2. **GraphQL.** GitHub's GraphQL API reaches data its REST API does not. A GraphQL query source would replace `operation` with a query document validated against the schema; reads are enforced by refusing mutations.
 3. **Description drift.** A new integration version may bundle a description in which an operation or field disappeared. The upgrade check (RFC 0005 section 4) should re-run static validation for every query source in use and refuse the upgrade, as it does for removed resources.
 4. **Description size.** Vendor descriptions run to several megabytes (GitHub's is about 10 MB). They load from memory like the rest of the package, which stays well inside the archive cap, but the host may want to index operations once per package version rather than per request.

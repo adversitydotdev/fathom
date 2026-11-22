@@ -16,6 +16,7 @@ Language specifications live in the sibling `ogrl-rfcs` repository; application 
 - [RFC 0004: HTTP API](docs/rfcs/0004-http-api.md) (draft), contract in [api/openapi.yaml](api/openapi.yaml)
 - [RFC 0005: Integrations](docs/rfcs/0005-integrations.md) (draft)
 - [RFC 0006: Query Sources](docs/rfcs/0006-query-sources.md) (draft)
+- [RFC 0007: Smithy Query Sources](docs/rfcs/0007-smithy-query-sources.md) (draft)
 
 ## Estimated monthly cost
 
