@@ -16,8 +16,11 @@ export function CrudDialog({
   trigger,
   children,
   wide = false,
+  size,
 }: {
   wide?: boolean;
+  /** "md" fits a writing surface; `wide` fits tables. */
+  size?: "md";
   open: boolean;
   onOpenChange: (open: boolean) => void;
   title: string;
@@ -33,7 +36,7 @@ export function CrudDialog({
         <Dialog.Content
           className={cn(
             "fixed top-1/2 left-1/2 z-50 flex max-h-[88dvh] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-card shadow-2xl outline-none",
-            wide ? "w-[min(96vw,72rem)]" : "w-[min(94vw,36rem)]",
+            wide ? "w-[min(96vw,72rem)]" : size === "md" ? "w-[min(94vw,48rem)]" : "w-[min(94vw,36rem)]",
           )}
         >
           <div className="flex items-start justify-between gap-4 border-b px-6 py-4">

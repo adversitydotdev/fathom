@@ -151,7 +151,7 @@ export default async function PoliciesPage({
                             ownerId: p.owner_ref,
                             reviewInterval: p.review_interval,
                             controlIds: p.control_refs ?? [],
-                            hasResource: Boolean(p.resource?.digest),
+                            hasResource: Boolean(p.resource),
                           }}
                         />
                       </td>
@@ -220,7 +220,7 @@ export default async function PoliciesPage({
                             policyId: proc.policy_ref,
                             ownerId: proc.owner_ref,
                             controlIds: proc.control_refs ?? [],
-                            hasResource: Boolean(proc.resource?.digest),
+                            hasResource: Boolean(proc.resource),
                           }}
                         />
                       </td>

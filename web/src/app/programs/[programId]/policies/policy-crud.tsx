@@ -1,12 +1,14 @@
 "use client";
 
 import { Pencil, Plus } from "lucide-react";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
-import { CrudDialog, Field, FormActions, FormError, RevokeButton, Select, Textarea } from "@/components/crud";
+import { CrudDialog, Field, FormActions, FormError, RevokeButton, Select } from "@/components/crud";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { RichTextEditor } from "@/components/rich-text-editor";
 import {
+  getDocumentBody,
   createPolicy,
   createProcedure,
   revokePolicy,
@@ -17,6 +19,25 @@ import {
 import type { Policy, Procedure } from "@/lib/api/types";
 
 export type Option = { id: string; label: string };
+
+/** Loads the stored body into the editor when an existing document's dialog opens. */
+function useStoredBody(kind: "policies" | "procedures", open: boolean, id: string | undefined, hasResource: boolean, set: (md: string) => void) {
+  const [original, setOriginal] = useState<string>();
+  useEffect(() => {
+    if (!open || !id || !hasResource) return;
+    let live = true;
+    getDocumentBody(kind, id).then(({ body }) => {
+      if (!live) return;
+      set(body);
+      setOriginal(body);
+    });
+    return () => {
+      live = false;
+    };
+  }, [kind, open, id, hasResource, set]);
+  const loading = open && Boolean(id) && hasResource && original === undefined;
+  return { loading, original };
+}
 
 const DOC_STATUSES: Policy["status"][] = ["draft", "adopted", "retired"];
 
@@ -50,6 +71,7 @@ export function PolicyCrudDialog({
   const [reviewInterval, setReviewInterval] = useState(existing?.reviewInterval ?? "annual");
   const [controlRef, setControlRef] = useState(existing?.controlIds[0] ?? "");
   const [contentMd, setContentMd] = useState("");
+  const { loading, original } = useStoredBody("policies", open, existing?.id, Boolean(existing?.hasResource), setContentMd);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,7 +86,7 @@ export function PolicyCrudDialog({
         control_refs: controlRef ? [controlRef] : [],
       };
       const md =
-        contentMd.trim() ||
+        (contentMd.trim() && contentMd !== original ? contentMd : undefined) ||
         (status === "adopted" && !existing?.hasResource
           ? `# ${name.trim()} v${version.trim() || "1.0"}\n\nAdopted security policy.\n`
           : undefined);
@@ -93,7 +115,8 @@ export function PolicyCrudDialog({
           if (!v) setError(undefined);
         }}
         title={existing ? "Edit policy" : "New policy"}
-        description="Adopting a policy uploads its Markdown body to S3 and records the SHA-256 digest."
+        size="md"
+        description="Adopting a policy stores its text and records the SHA-256 digest."
         trigger={
           existing ? (
             <Button size="icon-xs" variant="ghost" aria-label={`Edit ${existing.name}`} title="Edit policy">
@@ -151,17 +174,13 @@ export function PolicyCrudDialog({
               </Select>
             </Field>
           </div>
-          <Field
-            label="Policy body (Markdown)"
-            htmlFor="pol-body"
-            hint="Uploaded to S3 with SHA-256 digest. Required before adoption."
-          >
-            <Textarea
+          <Field label="Policy text" htmlFor="pol-body" hint={loading ? "Loading the current text…" : "Saved with a SHA-256 digest. Required before adoption."}>
+            <RichTextEditor
               id="pol-body"
+              label="Policy text"
               value={contentMd}
-              onChange={(e) => setContentMd(e.target.value)}
-              placeholder="# Policy title&#10;&#10;Purpose and scope…"
-              className="min-h-24 font-mono text-xs"
+              onChange={setContentMd}
+              placeholder="Write the policy: purpose, scope, and the rules people follow…"
             />
           </Field>
           <FormActions pending={pending} submitLabel={existing ? "Save changes" : "Create policy"} onCancel={() => setOpen(false)} />
@@ -208,6 +227,7 @@ export function ProcedureCrudDialog({
   const [ownerRef, setOwnerRef] = useState(existing?.ownerId ?? "");
   const [controlRef, setControlRef] = useState(existing?.controlIds[0] ?? "");
   const [contentMd, setContentMd] = useState("");
+  const { loading, original } = useStoredBody("procedures", open, existing?.id, Boolean(existing?.hasResource), setContentMd);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -221,7 +241,7 @@ export function ProcedureCrudDialog({
         control_refs: controlRef ? [controlRef] : [],
       };
       const md =
-        contentMd.trim() ||
+        (contentMd.trim() && contentMd !== original ? contentMd : undefined) ||
         (status === "adopted" && !existing?.hasResource
           ? `# ${name.trim()}\n\nAdopted operating procedure.\n`
           : undefined);
@@ -249,6 +269,7 @@ export function ProcedureCrudDialog({
           setOpen(v);
           if (!v) setError(undefined);
         }}
+        size="md"
         title={existing ? "Edit procedure" : "New procedure"}
         trigger={
           existing ? (
@@ -311,13 +332,13 @@ export function ProcedureCrudDialog({
               </Select>
             </Field>
           </div>
-          <Field label="Procedure steps (Markdown)" htmlFor="proc-body">
-            <Textarea
+          <Field label="Procedure steps" htmlFor="proc-body" hint={loading ? "Loading the current text…" : undefined}>
+            <RichTextEditor
               id="proc-body"
+              label="Procedure steps"
               value={contentMd}
-              onChange={(e) => setContentMd(e.target.value)}
-              placeholder="# Runbook steps…"
-              className="min-h-20 font-mono text-xs"
+              onChange={setContentMd}
+              placeholder="List the steps someone follows, in order…"
             />
           </Field>
           <FormActions pending={pending} submitLabel={existing ? "Save changes" : "Create procedure"} onCancel={() => setOpen(false)} />

@@ -22,6 +22,7 @@ function createDb() {
     findings: [...f.findings],
     risks: [...f.risks],
     policies: [...f.policies],
+    bodies: { ...f.documentBodies } as Record<string, string>,
     procedures: [...f.procedures],
     jobs: [...f.jobs],
     libraryPin: { ...f.libraryPin },

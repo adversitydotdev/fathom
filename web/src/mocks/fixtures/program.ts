@@ -886,3 +886,29 @@ export const snapshotItems: Record<string, Record<string, unknown>[]> = {
   ],
 };
 
+
+// Stored Markdown bodies of policies and procedures, by id ------------------
+
+export const documentBodies: Record<string, string> = {
+  "policy--information-security": `# Information Security Policy
+
+## Purpose
+
+This policy sets the rules Acme follows to protect **customer data** and the systems that process it.
+
+## Scope
+
+Applies to all employees, contractors and systems in the production environment.
+
+## Requirements
+
+- Every system has a named owner.
+- Access is granted on *least privilege* and reviewed quarterly.
+- Security incidents are reported to the [security team](https://example.com/security) within one hour.
+
+| Role | Responsibility |
+| --- | --- |
+| CISO | Owns this policy |
+| Engineering | Implements controls |
+`,
+};
