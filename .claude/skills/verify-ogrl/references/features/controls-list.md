@@ -35,3 +35,4 @@ pnpm e2e controls
 - The table streams in after hydration. Wait for the rows (`toHaveCount`) before reading `.count()`.
 - `filter({ hasText: "IAM-03" })` can match more than one row because failed conditions mention other ids. Use the id button.
 - State badges render lowercase text (`gap`), CSS-styled.
+- layout: compact rows with a sticky header in a viewport-high scroll area, so search and filters stay in view. Tests, evidence and requirements tables do the same.

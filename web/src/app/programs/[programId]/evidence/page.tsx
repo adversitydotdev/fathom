@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { StatCard, PageTitle } from "@/components/typography";
+import { PageTitle } from "@/components/typography";
 import {
   evaluationInstant,
   getControls,
@@ -73,10 +73,6 @@ export default async function EvidencePage({
       return { id: i.id, label: `${ctrl?.display_id ?? i.control_ref} · ${ctrl?.name ?? i.id}` };
     });
 
-  const expired = rows.filter((r) => r.validity === "expired").length;
-  const expiring = rows.filter((r) => r.validity === "expiring").length;
-  const valid = rows.filter((r) => r.validity === "valid").length;
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
@@ -91,13 +87,6 @@ export default async function EvidencePage({
           </div>
         }
       />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total records" value={rows.length} />
-        <StatCard label="Valid" value={valid} tone="met" />
-        <StatCard label="Expiring ≤ 30d" value={expiring} tone={expiring > 0 ? "waived" : undefined} />
-        <StatCard label="Expired" value={expired} tone={expired > 0 ? "gap" : undefined} />
-      </div>
 
       <EvidenceTable rows={rows} implementations={implOptions} programId={programId} at={atParam} />
     </div>

@@ -95,3 +95,36 @@ test("changing the date on a full control page reloads it as a page", async ({ p
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Least privilege");
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
+
+test("next/previous and j/k step through the list without leaving the panel", async ({ page }) => {
+  await page.goto(`${list}?state=gap`);
+  await page.getByRole("button", { name: "CHG-01", exact: true }).click();
+  const panel = page.getByRole("dialog");
+  await expect(panel).toHaveAccessibleName(/CHG-01/);
+  await expect(panel.getByText("1 of 6")).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Previous control" })).toBeDisabled();
+
+  await panel.getByRole("button", { name: "Next control" }).click();
+  await expect(panel).toHaveAccessibleName(/IAM-01/);
+  await expect(panel.getByText("2 of 6")).toBeVisible();
+
+  await page.keyboard.press("j");
+  await expect(panel).toHaveAccessibleName(/IAM-02/);
+  await page.keyboard.press("k");
+  await expect(panel).toHaveAccessibleName(/IAM-01/);
+  await expect(page.getByRole("row", { name: /IAM-01/ })).toHaveAttribute("aria-current", "true");
+
+  // Stepping replaces history, so Back still closes the panel in one go.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/controls\?state=gap$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+});
+
+test("the panel leads with tests and evidence", async ({ page }) => {
+  await page.goto(list);
+  await page.getByRole("button", { name: "IAM-02", exact: true }).click();
+  const panel = page.getByRole("dialog", { name: /IAM-02/ });
+  const tests = await panel.getByText("Required tests", { exact: true }).boundingBox();
+  const statement = await panel.getByText("Statement", { exact: true }).boundingBox();
+  expect(tests!.y).toBeLessThan(statement!.y);
+});

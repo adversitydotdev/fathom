@@ -36,9 +36,9 @@ const statTone = { met: "text-met-ink", gap: "text-gap-ink", waived: "text-waive
 /** A labelled count, used in the stat row at the top of list pages. */
 export function StatCard({ label, value, tone }: { label: string; value: number; tone?: keyof typeof statTone }) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border bg-card px-4 py-3.5 shadow-xs">
-      <Eyebrow>{label}</Eyebrow>
-      <CountUp value={value} className={cn("text-2xl font-semibold tabular-nums", value > 0 && tone && statTone[tone])} />
+    <div className="flex items-baseline justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-xs">
+      <Eyebrow className="leading-tight">{label}</Eyebrow>
+      <CountUp value={value} className={cn("text-xl leading-none font-semibold tabular-nums", value > 0 && tone && statTone[tone])} />
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { StatCard, PageTitle } from "@/components/typography";
+import { PageTitle } from "@/components/typography";
 import {
   getImplementations,
   getParties,
@@ -54,11 +54,6 @@ export default async function PartiesPage({
     ownedPolicies: policyCounts.get(p.id) ?? 0,
   }));
 
-  const people = rows.filter((r) => r.kind === "person").length;
-  const teams = rows.filter((r) => r.kind === "team").length;
-  const roles = rows.filter((r) => r.kind === "role").length;
-  const orgs = rows.filter((r) => r.kind === "organization").length;
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
@@ -73,13 +68,6 @@ export default async function PartiesPage({
           </div>
         }
       />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="People" value={people} />
-        <StatCard label="Teams" value={teams} />
-        <StatCard label="Roles & agents" value={roles} />
-        <StatCard label="Organizations" value={orgs} />
-      </div>
 
       <PartiesTable rows={rows} />
     </div>

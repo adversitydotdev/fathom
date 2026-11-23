@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 
-import { useListLocation } from "@/components/shell/side-panel";
+import { PanelSequence, useListLocation } from "@/components/shell/side-panel";
 import { useMemo } from "react";
 import { cn } from "cn";
 
@@ -99,8 +99,13 @@ export function ControlsTable({ rows, programId, at }: { rows: ControlRow[]; pro
   );
 
   return (
+    <>
+    <PanelSequence hrefs={visible.map((r) => `/programs/${programId}/controls/${r.id}`)} />
     <DataTable
       data={visible}
+      density="compact"
+      stickyHeader
+      maxHeight="max(24rem, calc(100dvh - 17rem))"
       columns={columns}
       rowId={(r) => r.id}
       rowLabel={(r) => `${r.displayId} ${r.name}`}
@@ -138,6 +143,7 @@ export function ControlsTable({ rows, programId, at }: { rows: ControlRow[]; pro
         </div>
       }
     />
+    </>
   );
 }
 

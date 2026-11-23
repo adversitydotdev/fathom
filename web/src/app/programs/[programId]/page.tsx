@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Info,
   BookDown,
   ChevronRight,
   FileOutput,
@@ -19,7 +20,8 @@ import Link from "next/link";
 import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { PageTitle } from "@/components/typography";
 import { CountUp } from "@/components/motion";
-import { Legend, Ring, SegmentBar, controlSegments, requirementSegments } from "@/components/status";
+import { PanelSequence } from "@/components/shell/side-panel";
+import { Legend, Ring, SegmentBar, requirementSegments } from "@/components/status";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job, RequirementState } from "@/lib/api/types";
 import {
@@ -95,72 +97,75 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         </p>
       </PageTitle>
 
-      <section aria-label="Control status" className="motion-rise" style={{ ["--i" as string]: 1 }}>
-        <Card className="bg-linear-to-br from-primary/[0.035] via-card to-card">
-          <CardHeader>
-            <CardTitle>Control readiness</CardTitle>
-            <CardAction>
-              <Link href={stateHref()} className="group inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground">
-                All controls
-                <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
-              </Link>
-            </CardAction>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-4">
-              <div className="flex items-center gap-5">
-                <Ring value={totalControls ? c.met / totalControls : 0}>
-                  <CountUp
-                    value={totalControls ? Math.round((c.met / totalControls) * 100) : 0}
-                    suffix="%"
-                    className="text-2xl font-semibold tracking-tight tabular-nums"
-                  />
-                </Ring>
-                <div>
-                  <div className="text-lg font-semibold">
-                    {c.gap === 0 ? "Every control is accounted for" : `${c.gap} ${c.gap === 1 ? "gap" : "gaps"} to close`}
-                  </div>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {c.met} of {totalControls} controls met
-                  </p>
+      <div className="grid items-stretch gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+        <section aria-label="Control status" className="motion-rise flex" style={{ ["--i" as string]: 1 }}>
+          <Card className="flex-1 bg-linear-to-br from-primary/[0.035] via-card to-card">
+            <CardHeader>
+              <CardTitle>Control readiness</CardTitle>
+              <CardAction>
+                <Link href={stateHref()} className="group inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground">
+                  All controls
+                  <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                </Link>
+              </CardAction>
+            </CardHeader>
+            <CardContent className="flex items-center gap-6">
+              <Ring value={totalControls ? c.met / totalControls : 0}>
+                <CountUp
+                  value={totalControls ? Math.round((c.met / totalControls) * 100) : 0}
+                  suffix="%"
+                  className="text-2xl font-semibold tracking-tight tabular-nums"
+                />
+              </Ring>
+              <div className="min-w-0 flex-1">
+                <div className="text-lg font-semibold">
+                  {c.gap === 0 ? "Every control is accounted for" : `${c.gap} ${c.gap === 1 ? "gap" : "gaps"} to close`}
+                </div>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  {c.met} of {totalControls} controls met
+                </p>
+                <div className="mt-3 -ml-2 flex flex-wrap gap-1">
+                  <StateLink label="Met" value={c.met} dot="bg-met" href={stateHref("met")} />
+                  <StateLink label="Gap" value={c.gap} dot="bg-gap" tone="gap" href={stateHref("gap")} />
+                  <StateLink label="Waived" value={c.waived} dot="bg-waived" href={stateHref("waived")} />
+                  <StateLink label="Out of scope" value={c.out_of_scope} dot="bg-oos" href={stateHref("out_of_scope")} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-x-2 gap-y-1 sm:grid-cols-4">
-                <StateLink label="Met" value={c.met} dot="bg-met" href={stateHref("met")} />
-                <StateLink label="Gap" value={c.gap} dot="bg-gap" tone="gap" href={stateHref("gap")} />
-                <StateLink label="Waived" value={c.waived} dot="bg-waived" href={stateHref("waived")} />
-                <StateLink label="Out of scope" value={c.out_of_scope} dot="bg-oos" href={stateHref("out_of_scope")} />
-              </div>
+            </CardContent>
+          </Card>
+        </section>
+
+        <Card className="motion-rise" style={{ ["--i" as string]: 2 }}>
+          <CardHeader>
+            <div className="flex items-center gap-1.5">
+              <CardTitle>Requirement coverage</CardTitle>
+              <span
+                className="text-muted-foreground"
+                title="Covered when every part has a reviewed mapping whose controls are met. Unmapped means nobody has reviewed a crosswalk yet."
+              >
+                <Info className="size-3.5" aria-hidden />
+                <span className="sr-only">
+                  Covered when every part has a reviewed mapping whose controls are met. Unmapped means nobody has reviewed a crosswalk yet.
+                </span>
+              </span>
             </div>
-            <SegmentBar segments={controlSegments(c)} className="h-2.5" />
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            {coverage.map(({ framework, counts, total }) => (
+              <div key={framework?.id} className="flex flex-col gap-2">
+                <div className="flex items-baseline justify-between gap-4 text-sm">
+                  <span className="truncate font-medium">{framework?.name}</span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    <span className="font-semibold text-foreground">{percent(counts.covered, total)}</span> · {counts.covered}/{total}
+                  </span>
+                </div>
+                <SegmentBar segments={requirementSegments(counts)} />
+              </div>
+            ))}
+            <Legend kind="requirement" />
           </CardContent>
         </Card>
-      </section>
-
-      <Card className="motion-rise" style={{ ["--i" as string]: 2 }}>
-        <CardHeader>
-          <CardTitle>Requirement coverage</CardTitle>
-          <CardAction>
-            <Legend kind="requirement" />
-          </CardAction>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          {coverage.map(({ framework, counts, total }) => (
-            <div key={framework?.id} className="flex flex-col gap-2">
-              <div className="flex items-baseline justify-between gap-4 text-sm">
-                <span className="truncate font-medium">{framework?.name}</span>
-                <span className="text-muted-foreground tabular-nums">
-                  <span className="font-semibold text-foreground">{percent(counts.covered, total)}</span> · {counts.covered} of {total} covered
-                </span>
-              </div>
-              <SegmentBar segments={requirementSegments(counts)} />
-            </div>
-          ))}
-          <p className="text-xs text-muted-foreground">
-            Covered when every part has a reviewed mapping whose controls are met. Unmapped means nobody has reviewed a crosswalk yet.
-          </p>
-        </CardContent>
-      </Card>
+      </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card className="motion-rise" style={{ ["--i" as string]: 3 }}>
@@ -208,6 +213,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
                 })}
               </ul>
             )}
+            <PanelSequence hrefs={programGaps.map((g) => `${base}/controls/${g.control_id}`)} />
             {programGaps.length > 6 && <p className="pt-2 text-xs text-muted-foreground">+ {programGaps.length - 6} more</p>}
           </CardContent>
         </Card>
@@ -240,7 +246,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             </CardHeader>
             <CardContent>
               <ul className="divide-y text-sm">
-                {jobs.data.slice(0, 5).map((j) => (
+                {jobs.data.slice(0, 3).map((j) => (
                   <li key={j.id} className="flex items-center gap-3 py-2.5">
                     <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&>svg]:size-3.5">
                       <JobIcon type={j.type} />
@@ -278,15 +284,10 @@ function StateLink({
   href: string;
 }) {
   return (
-    <Link href={href} className="flex min-w-24 flex-col gap-1 rounded-lg px-3 py-2 transition-colors hover:bg-foreground/5">
-      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-        <span className={`size-2 rounded-full ${dot}`} aria-hidden />
-        {label}
-      </span>
-      <CountUp
-        value={value}
-        className={tone === "gap" && value > 0 ? "text-xl font-semibold tabular-nums text-gap-ink" : "text-xl font-semibold tabular-nums"}
-      />
+    <Link href={href} className="flex items-center gap-1.5 rounded-md px-2 py-1 text-sm transition-colors hover:bg-foreground/5">
+      <span className={`size-2 rounded-full ${dot}`} aria-hidden />
+      <span className="text-muted-foreground">{label}</span>
+      <CountUp value={value} className={tone === "gap" && value > 0 ? "font-semibold tabular-nums text-gap-ink" : "font-semibold tabular-nums"} />
     </Link>
   );
 }

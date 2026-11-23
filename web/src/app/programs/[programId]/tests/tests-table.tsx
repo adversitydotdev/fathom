@@ -152,6 +152,9 @@ export function TestsTable({
   return (
     <DataTable
       data={visible}
+      density="compact"
+      stickyHeader
+      maxHeight="max(24rem, calc(100dvh - 17rem))"
       columns={columns}
       rowId={(r) => r.id}
       rowLabel={(r) => `${r.controlDisplayId} ${r.name}`}

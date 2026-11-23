@@ -30,3 +30,4 @@ pnpm --dir web e2e integrations
 pnpm --dir web e2e rule-editor
 pnpm --dir web e2e sweep
 ```
+- Stat-card rows were removed where the table's filter chips already show the same counts (tests, risks, evidence, parties). Exceptions, findings, jobs and policies keep compact one-line stat cards. Requirements shows a one-line coverage strip per framework; the framework subtitle appears in rows only when more than one framework is in scope.

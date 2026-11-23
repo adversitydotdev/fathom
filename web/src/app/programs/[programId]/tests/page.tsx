@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { StatCard, PageTitle } from "@/components/typography";
+import { PageTitle } from "@/components/typography";
 import {
   evaluationInstant,
   getControls,
@@ -90,10 +90,6 @@ export default async function TestsPage({
     .filter((t) => !t.fulfills_ref && inBaseline.has(t.control_ref))
     .map((t) => ({ id: t.id, label: t.name ?? t.id, controlId: t.control_ref }));
 
-  const passing = rows.filter((r) => r.status === "pass").length;
-  const failing = rows.filter((r) => r.status === "fail" || r.status === "error").length;
-  const missing = rows.filter((r) => r.status === "missing").length;
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
@@ -111,13 +107,6 @@ export default async function TestsPage({
           </div>
         }
       />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total tests" value={rows.length} />
-        <StatCard label="Passing" value={passing} tone="met" />
-        <StatCard label="Failing / Error" value={failing} tone={failing > 0 ? "gap" : undefined} />
-        <StatCard label="No methodology" value={missing} tone={missing > 0 ? "waived" : undefined} />
-      </div>
 
       <TestsTable rows={rows} controls={controlOptions} programId={programId} at={atParam} />
     </div>

@@ -164,8 +164,8 @@ export async function ControlDetail({
       </div>
 
       <div className={panel ? "flex flex-col gap-5" : "grid gap-6 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)]"}>
-        <div className={panel ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
-          <Card>
+        <div className={panel ? "contents" : "flex flex-col gap-6"}>
+          <Card className="order-4">
             <CardHeader>
               <CardTitle>Statement</CardTitle>
               <CardAction>
@@ -180,6 +180,7 @@ export async function ControlDetail({
 
           {systemImpl ? (
             <ImplementationCard
+              className="order-5"
               impl={systemImpl}
               parties={parties}
               title="Implementation"
@@ -202,7 +203,7 @@ export async function ControlDetail({
               }
             />
           ) : (
-            <Card>
+            <Card className="order-5">
               <CardHeader>
                 <CardTitle>Implementation</CardTitle>
                 <CardAction className="flex items-center gap-1.5">
@@ -226,12 +227,12 @@ export async function ControlDetail({
           )}
 
           {providerHalves.map((impl) => (
-            <ImplementationCard key={impl.id} impl={impl} parties={parties} title="Provider's half" />
+            <ImplementationCard className="order-6" key={impl.id} impl={impl} parties={parties} title="Provider's half" />
           ))}
         </div>
 
-        <div className={panel ? "flex flex-col gap-5" : "flex flex-col gap-6"}>
-          <Card>
+        <div className={panel ? "contents" : "flex flex-col gap-6"}>
+          <Card className="order-1">
             <CardHeader>
               <CardTitle>Required tests</CardTitle>
             </CardHeader>
@@ -269,7 +270,7 @@ export async function ControlDetail({
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="order-2">
             <CardHeader>
               <CardTitle>Evidence</CardTitle>
               <CardAction className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -300,7 +301,7 @@ export async function ControlDetail({
           </Card>
 
           {exceptions.length > 0 && (
-            <Card>
+            <Card className="order-3">
               <CardHeader>
                 <CardTitle>Exceptions</CardTitle>
               </CardHeader>
@@ -318,7 +319,7 @@ export async function ControlDetail({
             </Card>
           )}
 
-          <Card>
+          <Card className="order-7">
             <CardHeader>
               <CardTitle>Maps to</CardTitle>
             </CardHeader>
@@ -394,16 +395,18 @@ function ImplementationCard({
   parties,
   title,
   action,
+  className,
 }: {
   impl: Implementation;
   parties: Map<string, Party>;
   title: string;
   action?: React.ReactNode;
+  className?: string;
 }) {
   const byAgent = createdByAgent(impl.created_by_ref, parties);
   const owner = impl.owner_ref ? (parties.get(impl.owner_ref)?.name ?? impl.owner_ref) : "—";
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardAction className="flex items-center gap-3">

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { StatCard, PageTitle } from "@/components/typography";
+import { PageTitle } from "@/components/typography";
 import {
   evaluationInstant,
   getControls,
@@ -65,10 +65,6 @@ export default async function RisksPage({
   const partyOptions = [...parties.values()].map((p) => ({ id: p.id, label: p.name ?? p.id }));
   const controlOptions = controls.map((c) => ({ id: c.id, label: `${c.display_id ?? c.id} · ${c.name ?? ""}`.trim() }));
 
-  const open = rows.filter((r) => r.status === "open").length;
-  const treating = rows.filter((r) => r.status === "treating").length;
-  const acceptedOrClosed = rows.filter((r) => r.status === "accepted" || r.status === "closed").length;
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
@@ -83,13 +79,6 @@ export default async function RisksPage({
           </div>
         }
       />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total risks" value={rows.length} />
-        <StatCard label="Open" value={open} tone={open > 0 ? "gap" : undefined} />
-        <StatCard label="Treating" value={treating} tone={treating > 0 ? "waived" : undefined} />
-        <StatCard label="Accepted / Closed" value={acceptedOrClosed} tone={acceptedOrClosed > 0 ? "met" : undefined} />
-      </div>
 
       <RisksView
         rows={rows}

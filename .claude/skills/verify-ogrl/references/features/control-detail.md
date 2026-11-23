@@ -4,7 +4,7 @@
 
 Two ways it renders:
 
-- **Side panel** (soft navigation): any control link or row clicked inside a program opens `@panel/(.)controls/[controlId]` as `dialog "<display id> <name>"` on the right, over the page it came from. The URL changes to the control URL. The heading is an h2; the page underneath keeps its h1. Not modal: the list stays usable and another row swaps the panel. "Close panel", Escape (unless a dialog inside is open), or browser back closes it and returns to the opening page. "Open full page" is a plain anchor (full load).
+- **Side panel** (soft navigation): any control link or row clicked inside a program opens `@panel/(.)controls/[controlId]` as `dialog "<display id> <name>"` on the right, over the page it came from. The URL changes to the control URL. The heading is an h2; the page underneath keeps its h1. Not modal: the list stays usable and another row swaps the panel. The panel leads with required tests, evidence and exceptions, then statement and implementation (CSS `order` on the cards; the two page columns become `contents`). When the page underneath registered its order (`PanelSequence`: the controls table and the overview gaps), the panel header shows Previous/Next control buttons and "N of M", and `j`/`k` step through; stepping uses `replace`, so Back still closes the panel. "Close panel", Escape (unless a dialog inside is open), or browser back closes it and returns to the opening page. "Open full page" is a plain anchor (full load).
 - **Full page** (direct load, refresh, shared link, "Open full page"): breadcrumb and h1, two columns. Changing the date here does a full load, because a soft navigation to a control URL would be intercepted into the panel.
 
 ## Sub-features
