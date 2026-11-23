@@ -18,7 +18,8 @@ import Link from "next/link";
 
 import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { PageTitle } from "@/components/typography";
-import { Legend, SegmentBar, controlSegments, requirementSegments } from "@/components/status";
+import { CountUp } from "@/components/motion";
+import { Legend, Ring, SegmentBar, controlSegments, requirementSegments } from "@/components/status";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job, RequirementState } from "@/lib/api/types";
 import {
@@ -94,24 +95,35 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         </p>
       </PageTitle>
 
-      <section aria-label="Control status">
-        <Card>
+      <section aria-label="Control status" className="motion-rise" style={{ ["--i" as string]: 1 }}>
+        <Card className="bg-linear-to-br from-primary/[0.035] via-card to-card">
           <CardHeader>
             <CardTitle>Control readiness</CardTitle>
             <CardAction>
-              <Link href={stateHref()} className="inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground">
+              <Link href={stateHref()} className="group inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground">
                 All controls
-                <ChevronRight className="size-4" aria-hidden />
+                <ChevronRight className="size-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
               </Link>
             </CardAction>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
-            <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
-              <div>
-                <div className="text-4xl font-semibold tracking-tight tabular-nums">{percent(c.met, totalControls)}</div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {c.met} of {totalControls} controls met
-                </p>
+            <div className="flex flex-wrap items-center justify-between gap-x-10 gap-y-4">
+              <div className="flex items-center gap-5">
+                <Ring value={totalControls ? c.met / totalControls : 0}>
+                  <CountUp
+                    value={totalControls ? Math.round((c.met / totalControls) * 100) : 0}
+                    suffix="%"
+                    className="text-2xl font-semibold tracking-tight tabular-nums"
+                  />
+                </Ring>
+                <div>
+                  <div className="text-lg font-semibold">
+                    {c.gap === 0 ? "Every control is accounted for" : `${c.gap} ${c.gap === 1 ? "gap" : "gaps"} to close`}
+                  </div>
+                  <p className="mt-0.5 text-sm text-muted-foreground">
+                    {c.met} of {totalControls} controls met
+                  </p>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-x-2 gap-y-1 sm:grid-cols-4">
                 <StateLink label="Met" value={c.met} dot="bg-met" href={stateHref("met")} />
@@ -125,7 +137,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         </Card>
       </section>
 
-      <Card>
+      <Card className="motion-rise" style={{ ["--i" as string]: 2 }}>
         <CardHeader>
           <CardTitle>Requirement coverage</CardTitle>
           <CardAction>
@@ -151,7 +163,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
       </Card>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <Card>
+        <Card className="motion-rise" style={{ ["--i" as string]: 3 }}>
           <CardHeader>
             <div className="flex items-center gap-2">
               <CardTitle>Gaps</CardTitle>
@@ -182,14 +194,14 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
                     <li key={g.control_id}>
                       <Link
                         href={`${base}/controls/${g.control_id}${q}`}
-                        className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2.5 text-sm hover:bg-muted"
+                        className="group grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2.5 text-sm transition-colors hover:bg-muted"
                       >
                         <span className="font-mono text-xs text-muted-foreground">{control?.display_id}</span>
                         <span className="min-w-0">
                           <span className="block truncate font-medium">{control?.name}</span>
                           <span className="block truncate text-xs text-gap-ink">{g.failed[0]}</span>
                         </span>
-                        <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+                        <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" aria-hidden />
                       </Link>
                     </li>
                   );
@@ -200,7 +212,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
           </CardContent>
         </Card>
 
-        <div className="flex flex-col gap-6">
+        <div className="motion-rise flex flex-col gap-6" style={{ ["--i" as string]: 4 }}>
           <Card>
             <CardHeader>
               <CardTitle>Needs attention</CardTitle>
@@ -266,14 +278,15 @@ function StateLink({
   href: string;
 }) {
   return (
-    <Link href={href} className="flex min-w-24 flex-col gap-1 rounded-lg px-3 py-2 transition-colors hover:bg-muted">
+    <Link href={href} className="flex min-w-24 flex-col gap-1 rounded-lg px-3 py-2 transition-colors hover:bg-foreground/5">
       <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <span className={`size-2 rounded-full ${dot}`} aria-hidden />
         {label}
       </span>
-      <span className={tone === "gap" && value > 0 ? "text-xl font-semibold tabular-nums text-gap-ink" : "text-xl font-semibold tabular-nums"}>
-        {value}
-      </span>
+      <CountUp
+        value={value}
+        className={tone === "gap" && value > 0 ? "text-xl font-semibold tabular-nums text-gap-ink" : "text-xl font-semibold tabular-nums"}
+      />
     </Link>
   );
 }

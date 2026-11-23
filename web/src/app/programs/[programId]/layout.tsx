@@ -2,6 +2,7 @@ import { Suspense } from "react";
 
 import { AgentProvider, AgentSystemSync, AssistantTriggerButton } from "@/components/agent/assistant-drawer";
 import { AtPicker, ProgramSwitcher } from "@/components/shell/header-controls";
+import { MotionBoot, PageTransition } from "@/components/motion";
 import { PanelOriginTracker } from "@/components/shell/side-panel";
 import { Sidebar, SidebarSkeleton } from "@/components/shell/sidebar";
 import { ThemeToggle } from "@/components/theme";
@@ -31,11 +32,16 @@ export default function ProgramLayout({ children, panel, params }: LayoutProps<"
             <AssistantTriggerButton />
             <ThemeToggle />
           </header>
-          <main className="flex-1 px-6 py-8 lg:px-10">{children}</main>
+          <main className="flex-1 px-6 py-8 lg:px-10">
+            <Suspense fallback={children}>
+              <PageTransition>{children}</PageTransition>
+            </Suspense>
+          </main>
           {panel}
           <Suspense fallback={null}>
             <PanelOriginTracker />
           </Suspense>
+          <MotionBoot />
         </div>
       </div>
     </AgentProvider>

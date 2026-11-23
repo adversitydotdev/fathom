@@ -31,3 +31,4 @@ pnpm e2e shell
 - `?at` must survive every navigation: sidebar, switcher, breadcrumbs, metric links, row clicks. Check it whenever you add a link.
 - In full-page screenshots the sticky sidebar background ends at viewport height. That is how Playwright captures sticky elements, not a layout bug.
 - There is no mobile layout yet. The grid is a fixed `13rem` sidebar plus content.
+- The sidebar's active highlight slides between items (motion `layoutId`), and page content fades in on navigation (`PageTransition`, keyed on the list URL so opening the side panel doesn't re-run it). Both respect reduced motion.

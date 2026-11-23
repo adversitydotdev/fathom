@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { MotionConfig, motion } from "motion/react";
 import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "cn";
@@ -65,6 +66,7 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
   const isActive = (href: string) => (href === base ? pathname === base : pathname.startsWith(href));
 
   return (
+    <MotionConfig reducedMotion="user">
     <nav className="flex h-full flex-col gap-1 px-3 py-4 text-sm" aria-label="Main">
       <Link href={withAt(base)} className="mb-3 flex h-8 items-center gap-2 px-2">
         <OgrlMark className="size-5 shrink-0 text-primary" aria-hidden />
@@ -81,12 +83,21 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
                 href={withAt(href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-2 py-1.5 text-foreground/75 transition-colors hover:bg-foreground/5 hover:text-foreground",
-                  active && "bg-sidebar-accent font-medium text-sidebar-accent-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                  "relative flex items-center gap-2.5 rounded-md px-2 py-1.5 text-foreground/75 transition-colors hover:bg-foreground/5 hover:text-foreground",
+                  active && "font-medium text-sidebar-accent-foreground hover:bg-transparent hover:text-sidebar-accent-foreground",
                 )}
               >
-                <Icon className={cn("size-4 text-muted-foreground", active && "text-sidebar-accent-foreground")} />
-                {label}
+                {active && (
+                  // Slides between items as the page changes.
+                  <motion.span
+                    layoutId="sidebar-active"
+                    className="absolute inset-0 rounded-md bg-sidebar-accent"
+                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
+                    aria-hidden
+                  />
+                )}
+                <Icon className={cn("relative size-4 text-muted-foreground", active && "text-sidebar-accent-foreground")} />
+                <span className="relative">{label}</span>
               </Link>
             );
           })}
@@ -94,6 +105,7 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
       ))}
       {footer && <div className="mt-auto px-2 pt-4">{footer}</div>}
     </nav>
+    </MotionConfig>
   );
 }
 

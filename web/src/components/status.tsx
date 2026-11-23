@@ -60,14 +60,63 @@ export function SegmentBar({ segments, className }: { segments: Segment[]; class
   const total = segments.reduce((n, s) => n + s.value, 0);
   return (
     <div
-      className={cn("flex h-2 gap-0.5 overflow-hidden rounded-full bg-muted", className)}
+      className={cn("h-2 overflow-hidden rounded-full bg-muted", className)}
       role="img"
       aria-label={segments.map((s) => `${s.value} ${s.label}`).join(", ")}
     >
-      {total > 0 &&
-        segments
-          .filter((s) => s.value > 0)
-          .map((s) => <div key={s.key} className={s.className} style={{ flexGrow: s.value }} />)}
+      {total > 0 && (
+        <div className="motion-grow-x flex h-full gap-0.5">
+          {segments
+            .filter((s) => s.value > 0)
+            .map((s) => (
+              <div key={s.key} className={s.className} style={{ flexGrow: s.value }} />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A progress ring that draws itself in. `value` is a 0..1 fraction the API's
+ * counts already imply; the ring only presents it.
+ */
+export function Ring({
+  value,
+  size = 112,
+  stroke = 10,
+  className,
+  children,
+}: {
+  value: number;
+  size?: number;
+  stroke?: number;
+  className?: string;
+  children?: React.ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const length = 2 * Math.PI * r;
+  const offset = length * (1 - Math.min(1, Math.max(0, value)));
+  return (
+    <div className={cn("relative shrink-0", className)} style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90" aria-hidden>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} className="stroke-muted" />
+        {value > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            className="motion-draw stroke-met"
+            strokeDasharray={length}
+            strokeDashoffset={offset}
+            style={{ ["--ring-length" as string]: length }}
+          />
+        )}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
     </div>
   );
 }

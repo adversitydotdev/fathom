@@ -1,5 +1,7 @@
 import { cn } from "cn";
 
+import { CountUp } from "@/components/motion";
+
 /** Small muted label above a title or value. */
 export function Eyebrow({ className, children }: { className?: string; children: React.ReactNode }) {
   return <div className={cn("text-xs leading-none font-medium text-muted-foreground", className)}>{children}</div>;
@@ -36,7 +38,7 @@ export function StatCard({ label, value, tone }: { label: string; value: number;
   return (
     <div className="flex flex-col gap-2 rounded-xl border bg-card px-4 py-3.5 shadow-xs">
       <Eyebrow>{label}</Eyebrow>
-      <span className={cn("text-2xl font-semibold tabular-nums", value > 0 && tone && statTone[tone])}>{value}</span>
+      <CountUp value={value} className={cn("text-2xl font-semibold tabular-nums", value > 0 && tone && statTone[tone])} />
     </div>
   );
 }
