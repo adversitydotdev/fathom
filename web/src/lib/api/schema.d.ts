@@ -2633,8 +2633,8 @@ export interface components {
         Envelope: {
             type: string;
             id: string;
-            /** @constant */
-            spec_version: "0.1.0";
+            /** @description RFC 0001 §6.2. This deployment stamps 0.1.0 on writes; library pulls may return 0.2.x. */
+            spec_version: string;
             /** Format: date-time */
             created: string;
             /** Format: date-time */

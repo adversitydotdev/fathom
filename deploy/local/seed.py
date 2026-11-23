@@ -8,6 +8,8 @@ evidence, risks, an exception, a finding, policies, and procedures so the UI
 opens straight into real Postgres + ogrl-rs kernel data.
 
 Set OGRL_SKIP_SEED=true to boot an empty workspace instead.
+Set OGRL_SEED_LIBRARY_COMMIT to pull by git revision (e.g. main) before a library-v* tag
+exists for spec 0.2.0; otherwise OGRL_SEED_LIBRARY_VERSION selects a tagged release.
 """
 
 from __future__ import annotations
@@ -23,6 +25,7 @@ from datetime import UTC, datetime, timedelta
 API = os.environ.get("OGRL_API_ORIGIN", "http://api:8080").rstrip("/")
 TOKEN = os.environ.get("OGRL_API_TOKEN", "ogrl_pat_local_dev_admin")
 LIB_VERSION = os.environ.get("OGRL_SEED_LIBRARY_VERSION", "0.4.1")
+LIB_COMMIT = os.environ.get("OGRL_SEED_LIBRARY_COMMIT")
 
 
 def req(method: str, path: str, body: dict | None = None, *, if_match: str | None = None) -> dict:
@@ -167,10 +170,15 @@ def main() -> int:
         print("seed: programs already exist; nothing to do.")
         return 0
 
-    print(f"seed: pulling ogrl-library v{LIB_VERSION}...")
-    job = req("POST", "/v1/library/pull", {"version": LIB_VERSION})
+    if LIB_COMMIT:
+        print(f"seed: pulling ogrl-library at commit {LIB_COMMIT}...")
+        job = req("POST", "/v1/library/pull", {"commit": LIB_COMMIT})
+    else:
+        print(f"seed: pulling ogrl-library v{LIB_VERSION}...")
+        job = req("POST", "/v1/library/pull", {"version": LIB_VERSION})
     wait_for_job(job["id"])
-    print(f"seed: library v{LIB_VERSION} pulled (job {job['id']}).")
+    label = f"commit {LIB_COMMIT}" if LIB_COMMIT else f"v{LIB_VERSION}"
+    print(f"seed: library {label} pulled (job {job['id']}).")
 
     # Parties
     jordan = req("POST", "/v1/parties", {"name": "Jordan Lee", "kind": "person"})["id"]
