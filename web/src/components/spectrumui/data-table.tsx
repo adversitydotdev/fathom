@@ -250,6 +250,8 @@ export interface DataTableProps<T> {
   emptyState?: React.ReactNode;
 
   onRowClick?: (row: T) => void;
+  /** Highlights the row shown in a side panel. */
+  isRowActive?: (row: T) => boolean;
 
   /**
    * Arrow-key row cursor, Shift range selection and the ⌘A / ⌘C / Space
@@ -731,6 +733,7 @@ export function DataTable<T>({
   skeletonRows = 5,
   emptyState,
   onRowClick,
+  isRowActive,
   keyboardNavigation = true,
   clipboard = true,
   totals,
@@ -1606,6 +1609,8 @@ export function DataTable<T>({
                               : SPRING_FLUID
                           }
                           data-selected={isSelected || undefined}
+                          data-active={isRowActive?.(row) || undefined}
+                          aria-current={isRowActive?.(row) || undefined}
                           onPointerDown={() => setCursor(index)}
                           onClick={
                             onRowClick
@@ -1625,6 +1630,7 @@ export function DataTable<T>({
                             surface.rowFill,
                             index % 2 === 1 && surface.stripe,
                             onRowClick && 'cursor-pointer',
+                            'data-[active]:bg-primary/8 data-[active]:shadow-[inset_3px_0_0_var(--primary)]',
                           )}
                         >
                           {renderDetail && (

@@ -2,12 +2,13 @@ import { Suspense } from "react";
 
 import { AgentProvider, AgentSystemSync, AssistantTriggerButton } from "@/components/agent/assistant-drawer";
 import { AtPicker, ProgramSwitcher } from "@/components/shell/header-controls";
+import { PanelOriginTracker } from "@/components/shell/side-panel";
 import { Sidebar, SidebarSkeleton } from "@/components/shell/sidebar";
 import { ThemeToggle } from "@/components/theme";
 import { apiMocking } from "@/lib/env";
 import { getProgram, getPrograms, getSystem } from "@/lib/data";
 
-export default function ProgramLayout({ children, params }: LayoutProps<"/programs/[programId]">) {
+export default function ProgramLayout({ children, panel, params }: LayoutProps<"/programs/[programId]">) {
   return (
     <AgentProvider>
       <div className="grid min-h-dvh grid-cols-[14rem_minmax(0,1fr)]">
@@ -31,6 +32,10 @@ export default function ProgramLayout({ children, params }: LayoutProps<"/progra
             <ThemeToggle />
           </header>
           <main className="flex-1 px-6 py-8 lg:px-10">{children}</main>
+          {panel}
+          <Suspense fallback={null}>
+            <PanelOriginTracker />
+          </Suspense>
         </div>
       </div>
     </AgentProvider>

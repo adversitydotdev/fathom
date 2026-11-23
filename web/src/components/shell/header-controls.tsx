@@ -5,6 +5,7 @@ import { cn } from "cn";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
+import { isPanelRoute } from "@/components/shell/side-panel";
 import { Spinner } from "@/components/spectrumui/spinner-dependencies";
 
 type ProgramOption = { id: string; name: string };
@@ -64,7 +65,11 @@ export function AtPicker() {
     if (value) next.set("at", value);
     else next.delete("at");
     const qs = next.toString();
-    start(() => router.replace(qs ? `${pathname}?${qs}` : pathname));
+    const url = qs ? `${pathname}?${qs}` : pathname;
+    // A soft navigation to a control URL would be intercepted into the side
+    // panel, on top of the page it came from. Load it as a page instead.
+    if (isPanelRoute(pathname)) window.location.assign(url);
+    else start(() => router.replace(url));
   };
 
   return (

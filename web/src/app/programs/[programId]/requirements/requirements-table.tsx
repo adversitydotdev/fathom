@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+
+import { useListLocation } from "@/components/shell/side-panel";
 import { useMemo } from "react";
 import { cn } from "cn";
 
@@ -34,8 +36,7 @@ export function RequirementsTable({
   at?: string;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
+  const { pathname, search } = useListLocation();
   const state = search.get("state") as RequirementState | null;
   const fw = search.get("framework");
   const q = at ? `?at=${at}` : "";

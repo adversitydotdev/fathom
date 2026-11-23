@@ -1,6 +1,8 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+
+import { useListLocation } from "@/components/shell/side-panel";
 import { useMemo } from "react";
 import { cn } from "cn";
 
@@ -69,8 +71,8 @@ const columns: DataTableColumn<ControlRow>[] = [
 
 export function ControlsTable({ rows, programId, at }: { rows: ControlRow[]; programId: string; at?: string }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
+  const current = usePathname();
+  const { pathname, search } = useListLocation();
   const state = search.get("state") as ControlState | null;
   const family = search.get("family");
 
@@ -107,6 +109,7 @@ export function ControlsTable({ rows, programId, at }: { rows: ControlRow[]; pro
       searchPlaceholder="Search controls"
       searchText={(r) => `${r.displayId} ${r.name} ${r.family} ${r.owner ?? ""} ${r.id}`}
       clipboard={false}
+      isRowActive={(r) => current.endsWith(`/controls/${r.id}`)}
       onRowClick={(r) => router.push(`/programs/${programId}/controls/${r.id}${at ? `?at=${at}` : ""}`)}
       emptyState={<span className="text-sm text-muted-foreground">No controls match these filters.</span>}
       toolbar={
