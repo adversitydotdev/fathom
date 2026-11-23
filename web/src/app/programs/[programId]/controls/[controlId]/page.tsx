@@ -120,13 +120,13 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
         >
           <div className="flex flex-wrap items-center gap-3">
             {entry && <ControlStateBadge state={entry.state} />}
-            <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+            <span className="text-xs font-medium text-muted-foreground">
               {control.family} · {control.control_type} · {control.frequency} · {control.origin === "custom" ? "custom" : "library"}
             </span>
           </div>
         </PageTitle>
         {entry && entry.failed && entry.failed.length > 0 && (
-          <div className="mt-4 flex flex-col gap-1 rounded-2xl border border-gap/30 bg-gap-soft px-4 py-3 text-sm text-gap-ink" role="status">
+          <div className="mt-4 flex flex-col gap-1 rounded-xl border border-gap/30 bg-gap-soft px-4 py-3 text-sm text-gap-ink" role="status">
             {entry.failed.map((f) => (
               <span key={f} className="flex items-start gap-2">
                 <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
@@ -225,7 +225,7 @@ export default async function ControlPage({ params, searchParams }: PageProps<"/
                         <div className="min-w-0 flex-1 text-sm">
                           <div className="truncate">{t.name}</div>
                           <div className="text-xs text-muted-foreground">
-                            <span className="font-mono">{t.method}</span> · {t.interval}
+                            {t.method} · {t.interval}
                             {r ? <> · {r.outcome} {isoDate(r.observed)}</> : t.method === "automated" && !t.run ? " · no methodology defined" : " · no result"}
                           </div>
                           {r?.summary && r.outcome !== "pass" && <div className="mt-1 text-xs text-gap-ink">{r.summary}</div>}
@@ -384,8 +384,8 @@ function ImplementationCard({
       <CardHeader>
         <CardTitle>{title}</CardTitle>
         <CardAction className="flex items-center gap-3">
-          <span className="font-mono text-xs text-muted-foreground" title="Sent as If-Match on the next write">
-            modified {impl.modified.replace("T", " ").replace("Z", "")}
+          <span className="text-xs text-muted-foreground tabular-nums" title="Sent as If-Match on the next write">
+            Modified {impl.modified.replace("T", " ").replace(/(\.\d+)?Z$/, "")}
           </span>
           {action}
         </CardAction>
@@ -405,7 +405,7 @@ function ImplementationCard({
         )}
         <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-y-1.5">
           <dt className="text-muted-foreground">Status</dt>
-          <dd className="font-mono text-xs leading-5">{impl.status}</dd>
+          <dd className="capitalize">{impl.status}</dd>
           <dt className="text-muted-foreground">Responsibility</dt>
           <dd>
             {impl.responsibility}

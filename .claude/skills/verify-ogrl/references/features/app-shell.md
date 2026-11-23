@@ -6,10 +6,10 @@ The frame around every program page: `web/src/app/programs/[programId]/layout.ts
 
 - home-redirect: `/` redirects to the first program. With no programs it shows "Create your first program".
 - sidebar: all 13 sections (Overview, Controls, Requirements, Tests, Evidence, Risks, Exceptions, Findings, Policies, Systems, Parties, Library, Jobs) are links under `/programs/[programId]/...`. The active link has `aria-current="page"`. Links carry `?at`.
-- fixtures-badge: `Fixtures · no auth` in the header, only in mock mode.
+- fixtures-badge: `Fixtures · no auth` at the bottom of the sidebar, only in mock mode.
 - program-switcher: a `<select aria-label="Program">` listing programs on the same system. Changing it navigates and keeps `?at`.
-- evaluation-date: `<input type="date" aria-label="Evaluation date">` writes `?at=YYYY-MM-DD`. The "Evaluate now" button clears it.
-- theme-toggle: `aria-label="Toggle dark mode"`. Dark by default, persisted to `localStorage.theme`, applied as the `dark` class on `<html>`.
+- evaluation-date: a header pill reading "As of Today", or "Viewing <date>" (amber) when `?at` is set. An invisible `<input type="date" aria-label="Evaluation date">` covers the pill and writes `?at=YYYY-MM-DD`. The "Evaluate now" (×) button clears it.
+- theme-toggle: `aria-label="Toggle dark mode"`. Light by default, persisted to `localStorage.theme`, applied as the `dark` class on `<html>`.
 
 ## How to get to it (user POV)
 

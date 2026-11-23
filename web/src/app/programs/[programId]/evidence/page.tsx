@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Eyebrow, PageTitle } from "@/components/typography";
+import { StatCard, PageTitle } from "@/components/typography";
 import {
   evaluationInstant,
   getControls,
@@ -84,7 +84,7 @@ export default async function EvidencePage({
         title="Evidence"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} items · validity at <span className="text-foreground">{evalDate}</span>
             </p>
             <EvidenceCrudDialog implementations={implOptions} />
@@ -100,23 +100,6 @@ export default async function EvidencePage({
       </div>
 
       <EvidenceTable rows={rows} implementations={implOptions} programId={programId} at={atParam} />
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "met" | "gap" | "waived" }) {
-  const cls =
-    tone === "gap"
-      ? "text-gap-ink"
-      : tone === "met"
-        ? "text-met-ink"
-        : tone === "waived"
-          ? "text-waived-ink"
-          : "";
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
-      <Eyebrow>{label}</Eyebrow>
-      <span className={`text-3xl font-medium tabular-nums ${cls}`}>{value}</span>
     </div>
   );
 }

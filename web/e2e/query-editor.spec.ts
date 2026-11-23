@@ -120,7 +120,7 @@ test("a query source nothing reads can be removed", async ({ page }) => {
 
 test("the assistant drafts a query source into the editor; a person saves it", async ({ page, shot }) => {
   await page.goto(PAGE);
-  await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   const drawer = page.getByRole("dialog", { name: "OGRL AI Assistant" });
   await drawer.getByRole("textbox").fill("Write a query source for security groups open to the internet");
   await drawer.getByRole("textbox").press("Enter");

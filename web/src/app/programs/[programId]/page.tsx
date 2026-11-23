@@ -10,7 +10,6 @@ import {
   PackageOpen,
   Paperclip,
   PauseCircle,
-  Play,
   Plug,
   Sparkles,
 } from "lucide-react";
@@ -18,14 +17,8 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { AskAgentButton } from "@/components/agent/assistant-drawer";
-import { RecentActivity } from "@/components/spectrumui/recent-activity";
-import { Eyebrow, PageTitle } from "@/components/typography";
-import {
-  Legend,
-  SegmentBar,
-  controlSegments,
-  requirementSegments,
-} from "@/components/status";
+import { PageTitle } from "@/components/typography";
+import { Legend, SegmentBar, controlSegments, requirementSegments } from "@/components/status";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Job, RequirementState } from "@/lib/api/types";
 import {
@@ -82,34 +75,54 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
   const totalControls = c.met + c.gap + c.waived + c.out_of_scope;
   const base = `/programs/${programId}`;
 
+  const stateHref = (state?: string) =>
+    `${base}/controls${state ? `?state=${state}` : ""}${atParam ? `${state ? "&" : "?"}at=${atParam}` : ""}`;
+
   return (
-    <div className="mx-auto flex max-w-6xl flex-col gap-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
-        eyebrow={`Program · ${system.name}`}
+        eyebrow={system.name}
         title={program.name}
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
-            Evaluated at <span className="text-foreground">{isoDate(summary.at)}</span>
+          <p className="text-sm text-muted-foreground">
+            Evaluated at <span className="font-medium text-foreground tabular-nums">{isoDate(summary.at)}</span>
           </p>
         }
       >
         <p className="text-sm text-muted-foreground">
-          Baseline <span className="font-mono text-xs text-foreground">{baseline.name}</span>
+          Baseline <span className="text-foreground">{baseline.name}</span>
         </p>
       </PageTitle>
 
-      <section aria-label="Control status" className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          <Metric label="Met" value={c.met} hint={percent(c.met, totalControls)} href={`${base}/controls${q}`} />
-          <Metric label="Gap" value={c.gap} tone="gap" href={`${base}/controls?state=gap${atParam ? `&at=${atParam}` : ""}`} />
-          <Metric label="Waived" value={c.waived} href={`${base}/controls?state=waived${atParam ? `&at=${atParam}` : ""}`} />
-          <Metric label="Out of scope" value={c.out_of_scope} href={`${base}/controls?state=out_of_scope${atParam ? `&at=${atParam}` : ""}`} />
-        </div>
-        <SegmentBar segments={controlSegments(c)} />
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-xs text-muted-foreground">{totalControls} controls on the baseline.</p>
-          <Legend kind="control" />
-        </div>
+      <section aria-label="Control status">
+        <Card>
+          <CardHeader>
+            <CardTitle>Control readiness</CardTitle>
+            <CardAction>
+              <Link href={stateHref()} className="inline-flex items-center gap-0.5 text-sm text-muted-foreground hover:text-foreground">
+                All controls
+                <ChevronRight className="size-4" aria-hidden />
+              </Link>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-end justify-between gap-x-10 gap-y-4">
+              <div>
+                <div className="text-4xl font-semibold tracking-tight tabular-nums">{percent(c.met, totalControls)}</div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {c.met} of {totalControls} controls met
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1 sm:grid-cols-4">
+                <StateLink label="Met" value={c.met} dot="bg-met" href={stateHref("met")} />
+                <StateLink label="Gap" value={c.gap} dot="bg-gap" tone="gap" href={stateHref("gap")} />
+                <StateLink label="Waived" value={c.waived} dot="bg-waived" href={stateHref("waived")} />
+                <StateLink label="Out of scope" value={c.out_of_scope} dot="bg-oos" href={stateHref("out_of_scope")} />
+              </div>
+            </div>
+            <SegmentBar segments={controlSegments(c)} className="h-2.5" />
+          </CardContent>
+        </Card>
       </section>
 
       <Card>
@@ -119,14 +132,16 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             <Legend kind="requirement" />
           </CardAction>
         </CardHeader>
-        <CardContent className="flex flex-col gap-3">
+        <CardContent className="flex flex-col gap-5">
           {coverage.map(({ framework, counts, total }) => (
-            <div key={framework?.id} className="grid grid-cols-[12rem_minmax(0,1fr)_3rem] items-center gap-3 text-sm">
-              <span className="truncate">{framework?.name}</span>
+            <div key={framework?.id} className="flex flex-col gap-2">
+              <div className="flex items-baseline justify-between gap-4 text-sm">
+                <span className="truncate font-medium">{framework?.name}</span>
+                <span className="text-muted-foreground tabular-nums">
+                  <span className="font-semibold text-foreground">{percent(counts.covered, total)}</span> · {counts.covered} of {total} covered
+                </span>
+              </div>
               <SegmentBar segments={requirementSegments(counts)} />
-              <span className="text-right font-mono text-xs" title={`${counts.covered} of ${total} covered`}>
-                {percent(counts.covered, total)}
-              </span>
             </div>
           ))}
           <p className="text-xs text-muted-foreground">
@@ -135,10 +150,15 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         </CardContent>
       </Card>
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card>
           <CardHeader>
-            <CardTitle>Gaps</CardTitle>
+            <div className="flex items-center gap-2">
+              <CardTitle>Gaps</CardTitle>
+              {programGaps.length > 0 && (
+                <span className="rounded-full bg-gap-soft px-2 py-0.5 text-xs font-medium text-gap-ink tabular-nums">{programGaps.length}</span>
+              )}
+            </div>
             <CardAction className="flex items-center gap-3">
               {programGaps.length > 0 && (
                 <AskAgentButton
@@ -146,7 +166,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
                   prompt={`Analyze the open control gaps for program ${program.name} (${program.id}) and suggest prioritized remediation steps or offer to draft planned implementations.`}
                 />
               )}
-              <Link href={`${base}/controls?state=gap${atParam ? `&at=${atParam}` : ""}`} className="text-xs text-muted-foreground hover:text-foreground">
+              <Link href={stateHref("gap")} className="text-sm text-muted-foreground hover:text-foreground">
                 View all
               </Link>
             </CardAction>
@@ -155,18 +175,18 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             {programGaps.length === 0 ? (
               <p className="text-sm text-muted-foreground">Every control on the baseline is met, waived, or out of scope.</p>
             ) : (
-              <ul className="divide-y">
+              <ul className="-mx-2 divide-y">
                 {programGaps.slice(0, 6).map((g) => {
                   const control = controlById.get(g.control_id);
                   return (
                     <li key={g.control_id}>
                       <Link
                         href={`${base}/controls/${g.control_id}${q}`}
-                        className="-mx-2 grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2.5 text-sm hover:bg-muted"
+                        className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 rounded-md px-2 py-2.5 text-sm hover:bg-muted"
                       >
-                        <span className="font-mono text-xs">{control?.display_id}</span>
+                        <span className="font-mono text-xs text-muted-foreground">{control?.display_id}</span>
                         <span className="min-w-0">
-                          <span className="block truncate">{control?.name}</span>
+                          <span className="block truncate font-medium">{control?.name}</span>
                           <span className="block truncate text-xs text-gap-ink">{g.failed[0]}</span>
                         </span>
                         <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
@@ -186,7 +206,7 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
               <CardTitle>Needs attention</CardTitle>
             </CardHeader>
             <CardContent>
-              <ul className="divide-y text-sm">
+              <ul className="-mx-2 text-sm">
                 <Attention icon={FlaskConical} label="Tests not passing" value={summary.failing_tests} href={`${base}/tests${q}`} />
                 <Attention icon={Paperclip} label="Evidence expiring in 30 days" value={summary.expiring_evidence} href={`${base}/evidence${q}`} />
                 <Attention icon={PauseCircle} label="Exceptions expiring in 30 days" value={summary.expiring_exceptions} href={`${base}/exceptions${q}`} />
@@ -197,32 +217,63 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader>
+              <CardTitle>Recent jobs</CardTitle>
+              <CardAction>
+                <Link href={`${base}/jobs${q}`} className="text-sm text-muted-foreground hover:text-foreground">
+                  View all
+                </Link>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              <ul className="divide-y text-sm">
+                {jobs.data.slice(0, 5).map((j) => (
+                  <li key={j.id} className="flex items-center gap-3 py-2.5">
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground [&>svg]:size-3.5">
+                      <JobIcon type={j.type} />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{JOB_LABEL[j.type]}</span>
+                      <span className={j.status === "failed" ? "block truncate text-xs text-gap-ink" : "block truncate text-xs text-muted-foreground"}>
+                        {j.status === "failed" ? `Failed: ${j.error?.title ?? "see job"}` : j.status}
+                        {j.finished ? ` · ${duration(j.created, j.finished)}` : ""}
+                      </span>
+                    </span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{isoDate(j.created).slice(5)}</span>
+                  </li>
+                ))}
+              </ul>
+            </CardContent>
+          </Card>
         </div>
       </div>
-
-      <RecentActivity
-        title="Recent jobs"
-        titleIcon={<Play />}
-        items={jobs.data.map((j) => ({
-          icon: <JobIcon type={j.type} />,
-          title: JOB_LABEL[j.type],
-          duration: j.finished ? duration(j.created, j.finished) : undefined,
-          description: j.status === "failed" ? `Failed: ${j.error?.title ?? "see job"}` : j.status,
-          timeAgo: isoDate(j.created).slice(5),
-        }))}
-      />
     </div>
   );
 }
 
-function Metric({ label, value, hint, tone, href }: { label: string; value: number; hint?: string; tone?: "gap"; href: string }) {
+function StateLink({
+  label,
+  value,
+  dot,
+  tone,
+  href,
+}: {
+  label: string;
+  value: number;
+  dot: string;
+  tone?: "gap";
+  href: string;
+}) {
   return (
-    <Link href={href} className="flex flex-col gap-3 rounded-2xl border bg-card px-4 py-4 transition-colors hover:border-foreground/25">
-      <Eyebrow>{label}</Eyebrow>
-      <div className="flex items-baseline gap-2">
-        <span className={tone === "gap" && value > 0 ? "text-3xl font-medium tabular-nums text-gap-ink" : "text-3xl font-medium tabular-nums"}>{value}</span>
-        {hint && <span className="text-xs text-muted-foreground">{hint}</span>}
-      </div>
+    <Link href={href} className="flex min-w-24 flex-col gap-1 rounded-lg px-3 py-2 transition-colors hover:bg-muted">
+      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <span className={`size-2 rounded-full ${dot}`} aria-hidden />
+        {label}
+      </span>
+      <span className={tone === "gap" && value > 0 ? "text-xl font-semibold tabular-nums text-gap-ink" : "text-xl font-semibold tabular-nums"}>
+        {value}
+      </span>
     </Link>
   );
 }
@@ -238,14 +289,23 @@ function Attention({
   value?: number;
   href: string;
 }) {
+  const n = value ?? 0;
   return (
     <li>
-      <Link href={href} className="-mx-2 flex items-center justify-between rounded-md px-2 py-2 transition-colors hover:bg-muted">
-        <span className="flex items-center gap-2 text-muted-foreground">
-          <Icon className="size-4" />
+      <Link href={href} className="flex items-center justify-between rounded-md px-2 py-2 transition-colors hover:bg-muted">
+        <span className="flex items-center gap-2.5">
+          <Icon className="size-4 text-muted-foreground" />
           {label}
         </span>
-        <span className="font-medium tabular-nums">{value ?? 0}</span>
+        <span
+          className={
+            n > 0
+              ? "min-w-6 rounded-full bg-waived-soft px-2 py-0.5 text-center text-xs font-semibold text-waived-ink tabular-nums"
+              : "min-w-6 px-2 text-center text-xs text-muted-foreground tabular-nums"
+          }
+        >
+          {n}
+        </span>
       </Link>
     </li>
   );

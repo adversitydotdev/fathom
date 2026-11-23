@@ -5,7 +5,7 @@ import { CircleCheck, CircleDashed, CircleMinus } from "lucide-react";
 import { AskAgentButton } from "@/components/agent/assistant-drawer";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
 import { AgentMark } from "@/components/status";
-import { Eyebrow, PageTitle } from "@/components/typography";
+import { Eyebrow, StatCard, PageTitle } from "@/components/typography";
 import { getControls, getParties, getPolicies, getProcedures, getProgram } from "@/lib/data";
 import { isoDate } from "@/lib/format";
 
@@ -55,7 +55,7 @@ export default async function PoliciesPage({
         title="Policies"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {policies.length} policies · {procedures.length} procedures
             </p>
             <AskAgentButton
@@ -78,10 +78,10 @@ export default async function PoliciesPage({
 
       <section className="flex flex-col gap-3">
         <Eyebrow>Policies</Eyebrow>
-        <div className="overflow-hidden rounded-2xl border bg-card">
+        <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b bg-muted/30 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+              <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Policy</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -166,10 +166,10 @@ export default async function PoliciesPage({
 
       <section className="flex flex-col gap-3">
         <Eyebrow>Procedures</Eyebrow>
-        <div className="overflow-hidden rounded-2xl border bg-card">
+        <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b bg-muted/30 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+              <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Procedure</th>
                   <th className="px-4 py-3 font-medium">Parent policy</th>
@@ -232,16 +232,6 @@ export default async function PoliciesPage({
           </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "met" | "waived" }) {
-  const cls = tone === "met" ? "text-met-ink" : tone === "waived" ? "text-waived-ink" : "";
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
-      <Eyebrow>{label}</Eyebrow>
-      <span className={`text-3xl font-medium tabular-nums ${cls}`}>{value}</span>
     </div>
   );
 }

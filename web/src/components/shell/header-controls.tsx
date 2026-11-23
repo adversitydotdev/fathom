@@ -1,6 +1,7 @@
 "use client";
 
-import { CalendarDays, ChevronDown, RotateCcw } from "lucide-react";
+import { CalendarDays, ChevronsUpDown, X } from "lucide-react";
+import { cn } from "cn";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
@@ -21,11 +22,12 @@ export function ProgramSwitcher({
   const search = useSearchParams();
   const [pending, start] = useTransition();
   return (
-    <label className="relative flex h-8 items-center gap-2 rounded-full border bg-card pr-2 pl-3.5 text-sm">
+    <label className="relative flex h-8 items-center gap-2 rounded-md border bg-card pr-2 pl-3 text-sm shadow-xs transition-colors hover:bg-muted">
       {pending && <Spinner size="small" className="size-3.5 text-muted-foreground" />}
-      <span className="text-muted-foreground">{systemName} /</span>
+      <span className="text-muted-foreground">{systemName}</span>
+      <span className="text-muted-foreground/50">/</span>
       <select
-        className="appearance-none bg-transparent pr-5 font-medium outline-none"
+        className="cursor-pointer appearance-none bg-transparent pr-5 font-medium outline-none"
         value={current}
         aria-label="Program"
         onChange={(e) => {
@@ -39,7 +41,7 @@ export function ProgramSwitcher({
           </option>
         ))}
       </select>
-      <ChevronDown className="pointer-events-none absolute right-2 size-3.5 text-muted-foreground" aria-hidden />
+      <ChevronsUpDown className="pointer-events-none absolute right-2 size-3.5 text-muted-foreground" aria-hidden />
     </label>
   );
 }
@@ -47,6 +49,8 @@ export function ProgramSwitcher({
 /**
  * The evaluation date. RFC 0004: past status is computed from the revisions
  * in force then, so this is a view of the past, not today's objects re-dated.
+ * The native date input sits invisibly over the pill so the pill can read
+ * "Today" instead of the browser's empty mm/dd/yyyy placeholder.
  */
 export function AtPicker() {
   const router = useRouter();
@@ -64,26 +68,33 @@ export function AtPicker() {
   };
 
   return (
-    <div className="flex h-8 items-center gap-1.5 rounded-full border bg-card px-3.5 text-sm">
-      {pending ? (
-        <Spinner size="small" className="size-4 text-muted-foreground" />
-      ) : (
-        <CalendarDays className="size-4 text-muted-foreground" aria-hidden />
+    <div
+      className={cn(
+        "relative flex h-8 items-center gap-1.5 rounded-md border bg-card px-2.5 text-sm shadow-xs transition-colors hover:bg-muted",
+        at && "border-waived/50 bg-waived-soft text-waived-ink hover:bg-waived-soft",
       )}
-      <span className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">At</span>
+    >
+      {pending ? <Spinner size="small" className="size-4" /> : <CalendarDays className="size-4 opacity-70" aria-hidden />}
+      <span className="text-muted-foreground">{at ? "Viewing" : "As of"}</span>
+      <span className="font-medium tabular-nums">{at || "Today"}</span>
       <input
         type="date"
         aria-label="Evaluation date"
         value={at}
         onChange={(e) => set(e.target.value)}
-        className="bg-transparent font-mono text-xs outline-none [color-scheme:light] dark:[color-scheme:dark]"
+        onClick={(e) => e.currentTarget.showPicker?.()}
+        className="absolute inset-0 cursor-pointer opacity-0 [color-scheme:light] dark:[color-scheme:dark]"
       />
-      {at ? (
-        <button type="button" onClick={() => set("")} className="text-muted-foreground hover:text-foreground" aria-label="Evaluate now">
-          <RotateCcw className="size-3.5" />
+      {at && (
+        <button
+          type="button"
+          onClick={() => set("")}
+          className="relative z-10 -mr-1 ml-0.5 rounded p-0.5 hover:bg-waived/20"
+          aria-label="Evaluate now"
+          title="Back to today"
+        >
+          <X className="size-3.5" />
         </button>
-      ) : (
-        <span className="font-mono text-[10px] tracking-[0.12em] text-muted-foreground uppercase">now</span>
       )}
     </div>
   );

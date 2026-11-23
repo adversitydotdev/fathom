@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { CircleCheck, CircleX, Clock, Download, LoaderCircle } from "lucide-react";
 
 import { StatusBadge } from "@/components/spectrumui/status-badge";
-import { Eyebrow, PageTitle } from "@/components/typography";
+import { Eyebrow, StatCard, PageTitle } from "@/components/typography";
 import type { Job } from "@/lib/api/types";
 import { getAllJobs, getBaseline, getProgram } from "@/lib/data";
 import { isoDate } from "@/lib/format";
@@ -63,7 +63,7 @@ export default async function JobsPage({
         eyebrow={program.name}
         title="Jobs"
         aside={
-          <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+          <p className="text-xs font-medium text-muted-foreground">
             {jobs.length} jobs recorded
           </p>
         }
@@ -76,7 +76,7 @@ export default async function JobsPage({
         <StatCard label="Queued / Running" value={active} tone={active > 0 ? "waived" : undefined} />
       </div>
 
-      <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5" aria-label="Exports and renders">
+      <section className="flex flex-col gap-3 rounded-xl border bg-card p-5" aria-label="Exports and renders">
         <Eyebrow>Exports & renders</Eyebrow>
         <p className="text-xs text-muted-foreground">
           Queue OSCAL 1.2.3 packages, narrative System Security Plans (SSP), or full canonical Git mirror exports for{" "}
@@ -87,10 +87,10 @@ export default async function JobsPage({
 
       <section className="flex flex-col gap-3">
         <Eyebrow>Job history</Eyebrow>
-        <div className="overflow-hidden rounded-2xl border bg-card">
+        <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b bg-muted/30 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+              <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Job</th>
                   <th className="px-4 py-3 font-medium">Type</th>
@@ -108,7 +108,7 @@ export default async function JobsPage({
                     <td className="px-4 py-3">
                       <JobStatusBadge status={j.status} />
                     </td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{isoDate(j.created)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground tabular-nums">{isoDate(j.created)}</td>
                     <td className="px-4 py-3 font-mono text-xs tabular-nums text-muted-foreground">
                       {duration(j.created, j.finished)}
                     </td>
@@ -143,23 +143,6 @@ export default async function JobsPage({
           </div>
         </div>
       </section>
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "met" | "gap" | "waived" }) {
-  const cls =
-    tone === "gap"
-      ? "text-gap-ink"
-      : tone === "met"
-        ? "text-met-ink"
-        : tone === "waived"
-          ? "text-waived-ink"
-          : "";
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
-      <Eyebrow>{label}</Eyebrow>
-      <span className={`text-3xl font-medium tabular-nums ${cls}`}>{value}</span>
     </div>
   );
 }

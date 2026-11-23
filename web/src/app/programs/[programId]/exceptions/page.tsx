@@ -3,7 +3,7 @@ import Link from "next/link";
 import { CircleCheck, CirclePause, CircleX } from "lucide-react";
 
 import { StatusBadge } from "@/components/spectrumui/status-badge";
-import { Eyebrow, PageTitle } from "@/components/typography";
+import { StatCard, PageTitle } from "@/components/typography";
 import {
   evaluationInstant,
   getAllExceptions,
@@ -94,7 +94,7 @@ export default async function ExceptionsPage({
         title="Exceptions"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} {rows.length === 1 ? "waiver" : "waivers"} · evaluated at{" "}
               <span className="text-foreground">{evalDate}</span>
             </p>
@@ -111,13 +111,13 @@ export default async function ExceptionsPage({
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-2xl border bg-card px-6 py-10 text-center text-sm text-muted-foreground">
+        <div className="rounded-xl border bg-card px-6 py-10 text-center text-sm text-muted-foreground">
           No active or historical exceptions recorded for this system.
         </div>
       ) : (
         <div className="flex flex-col gap-3">
           {rows.map((r) => (
-            <article key={r.id} className="flex flex-col gap-3 rounded-2xl border bg-card p-5">
+            <article key={r.id} className="flex flex-col gap-3 rounded-xl border bg-card p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex flex-col gap-1">
                   <div className="flex items-center gap-2">
@@ -185,23 +185,6 @@ export default async function ExceptionsPage({
           ))}
         </div>
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "met" | "gap" | "waived" }) {
-  const cls =
-    tone === "gap"
-      ? "text-gap-ink"
-      : tone === "met"
-        ? "text-met-ink"
-        : tone === "waived"
-          ? "text-waived-ink"
-          : "";
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
-      <Eyebrow>{label}</Eyebrow>
-      <span className={`text-3xl font-medium tabular-nums ${cls}`}>{value}</span>
     </div>
   );
 }

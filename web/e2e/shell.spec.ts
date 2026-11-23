@@ -45,9 +45,9 @@ test("evaluation date sets and clears ?at, and sidebar links carry it", async ({
 test("theme toggle flips and persists", async ({ page }) => {
   await page.goto(`/programs/${PROGRAM_171}`);
   const html = page.locator("html");
-  await expect(html).toHaveClass(/dark/);
+  await expect(html).not.toHaveClass(/dark/);
   await page.getByLabel("Toggle dark mode").click();
-  await expect(html).not.toHaveClass(/dark/);
+  await expect(html).toHaveClass(/dark/);
   await page.reload();
-  await expect(html).not.toHaveClass(/dark/);
+  await expect(html).toHaveClass(/dark/);
 });

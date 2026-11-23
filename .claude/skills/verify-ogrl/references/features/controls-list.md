@@ -4,7 +4,7 @@
 
 ## Sub-features
 
-- header: the program name eyebrow, and "N on the baseline · at <date>".
+- header: the program name above the title, and "N on the baseline · at <date>".
 - state-chips: "All N", then one chip per state with its count. Labels are lowercase in the DOM: `met 16`, `gap 6`, `waived 1`, `out of scope 2`. They write `?state=`. Clicking the active chip clears it. Pressed state is shown with `aria-pressed`.
 - family-filter: `<select aria-label="Family">` writes `?family=`.
 - search: `searchbox "Search controls"` matches id, name, family, owner, and object id. It is client-side and not in the URL.

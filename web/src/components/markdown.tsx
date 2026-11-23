@@ -11,17 +11,17 @@ export function Markdown({ children, className }: { children: string; className?
         remarkPlugins={[remarkGfm]}
         components={{
           h1: ({ children }) => (
-            <h1 className="font-display text-lg font-medium tracking-[-0.01em] text-foreground pt-1 first:pt-0">
+            <h1 className="text-lg font-semibold text-foreground pt-1 first:pt-0">
               {children}
             </h1>
           ),
           h2: ({ children }) => (
-            <h2 className="font-display text-base font-medium tracking-[-0.01em] text-foreground pt-2 first:pt-0">
+            <h2 className="text-base font-semibold text-foreground pt-2 first:pt-0">
               {children}
             </h2>
           ),
           h3: ({ children }) => (
-            <h3 className="font-mono text-xs font-semibold tracking-[0.06em] text-foreground uppercase pt-2 first:pt-0">
+            <h3 className="text-sm font-semibold text-foreground pt-2 first:pt-0">
               {children}
             </h3>
           ),
@@ -73,7 +73,7 @@ export function Markdown({ children, className }: { children: string; className?
             </div>
           ),
           thead: ({ children }) => (
-            <thead className="border-b bg-muted/40 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+            <thead className="border-b bg-muted/40 text-xs font-medium text-muted-foreground">
               {children}
             </thead>
           ),

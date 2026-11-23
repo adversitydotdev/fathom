@@ -32,13 +32,13 @@ export function CrudDialog({
         <Dialog.Overlay className="fixed inset-0 z-50 bg-background/75 backdrop-blur-xs" />
         <Dialog.Content
           className={cn(
-            "fixed top-1/2 left-1/2 z-50 flex max-h-[88dvh] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border bg-card shadow-2xl outline-none",
+            "fixed top-1/2 left-1/2 z-50 flex max-h-[88dvh] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border bg-card shadow-2xl outline-none",
             wide ? "w-[min(96vw,72rem)]" : "w-[min(94vw,36rem)]",
           )}
         >
           <div className="flex items-start justify-between gap-4 border-b px-6 py-4">
             <div className="min-w-0">
-              <Dialog.Title className="font-display text-xl leading-tight">{title}</Dialog.Title>
+              <Dialog.Title className="text-xl font-semibold leading-tight">{title}</Dialog.Title>
               {description && (
                 <Dialog.Description className="mt-1 text-xs text-muted-foreground">
                   {description}
@@ -75,7 +75,7 @@ export function Field({
     <div className="flex flex-col gap-1.5">
       <label
         htmlFor={htmlFor}
-        className="flex items-center gap-1.5 font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase"
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground"
       >
         <span>{label}</span>
         {required && <span className="text-gap-ink">*</span>}

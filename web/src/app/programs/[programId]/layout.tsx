@@ -10,27 +10,21 @@ import { getProgram, getPrograms, getSystem } from "@/lib/data";
 export default function ProgramLayout({ children, params }: LayoutProps<"/programs/[programId]">) {
   return (
     <AgentProvider>
-      <div className="grid min-h-dvh grid-cols-[13rem_minmax(0,1fr)]">
-        <aside className="sticky top-0 h-dvh">
-          <Suspense fallback={<SidebarSkeleton />}>
-            <Sidebar />
-          </Suspense>
-        </aside>
+      <div className="grid min-h-dvh grid-cols-[14rem_minmax(0,1fr)]">
+        <div className="border-r bg-sidebar">
+          <aside className="sticky top-0 h-dvh">
+            <Suspense fallback={<SidebarSkeleton />}>
+              <Sidebar footer={apiMocking ? <MockBadge /> : undefined} />
+            </Suspense>
+          </aside>
+        </div>
         <div className="flex min-w-0 flex-col">
-          <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/80 px-6 py-3 backdrop-blur">
-            {apiMocking && (
-              <span
-                className="rounded-full border border-waived/40 bg-waived-soft px-2.5 py-1 font-mono text-[10px] tracking-[0.12em] text-waived-ink uppercase"
-                title="OGRL_API_MOCKING=enabled: /v1 is served from src/mocks"
-              >
-                Fixtures · no auth
-              </span>
-            )}
-            <div className="flex-1" />
-            <Suspense fallback={<div className="h-8 w-56 rounded-full border" />}>
+          <header className="sticky top-0 z-10 flex h-14 items-center gap-2 border-b bg-background/85 px-6 backdrop-blur lg:px-10">
+            <Suspense fallback={<div className="h-8 w-56 rounded-md border" />}>
               <Switcher params={params} />
             </Suspense>
-            <Suspense fallback={<div className="h-8 w-44 rounded-full border" />}>
+            <div className="flex-1" />
+            <Suspense fallback={<div className="h-8 w-36 rounded-md border" />}>
               <AtPicker />
             </Suspense>
             <AssistantTriggerButton />
@@ -56,5 +50,17 @@ async function Switcher({ params }: { params: LayoutProps<"/programs/[programId]
         systemName={system.name ?? system.id}
       />
     </>
+  );
+}
+
+function MockBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
+      title="OGRL_API_MOCKING=enabled: /v1 is served from src/mocks"
+    >
+      <span className="size-1.5 rounded-full bg-waived" aria-hidden />
+      Fixtures · no auth
+    </span>
   );
 }

@@ -20,7 +20,7 @@ test("tests page lists outcomes and triggers a test run", async ({ page }) => {
 test("evidence page evaluates validity against ?at", async ({ page }) => {
   await page.goto(`/programs/${PROGRAM_171}/evidence?at=2026-09-01`);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("Evidence");
-  await expect(page.getByText("2026-09-01")).toBeVisible();
+  await expect(page.getByRole("main").getByText("2026-09-01")).toBeVisible();
   await expect(page.getByText("Weekly log review, 2026-W43")).toBeVisible();
 });
 

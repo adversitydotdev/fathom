@@ -8,7 +8,6 @@ import { cn } from "cn";
 import { RevokeButton } from "@/components/crud";
 import { DataTable, type DataTableColumn } from "@/components/spectrumui/data-table";
 import { StatusBadge } from "@/components/spectrumui/status-badge";
-import { Eyebrow } from "@/components/typography";
 import { revokeRisk } from "@/lib/actions";
 import type { Risk } from "@/lib/api/types";
 import { isoDate } from "@/lib/format";
@@ -134,7 +133,7 @@ export function RisksView({
             <div className="font-medium">{r.name}</div>
             <p className="line-clamp-2 text-xs text-muted-foreground">{r.statement}</p>
             {r.milestones.length > 0 && (
-              <div className="mt-1.5 flex flex-wrap gap-1.5 font-mono text-[11px] text-muted-foreground">
+              <div className="mt-1.5 flex flex-wrap gap-1.5 text-xs text-muted-foreground">
                 {r.milestones.map((m) => (
                   <span key={m.name} className="rounded border bg-muted/30 px-1.5 py-0.5">
                     {m.name}
@@ -169,7 +168,7 @@ export function RisksView({
                 <span className="opacity-70">({r.likelihood}×{r.impact})</span>
               </span>
               {res !== undefined && (
-                <span className="font-mono text-[11px] tabular-nums text-muted-foreground">
+                <span className="text-xs tabular-nums text-muted-foreground">
                   residual {res} ({r.residualLikelihood}×{r.residualImpact})
                 </span>
               )}
@@ -188,7 +187,7 @@ export function RisksView({
         cell: (r) => (
           <div className="flex flex-col items-start gap-1">
             <RiskStatusBadge status={r.status} />
-            {r.treatment && <span className="font-mono text-[11px] text-muted-foreground">{r.treatment}</span>}
+            {r.treatment && <span className="text-xs text-muted-foreground capitalize">{r.treatment}</span>}
           </div>
         ),
       },
@@ -244,10 +243,10 @@ export function RisksView({
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="rounded-2xl border bg-card p-5" aria-label="Risk matrix">
+      <section className="rounded-xl border bg-card p-5" aria-label="Risk matrix">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-col gap-1">
-            <Eyebrow>Risk matrix</Eyebrow>
+            <h2 className="text-base font-semibold">Risk matrix</h2>
             <p className="text-xs text-muted-foreground">
               Likelihood (vertical) × Impact (horizontal). Click any cell to filter the register below.
             </p>
@@ -275,7 +274,7 @@ export function RisksView({
           <div className="grid min-w-[520px] grid-cols-[124px_repeat(5,minmax(0,1fr))] gap-1.5">
             {[5, 4, 3, 2, 1].map((l) => (
               <div key={l} className="contents">
-                <div className="flex items-center justify-end pr-2 font-mono text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-end pr-2 text-xs text-muted-foreground">
                   <span className="truncate">{LIKELIHOOD_LABELS[l - 1]}</span>
                   <span className="ml-1.5 opacity-60">{l}</span>
                 </div>
@@ -290,7 +289,7 @@ export function RisksView({
                       aria-pressed={active}
                       aria-label={`Likelihood ${l} (${LIKELIHOOD_LABELS[l - 1]}), Impact ${i} (${IMPACT_LABELS[i - 1]}): ${count} risks`}
                       className={cn(
-                        "flex h-11 items-center justify-center rounded-lg border font-mono text-xs tabular-nums transition-all",
+                        "flex h-11 items-center justify-center rounded-lg border text-xs font-medium tabular-nums transition-all",
                         matrixCellTone(l * i, count > 0),
                         active && "ring-2 ring-foreground ring-offset-2 ring-offset-card",
                       )}
@@ -303,7 +302,7 @@ export function RisksView({
             ))}
             <div />
             {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="pt-1 text-center font-mono text-[11px] text-muted-foreground">
+              <div key={i} className="pt-1 text-center text-xs text-muted-foreground">
                 <span>{IMPACT_LABELS[i - 1]}</span>
                 <span className="ml-1 opacity-60">{i}</span>
               </div>

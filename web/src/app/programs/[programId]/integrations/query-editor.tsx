@@ -413,7 +413,7 @@ export function QueryEditorDialog({
 
           {operation && operation.parameters.length > 0 && (
             <fieldset className="flex flex-col gap-3">
-              <legend className="pb-1.5 font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Parameters</legend>
+              <legend className="pb-1.5 text-xs font-medium text-muted-foreground">Parameters</legend>
               {operation.parameters.map((p) => {
                 const id = `query-param-${p.name}`;
                 const json = p.in === "json";
@@ -551,7 +551,7 @@ export function QueryEditorDialog({
                     <Input id="query-list-items" value={listItems} onChange={(e) => setListItems(e.target.value)} className="font-mono" placeholder={listOperation?.items ?? ""} />
                   </Field>
                   <div className="flex flex-col gap-2" aria-label="Bindings">
-                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Each listed item fills</span>
+                    <span className="text-xs font-medium text-muted-foreground">Each listed item fills</span>
                     {binds.map((b, i) => (
                       <div key={i} className="flex flex-col gap-1">
                         <div className="grid grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-2">
@@ -610,7 +610,7 @@ export function QueryEditorDialog({
           </Field>
 
           <fieldset className="flex flex-col gap-2" aria-label="Fields to keep">
-            <legend className="pb-1.5 font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Fields to keep</legend>
+            <legend className="pb-1.5 text-xs font-medium text-muted-foreground">Fields to keep</legend>
             <p className="text-[11px] text-muted-foreground">
               Output name and the path it reads in each item. <span className="font-mono">id</span> and{" "}
               <span className="font-mono">name</span> name failing items. Click an item field to fill the focused row.
@@ -662,7 +662,7 @@ export function QueryEditorDialog({
         <div className="flex min-w-0 flex-col gap-4">
           <section aria-label="Check" className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Check</span>
+              <span className="text-xs font-medium text-muted-foreground">Check</span>
               <LoadingButton type="button" variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" loading={checking} onClick={runCheck}>
                 {!checking && <ShieldCheck className="size-3.5" aria-hidden />}
                 Validate
@@ -699,7 +699,7 @@ export function QueryEditorDialog({
 
           <section aria-label="Dry run" className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-4">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Dry run</span>
+              <span className="text-xs font-medium text-muted-foreground">Dry run</span>
               <LoadingButton
                 type="button"
                 variant="outline"
@@ -736,7 +736,7 @@ export function QueryEditorDialog({
             {columns.length > 0 && (
               <div className="max-h-64 overflow-auto rounded-lg border bg-card">
                 <table className="w-full text-left text-xs" aria-label="Sample items">
-                  <thead className="border-b bg-muted/30 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+                  <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                     <tr>
                       {columns.map((c) => (
                         <th key={c} className="px-2 py-1.5 font-medium">
@@ -762,7 +762,7 @@ export function QueryEditorDialog({
           </section>
 
           <aside aria-label="Item fields" className="flex min-w-0 flex-col gap-2">
-            <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Item fields</span>
+            <span className="text-xs font-medium text-muted-foreground">Item fields</span>
             {!operation && <p className="text-[11px] text-muted-foreground">Choose an operation to see what each item holds.</p>}
             {operation && (
               <ul className="flex max-h-72 flex-col divide-y overflow-auto rounded-xl border bg-card">
@@ -794,7 +794,7 @@ export function QueryEditorDialog({
             )}
             {each && listOperation && (
               <>
-                <span className="mt-2 font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Listed item fields</span>
+                <span className="mt-2 text-xs font-medium text-muted-foreground">Listed item fields</span>
                 <p className="text-[11px] text-muted-foreground">Fills the focused binding, or adds a field read from the listed item.</p>
                 <ul aria-label="Listed item fields" className="flex max-h-56 flex-col divide-y overflow-auto rounded-xl border bg-card">
                   {(listOperation.fields ?? []).map((f) => (

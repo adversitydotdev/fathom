@@ -343,8 +343,8 @@ export function AgentProvider({
               <div className="flex min-w-0 items-center gap-2">
                 <Sparkles className="size-4 shrink-0 text-agent" aria-hidden />
                 <div className="min-w-0">
-                  <h2 className="truncate font-display text-lg leading-none">AI Assistant</h2>
-                  <p className="mt-1 truncate font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+                  <h2 className="truncate text-lg font-semibold leading-none">AI Assistant</h2>
+                  <p className="mt-1 truncate text-xs font-medium text-muted-foreground">
                     {status?.enabled
                       ? status.model?.replace(/^(anthropic|openai):/, "") ?? "connected"
                       : "not configured"}
@@ -421,7 +421,7 @@ export function AgentProvider({
                     )}
                   >
                     {m.role === "user" ? (
-                      <div className="max-w-[88%] rounded-2xl bg-muted px-3.5 py-2 text-sm">
+                      <div className="max-w-[88%] rounded-xl bg-muted px-3.5 py-2 text-sm">
                         {m.content}
                       </div>
                     ) : (
@@ -452,7 +452,7 @@ export function AgentProvider({
                         )}
 
                         {(m.content || m.streaming) && (
-                          <div className="w-full rounded-2xl border bg-background/40 px-3.5 py-2.5">
+                          <div className="w-full rounded-xl border bg-background/40 px-3.5 py-2.5">
                             {m.content && <Markdown>{m.content}</Markdown>}
                             {m.streaming && (
                               <span className="mt-1 inline-block size-2 animate-pulse rounded-full bg-agent align-middle" />
@@ -538,11 +538,11 @@ export function AssistantTriggerButton() {
       size="sm"
       onClick={() => setOpen(!open)}
       aria-expanded={open}
-      className="h-8 gap-1.5 border-agent/35 text-xs hover:border-agent/60 hover:bg-agent/10"
+      className="h-8 gap-1.5 shadow-xs"
       title={status?.enabled ? `AI Assistant (${status.model})` : "AI Assistant"}
     >
       <Sparkles className="size-3.5 text-agent" aria-hidden />
-      <span>AI</span>
+      <span>Ask AI</span>
     </Button>
   );
 }

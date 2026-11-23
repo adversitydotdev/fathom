@@ -92,7 +92,7 @@ export default async function RequirementsPage({
         title="Requirements"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} in scope · at <span className="text-foreground">{isoDate(status.at)}</span>
             </p>
             <AskAgentButton

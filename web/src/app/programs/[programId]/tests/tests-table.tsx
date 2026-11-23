@@ -115,7 +115,7 @@ export function TestsTable({
         hideBelow: "lg",
         sortable: true,
         cell: (r) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {r.method}
             {r.interval ? ` · ${r.interval}` : ""}
           </span>
@@ -127,7 +127,7 @@ export function TestsTable({
         width: 112,
         hideBelow: "lg",
         sortable: true,
-        cell: (r) => <span className="font-mono text-xs text-muted-foreground">{isoDate(r.observed)}</span>,
+        cell: (r) => <span className="text-xs text-muted-foreground tabular-nums">{isoDate(r.observed)}</span>,
       },
       {
         id: "action",

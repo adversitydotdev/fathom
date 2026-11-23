@@ -4,11 +4,11 @@ export default function Loading() {
       <div className="h-14 w-80 rounded-xl bg-muted" />
       <div className="grid grid-cols-4 gap-3">
         {Array.from({ length: 4 }, (_, i) => (
-          <div key={i} className="h-24 rounded-2xl bg-muted" />
+          <div key={i} className="h-24 rounded-xl bg-muted" />
         ))}
       </div>
-      <div className="h-40 rounded-3xl bg-muted" />
-      <div className="h-64 rounded-3xl bg-muted" />
+      <div className="h-40 rounded-xl bg-muted" />
+      <div className="h-64 rounded-xl bg-muted" />
     </div>
   );
 }

@@ -165,7 +165,7 @@ export function ImplementationCrudButton({
           </Field>
           {paramKeys.length > 0 && (
             <div className="flex flex-col gap-3 rounded-xl border bg-background/40 p-3.5">
-              <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+              <span className="text-xs font-medium text-muted-foreground">
                 Control parameters
               </span>
               {paramKeys.map((key) => (

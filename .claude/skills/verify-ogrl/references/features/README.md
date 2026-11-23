@@ -4,7 +4,7 @@ A behavior-level inventory of the web UI. Agents use it to decide what to drive 
 
 ## Baseline preconditions
 
-- Mock mode (`OGRL_API_MOCKING=enabled`). The header shows a `Fixtures · no auth` badge. If it is missing, you are hitting a real API.
+- Mock mode (`OGRL_API_MOCKING=enabled`). The sidebar footer shows a `Fixtures · no auth` badge. If it is missing, you are hitting a real API.
 - The fixtures' "today" is `2026-11-09` (`FIXTURE_NOW` in `web/src/mocks/fixtures/program.ts`). Dates and expiry tones are relative to it, not to the wall clock.
 - Fixture org: Acme, with one system (`system--acme-platform`) and two programs:
   - `program--acme-platform-800-171` ("NIST 800-171", the first program, where `/` redirects)
