@@ -4795,7 +4795,8 @@ components:
           type: string
         spec_version:
           type: string
-          const: 0.1.0
+          description: RFC 0001 §6.2. This deployment stamps 0.1.0 on writes; library pulls may return 0.2.x.
+          pattern: ^(0\.1|0\.2)\.[0-9]+$
         created:
           type: string
           format: date-time

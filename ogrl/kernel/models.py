@@ -18,6 +18,8 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validat
 from ogrl.kernel.timeutil import utc
 
 SPEC_VERSION = "0.1.0"
+# Readable library revisions (RFC 0001 §6.2). Organization objects still stamp 0.1.0 for now.
+READABLE_SPEC_MAJOR_MINORS = frozenset({"0.1", "0.2"})
 
 Timestamp = Annotated[datetime, AfterValidator(utc)]
 Score = Annotated[int, Field(ge=1, le=5)]
@@ -26,7 +28,9 @@ Score = Annotated[int, Field(ge=1, le=5)]
 def readable_spec_version(value: str) -> bool:
     """A reader accepts the major and minor it implements, at any patch (6.2)."""
     parts = value.split(".")
-    return len(parts) == 3 and parts[:2] == SPEC_VERSION.split(".")[:2]
+    if len(parts) != 3 or not all(p.isdigit() for p in parts):
+        return False
+    return f"{parts[0]}.{parts[1]}" in READABLE_SPEC_MAJOR_MINORS
 
 
 class Part(BaseModel):
@@ -72,7 +76,8 @@ class Envelope(BaseModel):
     @classmethod
     def _readable(cls, value: str) -> str:
         if not readable_spec_version(value):
-            raise ValueError(f"spec_version {value} is not readable as {SPEC_VERSION}")
+            supported = ", ".join(sorted(f"{minor}.x" for minor in READABLE_SPEC_MAJOR_MINORS))
+            raise ValueError(f"spec_version {value} is not readable; supported {supported}")
         return value
 
     @property
