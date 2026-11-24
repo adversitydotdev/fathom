@@ -3,8 +3,7 @@ Description: >
   Fathom account. One public Fargate task, a single-AZ PostgreSQL instance,
   a private S3 bucket, and SSM Parameter Store. NAT, RDS Proxy, and SQS are
   off until their parameters are set. Leave EnableServices false until images
-  are pushed. TaskSize, EnableJobService, and EnableLoadBalancer are how an
-  active program grows.
+  are pushed. TaskSize, EnableJobService, and EnableLoadBalancer scale it.
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -56,6 +55,7 @@ Metadata:
           - OidcScopes
           - BootstrapAdminEmails
           - DisableApiTokenMinting
+          - SeedBundleUri
 
 Parameters:
   EnableServices:
@@ -82,7 +82,7 @@ Parameters:
     Type: String
     Default: fathom
     AllowedPattern: "^[a-z][a-z0-9-]{0,40}$"
-    Description: Lowercase prefix for the two ECR repositories, as prefix/api and prefix/web. One pair per account.
+    Description: Lowercase prefix for the ECR repositories (prefix/api, prefix/web). One pair per account.
   ApiImageTag:
     Type: String
     Default: latest
@@ -121,7 +121,7 @@ Parameters:
     Default: 100
     MinValue: 21
     MaxValue: 65536
-    Description: Storage autoscaling ceiling in GB. Must be greater than DatabaseAllocatedStorage.
+    Description: Storage autoscaling ceiling in GB, above DatabaseAllocatedStorage.
   DatabaseEngineVersion:
     Type: String
     Default: "18.6"
@@ -130,7 +130,7 @@ Parameters:
     Type: String
     Default: postgres18
     AllowedPattern: "^postgres[0-9]+$"
-    Description: Parameter group family. postgres18 for engine 18.x. Keep this on the same major version as DatabaseEngineVersion.
+    Description: Parameter group family, such as postgres18. Match the major version of DatabaseEngineVersion.
   DatabaseName:
     Type: String
     Default: fathom
@@ -153,21 +153,21 @@ Parameters:
     Type: String
     Default: "true"
     AllowedValues: ["true", "false"]
-    Description: Block deletion of the database instance. Set false before deleting the stack.
+    Description: Block database deletion. Set false before deleting the stack.
   DomainName:
     Type: String
     Default: ""
     AllowedPattern: "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?\\.[a-z]{2,}$"
-    Description: Domain for the SES identity, and for the alias record when a hosted zone and load balancer are set. Leave empty to skip mail.
+    Description: Domain for the SES identity and, with a hosted zone and load balancer, the alias record. Empty skips mail.
   PublicUrl:
     Type: String
     Default: ""
     AllowedPattern: "^$|^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]+)?$"
-    Description: The stable https origin users reach Fathom at. OAuth integration connections need it for their callback (RFC 0005 section 5). Leave empty until a domain or load balancer gives the deployment a stable name.
+    Description: Stable https origin of Fathom. OAuth connections need it for their callback (RFC 0005 section 5). Empty until a stable name exists.
   HostedZoneId:
     Type: String
     Default: ""
-    Description: Route 53 hosted zone for DomainName. When set, the stack writes the SES DKIM records and, with the load balancer, an alias to it.
+    Description: Route 53 hosted zone for DomainName. The stack writes the SES DKIM records and, with the load balancer, an alias.
   EnableLoadBalancer:
     Type: String
     Default: "false"
@@ -179,7 +179,7 @@ Parameters:
   CertificateArn:
     Type: String
     Default: ""
-    Description: ACM certificate in this region for DomainName. Required when EnableLoadBalancer is true.
+    Description: ACM certificate in this region for DomainName. Required with EnableLoadBalancer.
   EnableNatGateway:
     Type: String
     Default: "false"
@@ -213,23 +213,23 @@ Parameters:
   AvailabilityZoneB:
     Type: String
     Default: ""
-    Description: Second AZ for the database subnet group and the load balancer. Empty uses the region's second AZ.
+    Description: Second AZ for the database subnet group and load balancer. Empty uses the region's second AZ.
 
   OidcProviderName:
     Type: String
     Default: google
     AllowedPattern: "^[a-z0-9][a-z0-9_-]{0,31}$"
-    Description: Name of the OIDC provider. It is the {provider} segment of the login and callback paths (/v1/auth/oidc/{provider}/begin and /callback).
+    Description: OIDC provider name, the {provider} segment of /v1/auth/oidc/{provider}/begin and /callback.
   OidcIssuer:
     Type: String
     Default: ""
     AllowedPattern: "^$|^https://[^\\s\"\\\\]+$"
-    Description: OIDC issuer URL, such as https://accounts.google.com. Leave empty to configure no OIDC login (the other Oidc parameters are then ignored).
+    Description: OIDC issuer URL, such as https://accounts.google.com. Empty means no OIDC login (other Oidc parameters are ignored).
   OidcClientId:
     Type: String
     Default: ""
     AllowedPattern: "^[^\\s\"\\\\]*$"
-    Description: Client ID registered with the identity provider. Required when OidcIssuer is set.
+    Description: Client ID registered with the IdP. Required when OidcIssuer is set.
   OidcClientSecretParameter:
     Type: String
     Default: ""
@@ -244,7 +244,7 @@ Parameters:
     Type: String
     Default: ""
     AllowedPattern: "^$|^https://[^\\s\"\\\\]+$"
-    Description: Redirect URI registered with the identity provider. Empty derives PublicUrl/v1/auth/oidc/OidcProviderName/callback.
+    Description: Redirect URI registered with the IdP. Empty derives PublicUrl/v1/auth/oidc/OidcProviderName/callback.
   OidcScopes:
     Type: String
     Default: openid email profile
@@ -254,12 +254,17 @@ Parameters:
     Type: String
     Default: ""
     AllowedPattern: "^[^\\s\"\\\\]*$"
-    Description: Comma-separated emails (no spaces) that get the administrator role on their first OIDC login. Everyone else starts as a viewer.
+    Description: Comma-separated emails (no spaces) that become administrators on first OIDC login. Others start as viewers.
   DisableApiTokenMinting:
     Type: String
     Default: "false"
     AllowedValues: ["true", "false"]
-    Description: When true, POST /v1/auth/tokens refuses people, so sign-in is IdP-only. Agents and services are unaffected.
+    Description: When true, POST /v1/auth/tokens refuses people (IdP-only sign-in). Agents and services still work.
+  SeedBundleUri:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^(s3|https)://[^\\s\"\\\\]+$"
+    Description: Snapshot restored into an empty database at first boot. The task role must read an s3:// object.
 
 Rules:
   LoadBalancerNeedsCertificate:
@@ -268,14 +273,14 @@ Rules:
       - !Equals [!Ref EnableServices, "true"]
     Assertions:
       - Assert: !Not [!Equals [!Ref CertificateArn, ""]]
-        AssertDescription: EnableLoadBalancer requires CertificateArn when services are started.
+        AssertDescription: EnableLoadBalancer requires CertificateArn once services start.
   NatNeedsLoadBalancer:
     RuleCondition: !And
       - !Equals [!Ref EnableNatGateway, "true"]
       - !Equals [!Ref EnableServices, "true"]
     Assertions:
       - Assert: !Equals [!Ref EnableLoadBalancer, "true"]
-        AssertDescription: EnableNatGateway removes the tasks' public addresses, so EnableLoadBalancer is required once services are started.
+        AssertDescription: EnableNatGateway removes public task addresses, so started services need EnableLoadBalancer.
   ZoneNeedsDomain:
     RuleCondition: !Not [!Equals [!Ref HostedZoneId, ""]]
     Assertions:
@@ -308,6 +313,7 @@ Conditions:
   HasOidcRedirectUri: !Not [!Equals [!Ref OidcRedirectUri, ""]]
   HasBootstrapAdmins: !Not [!Equals [!Ref BootstrapAdminEmails, ""]]
   TokenMintingOff: !Equals [!Ref DisableApiTokenMinting, "true"]
+  HasSeedBundle: !Not [!Equals [!Ref SeedBundleUri, ""]]
   ServicesOn: !Equals [!Ref EnableServices, "true"]
   ServicesDirect: !And
     - !Condition ServicesOn
@@ -442,9 +448,8 @@ Resources:
         - Key: Name
           Value: !Sub ${AWS::StackName}-public-b
 
-  # The second private subnet has no tasks. A DB subnet group requires two
-  # availability zones even when the instance runs in one. Private subnets
-  # reach the internet only when EnableNatGateway adds a route.
+  # The second private subnet has no tasks: a DB subnet group needs two AZs.
+  # Private subnets reach the internet only when EnableNatGateway adds a route.
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -1053,14 +1058,14 @@ Resources:
                   - ssm:GetParameters
                   - ssm:GetParametersByPath
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fathom/${AWS::StackName}/*
-              # aws_role connections (RFC 0005 section 5): only roles the organization tagged.
+              # aws_role connections (RFC 0005 section 5): tagged roles only.
               - Effect: Allow
                 Action: sts:AssumeRole
                 Resource: "*"
                 Condition:
                   StringEquals:
                     aws:ResourceTag/ogrl-integration: "true"
-              # Integration connection secrets (RFC 0005 section 5): write-only from the API.
+              # Connection secrets (RFC 0005 section 5): write-only.
               - Effect: Allow
                 Action:
                   - ssm:PutParameter
@@ -1209,6 +1214,11 @@ Resources:
               - TokenMintingOff
               - Name: FATHOM_DISABLE_API_TOKEN_MINTING
                 Value: "true"
+              - !Ref AWS::NoValue
+            - !If
+              - HasSeedBundle
+              - Name: FATHOM_SEED_BUNDLE_URI
+                Value: !Ref SeedBundleUri
               - !Ref AWS::NoValue
           Secrets:
             - Name: FATHOM_DATABASE_PASSWORD
@@ -1517,7 +1527,7 @@ Resources:
 
 Outputs:
   BucketName:
-    Description: Private bucket for evidence, policy bodies, and rendered files.
+    Description: Private bucket for evidence, policy bodies, and renders.
     Value: !Ref Bucket
   ApiRepositoryUri:
     Description: Push the API image here before setting EnableServices to true.
@@ -1534,7 +1544,7 @@ Outputs:
       OidcClientSecretParameter points.
     Value: !Sub /fathom/${AWS::StackName}
   DatabaseEndpoint:
-    Description: PostgreSQL endpoint. The instance accepts connections only from the task security groups.
+    Description: PostgreSQL endpoint. Only the task security groups can connect.
     Value: !GetAtt Database.Endpoint.Address
   ClusterName:
     Value: !Ref Cluster
@@ -1548,7 +1558,7 @@ Outputs:
     Value: !GetAtt ApiServiceBehindLoadBalancer.Name
   ServiceNamePrivate:
     Condition: AlbWithNat
-    Description: API service in the private subnet, registered with the load balancer.
+    Description: API service in the private subnet, behind the load balancer.
     Value: !GetAtt ApiServicePrivate.Name
   JobServiceName:
     Condition: JobWithoutNat
