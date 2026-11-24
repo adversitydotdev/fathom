@@ -68,7 +68,7 @@ function MockBadge() {
   return (
     <span
       className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"
-      title="OGRL_API_MOCKING=enabled: /v1 is served from src/mocks"
+      title="FATHOM_API_MOCKING=enabled: /v1 is served from src/mocks"
     >
       <span className="size-1.5 rounded-full bg-waived" aria-hidden />
       Fixtures · no auth

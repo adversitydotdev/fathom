@@ -12,23 +12,23 @@ import pytest
 import yaml
 from fastapi.testclient import TestClient
 
-from ogrl import container
-from ogrl.access import ActorKind, Principal, Role
-from ogrl.adapters.library import DirectoryLibrary
-from ogrl.adapters.secrets import StaticSecrets
-from ogrl.api.app import create_app
-from ogrl.auth import Credentials
-from ogrl.operations.exports import ExportSettings
-from ogrl.persistence.memory import MemoryBlobs, MemoryStore
+from fathom import container
+from fathom.access import ActorKind, Principal, Role
+from fathom.adapters.library import DirectoryLibrary
+from fathom.adapters.secrets import StaticSecrets
+from fathom.api.app import create_app
+from fathom.auth import Credentials
+from fathom.operations.exports import ExportSettings
+from fathom.persistence.memory import MemoryBlobs, MemoryStore
 
 # The compose stack (compose.yaml). Override to point the suite somewhere else.
 DATABASE_URL = os.environ.get(
-    "OGRL_TEST_DATABASE_URL", "postgresql://ogrl:ogrl@localhost:5432/ogrl"
+    "FATHOM_TEST_DATABASE_URL", "postgresql://fathom:fathom@localhost:5432/fathom"
 )
-S3_ENDPOINT = os.environ.get("OGRL_TEST_S3_ENDPOINT", "http://localhost:8333")
-S3_BUCKET = os.environ.get("OGRL_TEST_S3_BUCKET", "ogrl")
-os.environ.setdefault("AWS_ACCESS_KEY_ID", "ogrl")
-os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "ogrl-secret")
+S3_ENDPOINT = os.environ.get("FATHOM_TEST_S3_ENDPOINT", "http://localhost:8333")
+S3_BUCKET = os.environ.get("FATHOM_TEST_S3_BUCKET", "fathom")
+os.environ.setdefault("AWS_ACCESS_KEY_ID", "fathom")
+os.environ.setdefault("AWS_SECRET_ACCESS_KEY", "fathom-secret")
 os.environ.setdefault("AWS_DEFAULT_REGION", "us-east-1")
 SCHEMAS: list[str] = []
 
@@ -38,7 +38,7 @@ def services_available() -> bool:
     import asyncpg
 
     async def ping() -> None:
-        from ogrl.persistence.postgres import async_url
+        from fathom.persistence.postgres import async_url
 
         url = async_url(DATABASE_URL).replace("postgresql+asyncpg://", "postgresql://")
         conn = await asyncpg.connect(url, timeout=2)
@@ -57,8 +57,8 @@ def postgres_store():
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
 
-    from ogrl.persistence.postgres import PostgresStore, async_url
-    from ogrl.persistence.tables import metadata
+    from fathom.persistence.postgres import PostgresStore, async_url
+    from fathom.persistence.tables import metadata
 
     schema = f"test_{uuid.uuid4().hex[:12]}"
     SCHEMAS.append(schema)
@@ -83,8 +83,8 @@ INTEGRATIONS_DIR = Path(__file__).parent / "integrations"
 
 
 def connection_store(store: Any) -> Any:
-    from ogrl.persistence.memory import MemoryConnections
-    from ogrl.persistence.postgres import PostgresConnections, PostgresStore
+    from fathom.persistence.memory import MemoryConnections
+    from fathom.persistence.postgres import PostgresConnections, PostgresStore
 
     if isinstance(store, PostgresStore):
         return PostgresConnections(store.engine)
@@ -92,7 +92,7 @@ def connection_store(store: Any) -> Any:
 
 
 def s3_blobs():
-    from ogrl.adapters.s3 import S3Blobs
+    from fathom.adapters.s3 import S3Blobs
 
     return S3Blobs(S3_BUCKET, prefix=f"test-{uuid.uuid4().hex[:12]}", endpoint_url=S3_ENDPOINT)
 
@@ -105,7 +105,7 @@ def drop_test_schemas() -> Iterator[None]:
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import create_async_engine
 
-    from ogrl.persistence.postgres import async_url
+    from fathom.persistence.postgres import async_url
 
     async def drop() -> None:
         engine = create_async_engine(async_url(DATABASE_URL))

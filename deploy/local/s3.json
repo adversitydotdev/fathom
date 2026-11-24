@@ -1,8 +1,8 @@
 {
   "identities": [
     {
-      "name": "ogrl",
-      "credentials": [{ "accessKey": "ogrl", "secretKey": "ogrl-secret" }],
+      "name": "fathom",
+      "credentials": [{ "accessKey": "fathom", "secretKey": "fathom-secret" }],
       "actions": ["Admin", "Read", "Write", "List", "Tagging"]
     }
   ]

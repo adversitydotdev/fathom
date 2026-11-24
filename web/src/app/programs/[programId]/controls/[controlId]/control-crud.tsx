@@ -115,7 +115,7 @@ export function ImplementationCrudButton({
           if (!v) setError(undefined);
         }}
         title={existing ? "Edit implementation" : "Add implementation"}
-        description="Updates are sent with If-Match and re-evaluated live by the OGRL kernel."
+        description="Updates are sent with If-Match and re-evaluated live by the Fathom kernel."
         trigger={
           <Button size="xs" variant="outline" className="gap-1">
             {existing ? <Pencil className="size-3" aria-hidden /> : <Plus className="size-3" aria-hidden />}

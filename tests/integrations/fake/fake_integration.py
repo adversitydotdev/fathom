@@ -83,7 +83,7 @@ def handle(request):
                 "jsonrpc": "2.0",
                 "id": rid,
                 "result": {
-                    "identity": f"{config['dataset']} as svc-ogrl",
+                    "identity": f"{config['dataset']} as svc-fathom",
                     "granted_scopes": ["users.read"],
                 },
             }

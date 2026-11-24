@@ -13,9 +13,9 @@ from urllib.parse import parse_qsl, urlsplit
 import httpx
 import pytest
 
-from ogrl.adapters.oauth import HttpOAuthClient
-from ogrl.errors import Invalid, NotFound, PreconditionFailed
-from ogrl.operations.integrations import (
+from fathom.adapters.oauth import HttpOAuthClient
+from fathom.errors import Invalid, NotFound, PreconditionFailed
+from fathom.operations.integrations import (
     CollectionRequest,
     ConnectionPatch,
     ConnectionWrite,
@@ -23,7 +23,7 @@ from ogrl.operations.integrations import (
     TemplateEnable,
     build_snapshot,
 )
-from ogrl.plugins.ports import IntegrationError
+from fathom.plugins.ports import IntegrationError
 from tests.conftest import C1, LIB_TEST, PRINCIPALS, Api
 
 FAKE = "dev.ogrl.fake"
@@ -54,7 +54,7 @@ class Vendor:
     """A local OAuth authorization server, the emulator the repo rules ask for.
 
     `authorize` plays the browser and the vendor's consent page: it reads the
-    URL OGRL built and issues a code bound to the PKCE challenge. The token
+    URL Fathom built and issues a code bound to the PKCE challenge. The token
     endpoint checks the client, the redirect URI, and the verifier.
     """
 
@@ -233,7 +233,7 @@ def test_connection_lifecycle(world):
     job = run(c.integrations.validate(ADMIN, connection.id))
     assert job.status == "succeeded", job
     connection = run(c.integrations.get_connection(ADMIN, connection.id))
-    assert (connection.state, connection.identity) == ("active", "acme as svc-ogrl")
+    assert (connection.state, connection.identity) == ("active", "acme as svc-fathom")
 
     renamed = run(
         c.integrations.update_connection(
@@ -599,7 +599,7 @@ def test_oauth_needs_a_public_url(make_app, clock):
     component = api.post("/components", {"name": "IdP", "kind": "software"})
     connection = oauth_connection(container, component["id"])
     problem = api.post(f"/connections/{connection.id}/oauth/start", expect=400)
-    assert problem["type"] == "urn:ogrl:problem:oauth-needs-public-url"
+    assert problem["type"] == "urn:fathom:problem:oauth-needs-public-url"
 
 
 def test_aws_role_connections_assume_with_the_external_id(world, assumer):
@@ -621,7 +621,7 @@ def test_aws_role_connections_assume_with_the_external_id(world, assumer):
     )
     ((role, external_id, session),) = assumer.calls
     assert (role, external_id) == (arn, connection["external_id"])
-    assert session.startswith("ogrl-")
+    assert session.startswith("fathom-")
 
     bad = api.post(
         "/connections",

@@ -304,7 +304,7 @@ const specs: ControlSpec[] = [
     slug: "risk-assessment", display: "RSK-01", name: "Risk assessment", family: "Risk management",
     type: "detective", frequency: "annual", state: "met",
     statement: "Assess risk to the system annually and after significant change, and record it in the risk register.",
-    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "The 2026 assessment is recorded as risks in OGRL. Owners review treatments monthly." },
+    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "The 2026 assessment is recorded as risks in Fathom. Owners review treatments monthly." },
     maps: [[R171 + "03-11-01", "equivalent-to", true], [R53 + "ra-3", "equivalent-to", true]],
   },
   {
@@ -325,7 +325,7 @@ const specs: ControlSpec[] = [
     slug: "security-policies", display: "GOV-01", name: "Security policies", family: "Governance", origin: "custom",
     type: "preventive", frequency: "annual", state: "met",
     statement: "Maintain adopted security policies and procedures, and review them annually.",
-    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "Policies are adopted in OGRL and reviewed each January." },
+    impl: { status: "implemented", responsibility: "provider", owner: "priya-shah", narrative: "Policies are adopted in Fathom and reviewed each January." },
     maps: [[R171 + "03-15-01", "subset-of", true]],
   },
 ];
@@ -467,7 +467,7 @@ function evidence(
     valid_until: day(validUntil),
     implementation_ref: implFor(control),
     resource: {
-      uri: `s3://acme-ogrl-evidence/${slug}`,
+      uri: `s3://acme-fathom-evidence/${slug}`,
       media_type: media,
       digest: { algorithm: "sha-256", value: "9f2c4e1ab0d73f5e8c61a2b4d07e9f13c5a8b6d2e4f1a3c7b9d0e2f4a6c8b1d3" },
     },
@@ -572,7 +572,7 @@ export const controlStates = new Map(
 export const jobs: Job[] = [
   { id: "job--0193-test-run-mfa", type: "test_run", status: "succeeded", created: at(-1, "06:00:00Z"), finished: at(-1, "06:00:41Z"), result_id: "result--mfa-enforced-latest" },
   { id: "job--0193-git-export", type: "git_export", status: "succeeded", created: at(0, "02:00:00Z"), finished: at(0, "02:01:12Z") },
-  { id: "job--0193-ir-drill", type: "test_run", status: "failed", created: at(-4, "06:00:00Z"), finished: at(-4, "06:00:09Z"), error: { type: "urn:ogrl:problem:runner-error", title: "Runner exited with status 1", status: 500 } },
+  { id: "job--0193-ir-drill", type: "test_run", status: "failed", created: at(-4, "06:00:00Z"), finished: at(-4, "06:00:09Z"), error: { type: "urn:fathom:problem:runner-error", title: "Runner exited with status 1", status: 500 } },
   { id: "job--0193-library-pull", type: "library_pull", status: "succeeded", created: at(-18, "10:12:00Z"), finished: at(-18, "10:14:51Z") },
 ];
 
@@ -589,7 +589,7 @@ export const policies: Policy[] = [
     reviewed: day(-25),
     review_interval: "annual",
     control_refs: ["control--security-policies", "control--risk-assessment"],
-    resource: { uri: "s3://acme-ogrl-evidence/policies/infosec-v2.3.md", media_type: "text/markdown" },
+    resource: { uri: "s3://acme-fathom-evidence/policies/infosec-v2.3.md", media_type: "text/markdown" },
   },
   {
     ...envelope("policy", "access-control", at(-180), at(-15)),
@@ -601,7 +601,7 @@ export const policies: Policy[] = [
     reviewed: day(-15),
     review_interval: "annual",
     control_refs: ["control--account-lifecycle", "control--mfa-privileged", "control--least-privilege"],
-    resource: { uri: "s3://acme-ogrl-evidence/policies/access-control-v1.8.md", media_type: "text/markdown" },
+    resource: { uri: "s3://acme-fathom-evidence/policies/access-control-v1.8.md", media_type: "text/markdown" },
   },
   {
     ...envelope("policy", "incident-response", at(-160), at(-62)),
@@ -613,7 +613,7 @@ export const policies: Policy[] = [
     reviewed: day(-62),
     review_interval: "annual",
     control_refs: ["control--incident-handling", "control--incident-reporting"],
-    resource: { uri: "s3://acme-ogrl-evidence/policies/ir-plan-v3.0.md", media_type: "text/markdown" },
+    resource: { uri: "s3://acme-fathom-evidence/policies/ir-plan-v3.0.md", media_type: "text/markdown" },
   },
   {
     ...envelope("policy", "change-management", at(-14), at(-3)),
@@ -762,7 +762,7 @@ export const connections: Connection[] = [
     auth_kind: "fields",
     bindings: ["component--okta"],
     state: "active",
-    identity: "acme.okta.com as svc-ogrl",
+    identity: "acme.okta.com as svc-fathom",
     granted_scopes: ["okta.users.read", "okta.groups.read"],
     last_validated: at(-1, "05:58:02Z"),
     secrets_set: ["OKTA_API_TOKEN"],
@@ -812,7 +812,7 @@ export const snapshots: Snapshot[] = [
     complete: true,
     item_count: 418,
     size: 184_220,
-    uri: "s3://acme-ogrl-evidence/snapshots/okta-users.json",
+    uri: "s3://acme-fathom-evidence/snapshots/okta-users.json",
     digest: "5d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f",
     warnings: ["removed undeclared fields: credentials"],
   },
@@ -824,7 +824,7 @@ export const snapshots: Snapshot[] = [
     complete: true,
     item_count: 37,
     size: 12_904,
-    uri: "s3://acme-ogrl-evidence/snapshots/okta-groups.json",
+    uri: "s3://acme-fathom-evidence/snapshots/okta-groups.json",
     digest: "a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9e0b2d4f",
   },
   {
@@ -836,7 +836,7 @@ export const snapshots: Snapshot[] = [
     reason: "rate limited after page 3",
     item_count: 300,
     size: 96_512,
-    uri: "s3://acme-ogrl-evidence/snapshots/github-repos.json",
+    uri: "s3://acme-fathom-evidence/snapshots/github-repos.json",
     digest: "0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7c9",
   },
   {
@@ -847,14 +847,14 @@ export const snapshots: Snapshot[] = [
     complete: true,
     item_count: 3,
     size: 1_204,
-    uri: "s3://acme-ogrl-evidence/snapshots/aws-security-groups.json",
+    uri: "s3://acme-fathom-evidence/snapshots/aws-security-groups.json",
     digest: "9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f15d2f8a1c3e7b9d0f4a6c8e2b1d3f5a7",
   },
 ];
 
 export const integrationVersions: IntegrationInstall[] = [
-  { id: "dev.adversity.okta", version: "1.3.0", digest: "3c5e7b9d1f3a5c7e9b0d2f4a6c8e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e", uri: "s3://acme-ogrl-evidence/integrations/dev.adversity.okta/1.3.0.tar.gz", tier: "first-party", enabled: false, installed: at(-60), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.3.0/dev.adversity.okta-1.3.0.tar.gz" },
-  { id: "dev.adversity.okta", version: "1.4.0", digest: "7f3a9c1e5b2d8f0a4c6e8b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f1a", uri: "s3://acme-ogrl-evidence/integrations/dev.adversity.okta/1.4.0.tar.gz", tier: "first-party", enabled: true, installed: at(-3), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.4.0/dev.adversity.okta-1.4.0.tar.gz" },
+  { id: "dev.adversity.okta", version: "1.3.0", digest: "3c5e7b9d1f3a5c7e9b0d2f4a6c8e1b3d5f7a9c0e2b4d6f8a1c3e5b7d9f0a2c4e", uri: "s3://acme-fathom-evidence/integrations/dev.adversity.okta/1.3.0.tar.gz", tier: "first-party", enabled: false, installed: at(-60), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.3.0/dev.adversity.okta-1.3.0.tar.gz" },
+  { id: "dev.adversity.okta", version: "1.4.0", digest: "7f3a9c1e5b2d8f0a4c6e8b1d3f5a7c9e0b2d4f6a8c1e3b5d7f9a0c2e4b6d8f1a", uri: "s3://acme-fathom-evidence/integrations/dev.adversity.okta/1.4.0.tar.gz", tier: "first-party", enabled: true, installed: at(-3), installed_by: "party--priya-shah", source: "https://github.com/adversitydotdev/ogrl-okta/releases/download/v1.4.0/dev.adversity.okta-1.4.0.tar.gz" },
 ];
 
 export const templateUpdates: (TemplateUpdate & { integration_id: string })[] = [

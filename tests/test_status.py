@@ -2,9 +2,9 @@
 
 from datetime import UTC, datetime, timedelta
 
-from ogrl.kernel import status
-from ogrl.kernel.graph import Graph
-from ogrl.kernel.models import parse
+from fathom.kernel import status
+from fathom.kernel.graph import Graph
+from fathom.kernel.models import parse
 from tests.conftest import AC2, AC3, C1, C2, LIB_BASELINE, LIB_TEST, STAMP, Api, library_objects
 
 AC2_A = "mapping--ogrl-ac-01_to_nist-sp-800-53-r5-ac-2_part_a"
@@ -396,7 +396,7 @@ def test_evidence_without_valid_until_does_not_meet():
 
 
 def test_requirement_override_without_parameter_map():
-    from ogrl.kernel.parameters import requirement_value
+    from fathom.kernel.parameters import requirement_value
 
     impl = parse(
         {

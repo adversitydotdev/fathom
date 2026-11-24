@@ -9,11 +9,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.pool import NullPool
 
-from ogrl.errors import Conflict, PreconditionFailed
-from ogrl.kernel.models import Party
-from ogrl.operations.records import Job
-from ogrl.operations.store import Row
-from ogrl.persistence.postgres import PostgresStore, async_url
+from fathom.errors import Conflict, PreconditionFailed
+from fathom.kernel.models import Party
+from fathom.operations.records import Job
+from fathom.operations.store import Row
+from fathom.persistence.postgres import PostgresStore, async_url
 from tests.conftest import DATABASE_URL, SCHEMAS, postgres_store, services_available
 
 pytestmark = pytest.mark.skipif(

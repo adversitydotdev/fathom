@@ -7,8 +7,8 @@ from pathlib import Path
 
 import yaml
 
-from ogrl.adapters.library import DirectoryLibrary
-from ogrl.operations.exports import ExportSettings
+from fathom.adapters.library import DirectoryLibrary
+from fathom.operations.exports import ExportSettings
 from tests.conftest import (
     AC2,
     C1,

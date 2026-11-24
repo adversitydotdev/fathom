@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ogrl.api.paths import all_endpoints
+from fathom.api.paths import all_endpoints
 
 SPEC = yaml.safe_load((Path(__file__).parents[1] / "api" / "openapi.yaml").read_text())
 

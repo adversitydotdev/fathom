@@ -4,9 +4,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from ogrl.kernel import constraints, rules
-from ogrl.kernel.graph import Graph
-from ogrl.kernel.models import Run, Test, parse
+from fathom.kernel import constraints, rules
+from fathom.kernel.graph import Graph
+from fathom.kernel.models import Run, Test, parse
 from tests.conftest import C1, STAMP, library_objects
 
 OBSERVED = datetime(2026, 11, 21, tzinfo=UTC)

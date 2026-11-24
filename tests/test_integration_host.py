@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from ogrl.integrations import host as host_module
-from ogrl.integrations.host import SubprocessHost
-from ogrl.integrations.manifest import PackageError, load_package
-from ogrl.plugins.ports import IntegrationError
+from fathom.integrations import host as host_module
+from fathom.integrations.host import SubprocessHost
+from fathom.integrations.manifest import PackageError, load_package
+from fathom.plugins.ports import IntegrationError
 
 FAKE = Path(__file__).parent / "integrations" / "fake"
 TOKEN = {"FAKE_TOKEN": "s3cret"}
@@ -44,7 +44,7 @@ def test_manifest_rejects_bad_packages(tmp_path):
 def test_validate_and_collect(package):
     host = SubprocessHost()
     report = run(host.validate(package, {"dataset": "acme"}, TOKEN))
-    assert report.identity == "acme as svc-ogrl"
+    assert report.identity == "acme as svc-fathom"
     assert list(report.granted_scopes) == ["users.read"]
 
     collected = run(host.collect(package, "users", 1, {"dataset": "acme"}, TOKEN))
@@ -120,7 +120,7 @@ def test_sts_assumer_builds_a_fresh_client_per_call(monkeypatch):
     """A reused STS client stays denied after a trust-policy change (seen against live AWS)."""
     import boto3
 
-    from ogrl.adapters.sts import StsRoleAssumer
+    from fathom.adapters.sts import StsRoleAssumer
 
     made = []
 
@@ -140,6 +140,6 @@ def test_sts_assumer_builds_a_fresh_client_per_call(monkeypatch):
     monkeypatch.setattr(boto3, "client", factory)
     assumer = StsRoleAssumer()
     for external in ("one", "two"):
-        run(assumer.assume("arn:aws:iam::123456789012:role/r", external, "ogrl-x"))
+        run(assumer.assume("arn:aws:iam::123456789012:role/r", external, "fathom-x"))
     assert made == ["one", "two"]
     assert len(clients) == 2 and clients[0] is not clients[1]

@@ -121,7 +121,7 @@ test("a query source nothing reads can be removed", async ({ page }) => {
 test("the assistant drafts a query source into the editor; a person saves it", async ({ page, shot }) => {
   await page.goto(PAGE);
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-  const drawer = page.getByRole("dialog", { name: "OGRL AI Assistant" });
+  const drawer = page.getByRole("dialog", { name: "Fathom AI Assistant" });
   await drawer.getByRole("textbox").fill("Write a query source for security groups open to the internet");
   await drawer.getByRole("textbox").press("Enter");
   for (const tool of ["search_operations", "describe_operation", "validate_query", "dry_run_query", "propose_query_source"]) {

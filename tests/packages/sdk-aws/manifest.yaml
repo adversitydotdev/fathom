@@ -5,7 +5,7 @@ id: dev.ogrl.aws
 name: AWS (test)
 version: 0.1.0
 protocol: 1
-publisher: ogrl.dev
+publisher: fathom.dev
 runtime:
   kind: python
   entrypoint: aws_integration:app.run

@@ -1,8 +1,8 @@
 """Regression tests for RFC 0001 §7.20 graph constraints (drift audit)."""
 
-from ogrl.kernel import constraints
-from ogrl.kernel.graph import Graph
-from ogrl.kernel.models import Implementation, Mapping, parse
+from fathom.kernel import constraints
+from fathom.kernel.graph import Graph
+from fathom.kernel.models import Implementation, Mapping, parse
 from tests.conftest import AC2, C1, STAMP, library_objects
 
 

@@ -300,7 +300,7 @@ def test_query_definitions_travel_with_the_git_export(make_app, tmp_path):
 
     import yaml
 
-    from ogrl.operations.exports import ExportSettings
+    from fathom.operations.exports import ExportSettings
 
     def git(*args, cwd=None):
         subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
@@ -319,7 +319,7 @@ def test_query_definitions_travel_with_the_git_export(make_app, tmp_path):
     checkout = tmp_path / "checkout"
     git("clone", "--quiet", str(remote), str(checkout))
     exported = yaml.safe_load(
-        (checkout / "ogrl-app/queries" / VENDOR / "active-apps@1.yaml").read_text()
+        (checkout / "fathom-app/queries" / VENDOR / "active-apps@1.yaml").read_text()
     )
     assert (exported["id"], exported["operation"]) == (saved["id"], "listApps")
 

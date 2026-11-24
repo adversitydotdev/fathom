@@ -14,12 +14,12 @@ import pytest
 from pydantic_ai.messages import ModelMessage, ToolReturnPart
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, FunctionModel
 
-from ogrl import container
-from ogrl.agent import AgentConfig, agent_principal
-from ogrl.agent.assistant import stream_agent_turn
-from ogrl.errors import Forbidden
-from ogrl.operations.integrations import QueryWrite
-from ogrl.persistence.memory import MemoryStore
+from fathom import container
+from fathom.agent import AgentConfig, agent_principal
+from fathom.agent.assistant import stream_agent_turn
+from fathom.errors import Forbidden
+from fathom.operations.integrations import QueryWrite
+from fathom.persistence.memory import MemoryStore
 
 PACKAGE = Path(__file__).parent / "packages" / "sdk-aws"
 AWS = "dev.ogrl.aws"

@@ -9,13 +9,13 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 from fastapi.testclient import TestClient
 
-from ogrl import container
-from ogrl.access import ActorKind, Principal, Role
-from ogrl.api.app import create_app
-from ogrl.auth import SESSION_COOKIE
-from ogrl.auth.oidc import VerifiedIdentity, pkce_challenge
-from ogrl.auth.store import MemoryAuthStore, PostgresAuthStore
-from ogrl.main import authenticator_from
+from fathom import container
+from fathom.access import ActorKind, Principal, Role
+from fathom.api.app import create_app
+from fathom.auth import SESSION_COOKIE
+from fathom.auth.oidc import VerifiedIdentity, pkce_challenge
+from fathom.auth.store import MemoryAuthStore, PostgresAuthStore
+from fathom.main import authenticator_from
 from tests.conftest import postgres_store, services_available
 
 
@@ -91,7 +91,7 @@ def test_oidc_pkce_login_session_csrf_and_logout():
     # Cookie-authenticated unsafe requests require a matching Origin (CSRF guard)
     no_origin = client.post("/v1/parties", json={"name": "SecOps", "kind": "team"})
     assert no_origin.status_code == 403
-    assert no_origin.json()["type"] == "urn:ogrl:problem:csrf"
+    assert no_origin.json()["type"] == "urn:fathom:problem:csrf"
 
     evil_origin = client.post(
         "/v1/parties",
@@ -131,7 +131,7 @@ def test_mint_use_list_and_revoke_api_tokens():
     assert minted.status_code == 201
     pat = minted.json()["token"]
     rec = minted.json()["record"]
-    assert pat.startswith("ogrl_pat_")
+    assert pat.startswith("fathom_pat_")
 
     # Mint an agent token (admin only)
     agent_minted = client.post(
@@ -195,7 +195,7 @@ def test_postgres_auth_store_roundtrip():
         )
         principal = await auth_store.principal("party--com.acme.pguser")
         secret, _ = await auth_store.create_session("party--com.acme.pguser")
-        from ogrl.auth.authenticator import digest
+        from fathom.auth.authenticator import digest
 
         session_actor = await auth_store.actor_for_session(digest(secret))
         await auth_store.revoke_session(digest(secret))

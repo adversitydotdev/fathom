@@ -3,12 +3,12 @@ from datetime import UTC, datetime
 import pytest
 from fastapi.testclient import TestClient
 
-from ogrl import container
-from ogrl.access import ActorKind, Principal, Role
-from ogrl.api.app import create_app
-from ogrl.auth import Credentials
-from ogrl.kernel.models import Control, Origin
-from ogrl.persistence.memory import MemoryControls
+from fathom import container
+from fathom.access import ActorKind, Principal, Role
+from fathom.api.app import create_app
+from fathom.auth import Credentials
+from fathom.kernel.models import Control, Origin
+from fathom.persistence.memory import MemoryControls
 
 LIBRARY = Control(
     id="control--ogrl-ac-01",
@@ -63,7 +63,7 @@ def test_no_token_is_401_problem(client):
     response = client.get("/v1/controls")
     assert response.status_code == 401
     assert response.headers["content-type"] == "application/problem+json"
-    assert response.json()["type"] == "urn:ogrl:problem:unauthenticated"
+    assert response.json()["type"] == "urn:fathom:problem:unauthenticated"
 
 
 def test_viewer_reads_but_cannot_write(client):
@@ -102,7 +102,7 @@ def test_library_control_is_read_only(client):
     headers = {**as_role(Role.ADMINISTRATOR), "If-Match": LIBRARY.modified.isoformat()}
     response = client.patch(f"/v1/controls/{LIBRARY.id}", json=NEW, headers=headers)
     assert response.status_code == 409
-    assert response.json()["type"] == "urn:ogrl:problem:library-object"
+    assert response.json()["type"] == "urn:fathom:problem:library-object"
 
 
 def test_reserved_slug_is_rejected(client):

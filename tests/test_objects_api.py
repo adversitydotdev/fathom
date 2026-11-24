@@ -10,7 +10,7 @@ def test_every_spec_operation_is_served():
 
     import yaml
 
-    from ogrl.api.paths import all_endpoints
+    from fathom.api.paths import all_endpoints
 
     spec = yaml.safe_load((Path(__file__).parents[1] / "api" / "openapi.yaml").read_text())
     operations = {
@@ -29,7 +29,7 @@ def test_library_objects_are_listed_and_read_only(pulled: Api):
     assert requirement["class"] == "control" and requirement["parts"][0]["id"] == "a"
     control = pulled.get(f"/controls/{C1}")
     problem = pulled.patch(f"/controls/{C1}", {"family": "zz"}, control["modified"], expect=409)
-    assert problem["type"] == "urn:ogrl:problem:library-object"
+    assert problem["type"] == "urn:fathom:problem:library-object"
     assert pulled.get(f"/requirements/{AC2}/mappings")["data"]
     assert [t["id"] for t in pulled.get(f"/controls/{C1}/tests")["data"]] == [LIB_TEST]
 
@@ -63,7 +63,7 @@ def test_ids_are_checked(admin: Api):
     dup = admin.post(
         "/parties", {"id": "party--com.acme.ops", "name": "x", "kind": "team"}, expect=409
     )
-    assert dup["type"] == "urn:ogrl:problem:id-taken"
+    assert dup["type"] == "urn:fathom:problem:id-taken"
     wrong = admin.post(
         "/parties", {"id": "system--com.acme.x", "name": "x", "kind": "team"}, expect=400
     )
@@ -142,7 +142,7 @@ def test_agent_drafts_and_a_person_attests(client, pulled: Api, program):
         "narrative": "Drafted.",
     }
     refused = agent.post("/implementations", body, expect=403)
-    assert refused["type"] == "urn:ogrl:problem:agent-refused"
+    assert refused["type"] == "urn:fathom:problem:agent-refused"
     draft = agent.post("/implementations", {**body, "status": "planned"})
     assert draft["created_by_ref"] == "party--agent"
     agent.revoke(f"/implementations/{draft['id']}", draft["modified"], expect=403)

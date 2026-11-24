@@ -27,7 +27,7 @@ async function mockStream(body: StreamReq): Promise<Response> {
   }> = [];
   const mockApi = async (path: string, payload?: unknown) => {
     const res = await handleMockRequest(
-      new Request(`http://ogrl.mock/v1${path}`, {
+      new Request(`http://fathom.mock/v1${path}`, {
         method: payload === undefined ? "GET" : "POST",
         headers: { "Content-Type": "application/json" },
         ...(payload === undefined ? {} : { body: JSON.stringify(payload) }),
@@ -88,7 +88,7 @@ async function mockStream(body: StreamReq): Promise<Response> {
   } else if (msg.includes("policy")) {
     events.push({ type: "tool_call", name: "draft_policy", args: { name: "AI-Drafted Acceptable Use Policy" } });
     const res = await handleMockRequest(
-      new Request("http://ogrl.mock/v1/policies", {
+      new Request("http://fathom.mock/v1/policies", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -131,7 +131,7 @@ async function mockStream(body: StreamReq): Promise<Response> {
     });
     events.push({ type: "tool_result", name: "get_program_status" });
     const text =
-      "Checked computed status from the OGRL kernel. Open gaps include **IAM-01** (unset `review_period`), **IAM-02** (failing MFA check), **LOG-02** (expired weekly review evidence), and **CHG-01** (missing test methodology). Ask me to draft any implementation or policy for human review.";
+      "Checked computed status from the Fathom kernel. Open gaps include **IAM-01** (unset `review_period`), **IAM-02** (failing MFA check), **LOG-02** (expired weekly review evidence), and **CHG-01** (missing test methodology). Ask me to draft any implementation or policy for human review.";
     events.push({ type: "delta", text });
     events.push({ type: "done", text, drafts });
   }

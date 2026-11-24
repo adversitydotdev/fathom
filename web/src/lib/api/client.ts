@@ -10,7 +10,7 @@ import type { paths } from "./schema";
 import type { Problem } from "./types";
 
 /** Host used for in-process mock requests. Never resolved on the network. */
-const MOCK_ORIGIN = "http://ogrl.mock";
+const MOCK_ORIGIN = "http://fathom.mock";
 
 async function mockFetch(request: Request): Promise<Response> {
   // A real fetch is request-time I/O. Without this, Next treats the in-process

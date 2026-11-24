@@ -12,10 +12,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-from ogrl import container
-from ogrl.integrations.archive import read_archive
-from ogrl.integrations.host import SubprocessHost
-from ogrl.integrations.manifest import PackageError
+from fathom import container
+from fathom.integrations.archive import read_archive
+from fathom.integrations.host import SubprocessHost
+from fathom.integrations.manifest import PackageError
 from tests.conftest import C1, LIB_TEST, PRINCIPALS, Api
 
 FAKE = Path(__file__).parent / "integrations" / "fake"
@@ -84,13 +84,13 @@ def test_install_from_a_url_and_list_versions(api, tmp_path):
     # Reinstalling the same bytes is a no-op; other bytes under the same version are refused.
     assert install(api, tmp_path, content)["status"] == "succeeded"
     other = install(api, tmp_path, build(tmp_path, "0.1.0", lambda m: m.update(name="Other")))
-    assert other["error"]["type"] == "urn:ogrl:problem:version-immutable"
+    assert other["error"]["type"] == "urn:fathom:problem:version-immutable"
 
 
 def test_install_refusals(make_app, api, tmp_path):
     content = build(tmp_path, "0.1.0")
     wrong = install(api, tmp_path, content, digest="0" * 64)
-    assert wrong["error"]["type"] == "urn:ogrl:problem:digest-mismatch"
+    assert wrong["error"]["type"] == "urn:fathom:problem:digest-mismatch"
 
     raw = io.BytesIO()
     with tarfile.open(fileobj=raw, mode="w") as tar:
@@ -98,18 +98,18 @@ def test_install_refusals(make_app, api, tmp_path):
         info.size = 1
         tar.addfile(info, io.BytesIO(b"x"))
     bad = install(api, tmp_path, gzip.compress(raw.getvalue()))
-    assert bad["error"]["type"] == "urn:ogrl:problem:bad-package"
+    assert bad["error"]["type"] == "urn:fathom:problem:bad-package"
 
     def as_directory_package(manifest):
         manifest["id"] = "dev.ogrl.fake"
         manifest["templates"][0]["test"]["run"]["source"] = "dev.ogrl.fake/users@1"
 
     clash = install(api, tmp_path, build(tmp_path, "0.1.0", as_directory_package))
-    assert clash["error"]["type"] == "urn:ogrl:problem:static-integration"
+    assert clash["error"]["type"] == "urn:fathom:problem:static-integration"
 
     strict, _ = make_app(allow_local_integrations=False)
     job = install(Api(strict, "administrator"), tmp_path, content)
-    assert job["error"]["type"] == "urn:ogrl:problem:untrusted-integration"
+    assert job["error"]["type"] == "urn:fathom:problem:untrusted-integration"
 
     Api(api.client, "contributor").post("/integrations", {"url": "x"}, expect=403)
 
@@ -145,7 +145,7 @@ def test_upgrade_with_template_update_breaking_refusal_and_rollback(api, tmp_pat
         manifest["templates"][0]["test"]["run"]["source"] = f"{ID}/users@2"
 
     breaking = install(api, tmp_path, build(tmp_path, "0.3.0", renamed))
-    assert breaking["error"]["type"] == "urn:ogrl:problem:upgrade-breaks-tests"
+    assert breaking["error"]["type"] == "urn:fathom:problem:upgrade-breaks-tests"
     assert test["id"] in breaking["error"]["detail"]
     versions = {v["version"]: v["enabled"] for v in api.get(f"/integrations/{ID}/versions")["data"]}
     assert versions == {"0.1.0": False, "0.2.0": True, "0.3.0": False}

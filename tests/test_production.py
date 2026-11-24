@@ -8,20 +8,20 @@ import logging
 
 from fastapi.testclient import TestClient
 
-from ogrl import container, telemetry
-from ogrl.access import ActorKind, Principal, Role
-from ogrl.adapters.queue import MemoryJobQueue
-from ogrl.adapters.secrets import EnvSecrets, SsmSecrets
-from ogrl.api.app import create_app
-from ogrl.main import (
+from fathom import container, telemetry
+from fathom.access import ActorKind, Principal, Role
+from fathom.adapters.queue import MemoryJobQueue
+from fathom.adapters.secrets import EnvSecrets, SsmSecrets
+from fathom.api.app import create_app
+from fathom.main import (
     build_from_env,
     database_url_from_env,
     dispatch_queued_job,
     parse_bind,
 )
-from ogrl.operations.jobs import QueuedExecutor
-from ogrl.operations.library import LibraryPullRequest
-from ogrl.persistence.postgres import PostgresStore
+from fathom.operations.jobs import QueuedExecutor
+from fathom.operations.library import LibraryPullRequest
+from fathom.persistence.postgres import PostgresStore
 
 
 def test_root_health_and_v1_health():
@@ -35,21 +35,21 @@ def test_root_health_and_v1_health():
 
 def test_cloudformation_database_env_components_and_bind():
     env = {
-        "OGRL_DATABASE_HOST": "ogrl-db.internal",
-        "OGRL_DATABASE_PORT": "5432",
-        "OGRL_DATABASE_NAME": "ogrl",
-        "OGRL_DATABASE_USER": "ogrl",
-        "OGRL_DATABASE_PASSWORD": "secret-pass",
-        "OGRL_DATABASE_SSLMODE": "require",
-        "OGRL_BIND": "127.0.0.1:9090",
+        "FATHOM_DATABASE_HOST": "fathom-db.internal",
+        "FATHOM_DATABASE_PORT": "5432",
+        "FATHOM_DATABASE_NAME": "fathom",
+        "FATHOM_DATABASE_USER": "fathom",
+        "FATHOM_DATABASE_PASSWORD": "secret-pass",
+        "FATHOM_DATABASE_SSLMODE": "require",
+        "FATHOM_BIND": "127.0.0.1:9090",
     }
     url = database_url_from_env(env)
-    assert url == "postgresql://ogrl:secret-pass@ogrl-db.internal:5432/ogrl?ssl=require"
+    assert url == "postgresql://fathom:secret-pass@fathom-db.internal:5432/fathom?ssl=require"
     assert parse_bind(env) == ("127.0.0.1", 9090)
 
     c = build_from_env(env)
     assert isinstance(c.store, PostgresStore)
-    assert c.store.engine.url.host == "ogrl-db.internal"
+    assert c.store.engine.url.host == "fathom-db.internal"
 
 
 def test_ssm_secrets_reads_harness_prefix_with_env_fallback():
@@ -60,20 +60,20 @@ def test_ssm_secrets_reads_harness_prefix_with_env_fallback():
         def get_parameter(self, Name: str, WithDecryption: bool = True) -> dict:  # noqa: N803
             assert WithDecryption is True
             self.calls.append(Name)
-            if Name == "/ogrl/prod/harness/AWS_TOKEN":
+            if Name == "/fathom/prod/harness/AWS_TOKEN":
                 return {"Parameter": {"Value": "from-ssm"}}
             raise KeyError(Name)
 
     ssm = FakeSsm()
     secrets = SsmSecrets(
-        "/ogrl/prod",
-        fallback=EnvSecrets({"OGRL_HARNESS_LOCAL_ONLY": "from-env"}),
+        "/fathom/prod",
+        fallback=EnvSecrets({"FATHOM_HARNESS_LOCAL_ONLY": "from-env"}),
         client=ssm,
     )
     assert secrets.get("LOCAL_ONLY") == "from-env"
     assert secrets.get("AWS_TOKEN") == "from-ssm"
     assert secrets.get("MISSING") is None
-    assert "/ogrl/prod/harness/AWS_TOKEN" in ssm.calls
+    assert "/fathom/prod/harness/AWS_TOKEN" in ssm.calls
 
 
 def test_structured_json_telemetry_formatter():
@@ -81,7 +81,7 @@ def test_structured_json_telemetry_formatter():
     assert mode == "json"
     fmt = telemetry.JsonLogFormatter()
     record = logging.LogRecord(
-        name="ogrl.test",
+        name="fathom.test",
         level=logging.INFO,
         pathname=__file__,
         lineno=1,
@@ -91,13 +91,13 @@ def test_structured_json_telemetry_formatter():
     )
     parsed = json.loads(fmt.format(record))
     assert parsed["level"] == "INFO"
-    assert parsed["logger"] == "ogrl.test"
+    assert parsed["logger"] == "fathom.test"
     assert parsed["message"] == "hello world"
     assert parsed["timestamp"].endswith("Z")
 
 
 def test_queued_executor_and_worker_dispatch(library_dir):
-    from ogrl.adapters.library import DirectoryLibrary
+    from fathom.adapters.library import DirectoryLibrary
 
     queue = MemoryJobQueue()
     api_c = container.build(

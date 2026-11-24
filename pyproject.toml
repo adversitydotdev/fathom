@@ -1,7 +1,7 @@
 [project]
-name = "ogrl"
+name = "fathom"
 version = "0.1.0"
-description = "OGRL kernel, API, job runner, and agents."
+description = "Fathom kernel, API, job runner, and agents."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.13"
@@ -47,7 +47,7 @@ ogrl-rs = [
 ]
 
 [project.scripts]
-ogrl = "ogrl.main:run"
+fathom = "fathom.main:run"
 
 [build-system]
 requires = ["uv_build>=0.9,<0.14"]

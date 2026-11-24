@@ -1,11 +1,11 @@
-# Full local OGRL stack (RFC 0003 §2 & §9):
+# Full local Fathom stack (RFC 0003 §2 & §9):
 #   - Postgres 18 (organization store + auth tables)
 #   - SeaweedFS S3 + bucket init (evidence & render blobs)
 #   - Alembic migration runner
-#   - OGRL FastAPI server (`http://localhost:8080`)
+#   - Fathom FastAPI server (`http://localhost:8080`)
 #   - Idempotent local dev seeder (pulls ogrl-library v0.4.1 + starter Acme Platform;
-#     set `OGRL_SKIP_SEED=true` to boot an empty workspace)
-#   - OGRL Next.js Web UI (`http://localhost:3000`)
+#     set `FATHOM_SKIP_SEED=true` to boot an empty workspace)
+#   - Fathom Next.js Web UI (`http://localhost:3000`)
 #   - Integrations (RFC 0005): the seeder installs the first-party Okta, AWS, and GitHub
 #     releases. Connection secrets persist in the `secrets` volume.
 #
@@ -17,45 +17,45 @@
 # starts. With an `aws login` session:
 #   eval "$(aws configure export-credentials --format env)" && docker compose up -d api
 
-name: ogrl
+name: fathom
 
 x-api-env: &api-env
-  OGRL_DATABASE_URL: postgresql://ogrl:ogrl@postgres:5432/ogrl
-  OGRL_S3_ENDPOINT: http://s3:8333
-  OGRL_S3_BUCKET: ogrl
-  OGRL_S3_ACCESS_KEY_ID: ogrl
-  OGRL_S3_SECRET_ACCESS_KEY: ogrl-secret
+  FATHOM_DATABASE_URL: postgresql://fathom:fathom@postgres:5432/fathom
+  FATHOM_S3_ENDPOINT: http://s3:8333
+  FATHOM_S3_BUCKET: fathom
+  FATHOM_S3_ACCESS_KEY_ID: fathom
+  FATHOM_S3_SECRET_ACCESS_KEY: fathom-secret
   AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
   # For AWS connections only: the identity that assumes each connection's role.
   AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
   AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
   AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN:-}
   # Integrations (RFC 0005). Releases are unsigned until the registry ships.
-  OGRL_ALLOW_LOCAL_INTEGRATIONS: "true"
-  OGRL_SECRETS_FILE: /var/lib/ogrl/secrets.json
-  OGRL_PUBLIC_URL: http://localhost:8080
-  OGRL_RUN_SCHEDULER: "true"
-  OGRL_API_TOKENS: '{"ogrl_pat_local_dev_admin":{"actor_id":"party--local-admin","roles":["administrator"],"kind":"person"}}'
-  OGRL_ALLOWED_ORIGINS: http://localhost:3000
+  FATHOM_ALLOW_LOCAL_INTEGRATIONS: "true"
+  FATHOM_SECRETS_FILE: /var/lib/fathom/secrets.json
+  FATHOM_PUBLIC_URL: http://localhost:8080
+  FATHOM_RUN_SCHEDULER: "true"
+  FATHOM_API_TOKENS: '{"fathom_pat_local_dev_admin":{"actor_id":"party--local-admin","roles":["administrator"],"kind":"person"}}'
+  FATHOM_ALLOWED_ORIGINS: http://localhost:3000
   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
   OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-  OGRL_AI_MODEL: ${OGRL_AI_MODEL:-}
-  OGRL_AI_BASE_URL: ${OGRL_AI_BASE_URL:-}
-  OGRL_AI_API_KEY: ${OGRL_AI_API_KEY:-}
+  FATHOM_AI_MODEL: ${FATHOM_AI_MODEL:-}
+  FATHOM_AI_BASE_URL: ${FATHOM_AI_BASE_URL:-}
+  FATHOM_AI_API_KEY: ${FATHOM_AI_API_KEY:-}
 
 services:
   postgres:
     image: postgres:18
     environment:
-      POSTGRES_USER: ogrl
-      POSTGRES_PASSWORD: ogrl
-      POSTGRES_DB: ogrl
+      POSTGRES_USER: fathom
+      POSTGRES_PASSWORD: fathom
+      POSTGRES_DB: fathom
     ports:
       - "5432:5432"
     volumes:
       - postgres:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ogrl -d ogrl"]
+      test: ["CMD-SHELL", "pg_isready -U fathom -d fathom"]
       interval: 2s
       timeout: 3s
       retries: 30
@@ -76,18 +76,18 @@ services:
     image: amazon/aws-cli:2.27.0
     depends_on: [s3]
     environment:
-      AWS_ACCESS_KEY_ID: ogrl
-      AWS_SECRET_ACCESS_KEY: ogrl-secret
+      AWS_ACCESS_KEY_ID: fathom
+      AWS_SECRET_ACCESS_KEY: fathom-secret
       AWS_DEFAULT_REGION: us-east-1
     entrypoint: >
       sh -c "for i in $$(seq 1 30); do
-               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket ogrl 2>/dev/null && exit 0;
-               aws --endpoint-url http://s3:8333 s3api create-bucket --bucket ogrl && exit 0;
+               aws --endpoint-url http://s3:8333 s3api head-bucket --bucket fathom 2>/dev/null && exit 0;
+               aws --endpoint-url http://s3:8333 s3api create-bucket --bucket fathom && exit 0;
                sleep 1;
              done; exit 1"
 
   migrate:
-    image: ogrl-api:local
+    image: fathom-api:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -99,7 +99,7 @@ services:
     restart: "no"
 
   api:
-    image: ogrl-api:local
+    image: fathom-api:local
     build:
       context: .
       dockerfile: Dockerfile
@@ -112,7 +112,7 @@ services:
         condition: service_completed_successfully
     environment: *api-env
     volumes:
-      - secrets:/var/lib/ogrl
+      - secrets:/var/lib/fathom
     ports:
       - "8080:8080"
     healthcheck:
@@ -123,15 +123,15 @@ services:
       retries: 15
 
   seed:
-    image: ogrl-api:local
+    image: fathom-api:local
     pull_policy: never
     depends_on:
       api:
         condition: service_healthy
     environment:
-      OGRL_API_ORIGIN: http://api:8080
-      OGRL_API_TOKEN: ogrl_pat_local_dev_admin
-      OGRL_SKIP_SEED: ${OGRL_SKIP_SEED:-false}
+      FATHOM_API_ORIGIN: http://api:8080
+      FATHOM_API_TOKEN: fathom_pat_local_dev_admin
+      FATHOM_SKIP_SEED: ${FATHOM_SKIP_SEED:-false}
     volumes:
       - ./deploy/local/seed.py:/app/seed.py:ro
     command: ["python", "/app/seed.py"]
@@ -142,15 +142,15 @@ services:
       context: ./web
       dockerfile: Dockerfile
       args:
-        OGRL_API_ORIGIN: http://api:8080
+        FATHOM_API_ORIGIN: http://api:8080
     depends_on:
       api:
         condition: service_healthy
       seed:
         condition: service_completed_successfully
     environment:
-      OGRL_API_ORIGIN: http://api:8080
-      OGRL_API_TOKEN: ogrl_pat_local_dev_admin
+      FATHOM_API_ORIGIN: http://api:8080
+      FATHOM_API_TOKEN: fathom_pat_local_dev_admin
     ports:
       - "3000:3000"
 

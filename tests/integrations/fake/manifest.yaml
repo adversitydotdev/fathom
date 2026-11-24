@@ -4,7 +4,7 @@ id: dev.ogrl.fake
 name: Fake directory
 version: 0.1.0
 protocol: 1
-publisher: ogrl.dev
+publisher: fathom.dev
 description: Users from a fixture file, for tests.
 runtime:
   kind: python

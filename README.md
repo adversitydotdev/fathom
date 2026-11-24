@@ -1,6 +1,6 @@
-# OGRL
+# Fathom
 
-OGRL (Open Governance Reference Language) is an open language for a security program, and later a self-hosted application for running one.
+Fathom is a self-hosted application for running a security program. It speaks [OGRL](https://ogrl.adversity.dev) (Open Governance Reference Language), an open language for describing one.
 
 A company runs one program. SOC 2, ISO 27001, HIPAA, NIST, and CMMC ask overlapping questions under different identifiers. That overlap usually lives in a vendor's private control library, so the program cannot leave the tool, and two tools cannot agree about the same evidence. OGRL publishes the library and the mapping rules. A control, a mapping, or a piece of evidence can move on its own. A tool can implement part of the model and still interoperate.
 
@@ -8,7 +8,7 @@ People author YAML they can review. Status is computed from implementations, par
 
 The shared standard library lives in [`adversitydotdev/ogrl-library`](https://github.com/adversitydotdev/ogrl-library) (browsable at [ogrl.adversity.dev/library](https://ogrl.adversity.dev/library/)). Once an organization pulls a pinned library revision, their database is the source of truth for their program. A scheduled export writes a git snapshot, and the running tool does not read it back. A provider can publish what a service inherits, and a customer does not retype it. The same program renders to OSCAL when a government customer needs that package.
 
-The language specifications are published at [ogrl.adversity.dev](https://ogrl.adversity.dev) from [`ogrl-rfcs`](https://github.com/adversitydotdev/ogrl-rfcs). This application's design docs and operator documentation are published at [tools.adversity.dev](https://tools.adversity.dev) from [`ogrl-tooling`](https://github.com/adversitydotdev/ogrl-tooling):
+The language specifications are published at [ogrl.adversity.dev](https://ogrl.adversity.dev) from [`ogrl-rfcs`](https://github.com/adversitydotdev/ogrl-rfcs). Fathom's design docs and operator documentation are published at [tools.adversity.dev](https://tools.adversity.dev) from [`ogrl-tooling`](https://github.com/adversitydotdev/ogrl-tooling):
 
 - [RFC 0001: OGRL Object Model](https://ogrl.adversity.dev/rfcs/0001-object-model/)
 - [RFC 0002: Tooling and Sources of Truth](https://ogrl.adversity.dev/rfcs/0002-tooling/)
@@ -54,21 +54,21 @@ That account is [deploy/aws/template.yaml](deploy/aws/template.yaml). The first 
 
 ```
 aws ssm put-parameter \
-  --name /ogrl/ogrl/database/password \
+  --name /fathom/fathom/database/password \
   --type SecureString \
   --value 'replace-with-at-least-16-characters'
 
 aws cloudformation deploy \
   --template-file deploy/aws/template.yaml \
-  --stack-name ogrl \
+  --stack-name fathom \
   --capabilities CAPABILITY_IAM
 ```
 
-The password cannot contain a slash, an at-sign, a quote, or a space. The stack name `ogrl` is the path on the log groups and the SSM prefix. After rotating the password, deploy again with `DatabasePasswordVersion` set to the new SSM version so the database picks it up.
+The password cannot contain a slash, an at-sign, a quote, or a space. The stack name `fathom` is the path on the log groups and the SSM prefix. After rotating the password, deploy again with `DatabasePasswordVersion` set to the new SSM version so the database picks it up.
 
 ## Standard Library & CLI Toolchain
 
-Catalog import, strict YAML 1.2 linting/formatting, bundle packing, and OSCAL 1.2.3 rendering are provided by [`adversitydotdev/ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) (consumed in-process via the `ogrl-rs` Python wheel and available as the standalone `ogrl` CLI).
+Catalog import, strict YAML 1.2 linting/formatting, bundle packing, and OSCAL 1.2.3 rendering are provided by [`adversitydotdev/ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) (consumed in-process via the `ogrl-rs` Python wheel and available as the standalone `fathom` CLI).
 
 ```bash
 # Regenerate pinned NIST SP 800-53 Rev 5 and SP 800-171 Rev 3 catalogs (with assessment objectives)
@@ -78,4 +78,4 @@ ogrl import nist --out ../ogrl-library/library
 ogrl lint ../ogrl-library/library --profile library
 ```
 
-By default, `OGRL_LIBRARY_REPO` pulls from `https://github.com/adversitydotdev/ogrl-library` (or uses a local `../ogrl-library/library` checkout during development).
+By default, `FATHOM_LIBRARY_REPO` pulls from `https://github.com/adversitydotdev/ogrl-library` (or uses a local `../ogrl-library/library` checkout during development).
