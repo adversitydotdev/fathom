@@ -6,7 +6,12 @@ FATHOM_API_TOKENS        JSON: {"<token>": {"actor_id": "party--...", "roles": [
                          "kind": "person"}}. Tokens start with `fathom_pat_`. Only their
                          SHA-256 is kept in memory.
 FATHOM_OIDC_PROVIDERS    JSON map: {"okta": {"issuer": "...", "client_id": "...",
-                         "client_secret": "...", "redirect_uri": "..."}}.
+                         "client_secret": "...", "redirect_uri": "..."}}. Instead of an inline
+                         "client_secret", "client_secret_env": "SOME_ENV_VAR" reads the secret
+                         from that variable (the template injects it from SSM). Optional
+                         "scopes". A named variable that is unset or empty fails startup.
+FATHOM_DISABLE_API_TOKEN_MINTING  `true` makes POST /v1/auth/tokens refuse people (sign-in is
+                         then IdP-only). Agents and services are unaffected. Default false.
 FATHOM_BOOTSTRAP_ADMIN_EMAILS  Comma-separated emails granted `administrator` on first OIDC login.
 FATHOM_ALLOWED_ORIGINS   Comma-separated extra origins accepted by the cookie CSRF check.
 FATHOM_LIBRARY_REPO      A git repository for the OGRL standard library (defaults to
@@ -162,17 +167,27 @@ def database_url_from_env(env: Mapping[str, str]) -> str | None:
     return f"postgresql://{creds}{host}:{port}/{name}{query}"
 
 
-def oidc_providers_from_env(raw: str) -> dict[str, IdentityProvider]:
+def oidc_providers_from_env(
+    raw: str, env: Mapping[str, str] | None = None
+) -> dict[str, IdentityProvider]:
     if not raw:
         return {}
+    env = os.environ if env is None else env
     parsed = json.loads(raw)
     providers: dict[str, IdentityProvider] = {}
     for name, cfg in parsed.items():
+        client_secret = cfg.get("client_secret")
+        if secret_var := cfg.get("client_secret_env"):
+            client_secret = env.get(secret_var)
+            if not client_secret:
+                raise ValueError(
+                    f"OIDC provider {name!r}: client_secret_env {secret_var!r} is unset or empty"
+                )
         providers[name] = OidcProvider(
             name=name,
             issuer=cfg["issuer"],
             client_id=cfg["client_id"],
-            client_secret=cfg.get("client_secret"),
+            client_secret=client_secret,
             redirect_uri=cfg["redirect_uri"],
             scopes=cfg.get("scopes", "openid email profile"),
         )
@@ -275,7 +290,8 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         store=store,
         blobs=blobs,
         auth_store=auth_store,
-        oidc_providers=oidc_providers_from_env(env.get("FATHOM_OIDC_PROVIDERS", "")),
+        oidc_providers=oidc_providers_from_env(env.get("FATHOM_OIDC_PROVIDERS", ""), env),
+        allow_token_minting=env.get("FATHOM_DISABLE_API_TOKEN_MINTING", "false").lower() != "true",
         bootstrap_admin_emails=admin_emails,
         executor=executor,
         queue=queue,

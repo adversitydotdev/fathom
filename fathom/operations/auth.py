@@ -52,6 +52,7 @@ class AuthService:
         default_roles: tuple[Role, ...] = (Role.VIEWER,),
         bootstrap_admin_emails: frozenset[str] = frozenset(),
         session_ttl: timedelta = DEFAULT_SESSION_TTL,
+        allow_token_minting: bool = True,
         clock: Callable[[], datetime] = now,
     ) -> None:
         self._store = store
@@ -61,6 +62,7 @@ class AuthService:
         self._default_roles = default_roles
         self._bootstrap_admins = frozenset(e.lower() for e in bootstrap_admin_emails)
         self._session_ttl = session_ttl
+        self._allow_token_minting = allow_token_minting
         self._clock = clock
         self._states = OidcStateStore(clock=clock)
 
@@ -134,6 +136,8 @@ class AuthService:
             await self._auth.revoke_session(digest(session_cookie))
 
     async def create_token(self, principal: Principal, request: CreateTokenRequest) -> CreatedToken:
+        if not self._allow_token_minting and principal.kind is ActorKind.PERSON:
+            raise Forbidden("API token minting is disabled for people; sign in through the IdP")
         if not request.name.strip():
             raise Invalid("token name must not be empty")
         target_actor = request.actor_id or principal.actor_id
