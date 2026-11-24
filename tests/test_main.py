@@ -108,3 +108,72 @@ def test_worker_dispatches_collection_jobs(tmp_path):
         return len(await c.integrations.list_snapshots(admin, connection.id, None))
 
     assert asyncio.run(scenario()) == 1
+
+
+def _providers(cfg: dict, env: dict | None = None):
+    from fathom.main import oidc_providers_from_env
+
+    return oidc_providers_from_env(json.dumps(cfg), env or {})
+
+
+BASE_PROVIDER = {
+    "issuer": "https://idp.example",
+    "client_id": "cid",
+    "redirect_uri": "https://grc.example/v1/auth/oidc/google/callback",
+}
+
+
+def test_oidc_client_secret_from_named_env_var():
+    cfg = {"google": {**BASE_PROVIDER, "client_secret_env": "FATHOM_OIDC_CLIENT_SECRET"}}
+    providers = _providers(cfg, {"FATHOM_OIDC_CLIENT_SECRET": "from-ssm"})
+    assert providers["google"]._client_secret == "from-ssm"
+    assert providers["google"]._scopes == "openid email profile"
+
+
+def test_oidc_client_secret_env_unset_or_empty_fails_startup():
+    import pytest
+
+    cfg = {"google": {**BASE_PROVIDER, "client_secret_env": "FATHOM_OIDC_CLIENT_SECRET"}}
+    with pytest.raises(ValueError, match="FATHOM_OIDC_CLIENT_SECRET"):
+        _providers(cfg, {})
+    with pytest.raises(ValueError, match="FATHOM_OIDC_CLIENT_SECRET"):
+        _providers(cfg, {"FATHOM_OIDC_CLIENT_SECRET": ""})
+
+
+def test_oidc_inline_client_secret_and_public_client_still_work():
+    cfg = {
+        "okta": {**BASE_PROVIDER, "client_secret": "inline", "scopes": "openid"},
+        "pub": dict(BASE_PROVIDER),
+    }
+    providers = _providers(cfg, {"FATHOM_OIDC_CLIENT_SECRET": "ignored"})
+    assert providers["okta"]._client_secret == "inline"
+    assert providers["okta"]._scopes == "openid"
+    assert providers["pub"]._client_secret is None
+
+
+def test_build_from_env_wires_secret_env_into_the_provider():
+    env = {
+        "FATHOM_OIDC_PROVIDERS": json.dumps(
+            {"google": {**BASE_PROVIDER, "client_secret_env": "S"}}
+        ),
+        "S": "shh",
+    }
+    c = build_from_env(env)
+    assert c.auth._providers["google"]._client_secret == "shh"
+
+
+def _person_client(env: dict):
+    c = build_from_env({"FATHOM_API_TOKENS": json.dumps(TOKENS), **env})
+    return TestClient(create_app(c))
+
+
+def test_token_minting_allowed_by_default_and_disabled_for_people_by_flag():
+    admin = {"Authorization": "Bearer fathom_pat_admin"}
+    bot = {"Authorization": "Bearer fathom_pat_bot"}
+    body = {"name": "laptop"}
+    assert _person_client({}).post("/v1/auth/tokens", json=body, headers=admin).status_code == 201
+    off = _person_client({"FATHOM_DISABLE_API_TOKEN_MINTING": "true"})
+    assert off.post("/v1/auth/tokens", json=body, headers=admin).status_code == 403
+    assert off.post("/v1/auth/tokens", json=body, headers=bot).status_code == 201
+    explicit_false = _person_client({"FATHOM_DISABLE_API_TOKEN_MINTING": "false"})
+    assert explicit_false.post("/v1/auth/tokens", json=body, headers=admin).status_code == 201

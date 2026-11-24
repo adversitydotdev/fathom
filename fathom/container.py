@@ -102,6 +102,7 @@ def build(
     oidc_providers: Mapping[str, IdentityProvider] | None = None,
     bootstrap_admin_emails: frozenset[str] = frozenset(),
     default_oidc_roles: tuple[Role, ...] = (Role.VIEWER,),
+    allow_token_minting: bool = True,
     executor: Executor | None = None,
     queue: JobQueue | None = None,
     library_source: LibrarySource | None = None,
@@ -174,6 +175,7 @@ def build(
         providers=oidc_providers,
         default_roles=default_oidc_roles,
         bootstrap_admin_emails=bootstrap_admin_emails,
+        allow_token_minting=allow_token_minting,
         clock=clock,
     )
     return Container(

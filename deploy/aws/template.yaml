@@ -45,6 +45,17 @@ Metadata:
           - EnableQueue
           - AvailabilityZoneA
           - AvailabilityZoneB
+      - Label:
+          default: Sign-in (OIDC)
+        Parameters:
+          - OidcProviderName
+          - OidcIssuer
+          - OidcClientId
+          - OidcClientSecretParameter
+          - OidcRedirectUri
+          - OidcScopes
+          - BootstrapAdminEmails
+          - DisableApiTokenMinting
 
 Parameters:
   EnableServices:
@@ -204,6 +215,52 @@ Parameters:
     Default: ""
     Description: Second AZ for the database subnet group and the load balancer. Empty uses the region's second AZ.
 
+  OidcProviderName:
+    Type: String
+    Default: google
+    AllowedPattern: "^[a-z0-9][a-z0-9_-]{0,31}$"
+    Description: Name of the OIDC provider. It is the {provider} segment of the login and callback paths (/v1/auth/oidc/{provider}/begin and /callback).
+  OidcIssuer:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^https://[^\\s\"\\\\]+$"
+    Description: OIDC issuer URL, such as https://accounts.google.com. Leave empty to configure no OIDC login (the other Oidc parameters are then ignored).
+  OidcClientId:
+    Type: String
+    Default: ""
+    AllowedPattern: "^[^\\s\"\\\\]*$"
+    Description: Client ID registered with the identity provider. Required when OidcIssuer is set.
+  OidcClientSecretParameter:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^/[a-zA-Z0-9_.\\-/]+$"
+    Description: >
+      Name, with a leading slash, of an SSM SecureString parameter that holds the
+      client secret, such as /fathom/my-stack/oidc/client-secret. Create it with
+      the default aws/ssm key before deploying. The value never passes through
+      CloudFormation. ECS injects it into the API task as
+      FATHOM_OIDC_CLIENT_SECRET. Required when OidcIssuer is set.
+  OidcRedirectUri:
+    Type: String
+    Default: ""
+    AllowedPattern: "^$|^https://[^\\s\"\\\\]+$"
+    Description: Redirect URI registered with the identity provider. Empty derives PublicUrl/v1/auth/oidc/OidcProviderName/callback.
+  OidcScopes:
+    Type: String
+    Default: openid email profile
+    AllowedPattern: "^[A-Za-z0-9:/._ -]+$"
+    Description: Space-separated OIDC scopes.
+  BootstrapAdminEmails:
+    Type: String
+    Default: ""
+    AllowedPattern: "^[^\\s\"\\\\]*$"
+    Description: Comma-separated emails (no spaces) that get the administrator role on their first OIDC login. Everyone else starts as a viewer.
+  DisableApiTokenMinting:
+    Type: String
+    Default: "false"
+    AllowedValues: ["true", "false"]
+    Description: When true, POST /v1/auth/tokens refuses people, so sign-in is IdP-only. Agents and services are unaffected.
+
 Rules:
   LoadBalancerNeedsCertificate:
     RuleCondition: !And
@@ -234,7 +291,23 @@ Rules:
           - !Not [!Equals [!Ref AvailabilityZoneB, ""]]
         AssertDescription: Set both availability zones, or leave both empty.
 
+  OidcNeedsClient:
+    RuleCondition: !Not [!Equals [!Ref OidcIssuer, ""]]
+    Assertions:
+      - Assert: !Not [!Equals [!Ref OidcClientId, ""]]
+        AssertDescription: OidcIssuer requires OidcClientId.
+      - Assert: !Not [!Equals [!Ref OidcClientSecretParameter, ""]]
+        AssertDescription: OidcIssuer requires OidcClientSecretParameter.
+      - Assert: !Or
+          - !Not [!Equals [!Ref OidcRedirectUri, ""]]
+          - !Not [!Equals [!Ref PublicUrl, ""]]
+        AssertDescription: OidcIssuer requires OidcRedirectUri or PublicUrl.
+
 Conditions:
+  OidcOn: !Not [!Equals [!Ref OidcIssuer, ""]]
+  HasOidcRedirectUri: !Not [!Equals [!Ref OidcRedirectUri, ""]]
+  HasBootstrapAdmins: !Not [!Equals [!Ref BootstrapAdminEmails, ""]]
+  TokenMintingOff: !Equals [!Ref DisableApiTokenMinting, "true"]
   ServicesOn: !Equals [!Ref EnableServices, "true"]
   ServicesDirect: !And
     - !Condition ServicesOn
@@ -935,6 +1008,12 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fathom/${AWS::StackName}/database/password
+              - !If
+                - OidcOn
+                - Effect: Allow
+                  Action: ssm:GetParameters
+                  Resource: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${OidcClientSecretParameter}
+                - !Ref AWS::NoValue
               - Effect: Allow
                 Action: kms:Decrypt
                 Resource: "*"
@@ -1107,9 +1186,38 @@ Resources:
               Value: !Ref PublicUrl
             - Name: FATHOM_QUEUE_URL
               Value: !If [QueueOn, !Ref JobQueue, ""]
+            - !If
+              - OidcOn
+              - Name: FATHOM_OIDC_PROVIDERS
+                Value: !Sub
+                  - >-
+                    {"${Name}": {"issuer": "${Issuer}", "client_id": "${ClientId}",
+                    "client_secret_env": "FATHOM_OIDC_CLIENT_SECRET",
+                    "redirect_uri": "${RedirectUri}", "scopes": "${Scopes}"}}
+                  - Name: !Ref OidcProviderName
+                    Issuer: !Ref OidcIssuer
+                    ClientId: !Ref OidcClientId
+                    RedirectUri: !If [HasOidcRedirectUri, !Ref OidcRedirectUri, !Sub "${PublicUrl}/v1/auth/oidc/${OidcProviderName}/callback"]
+                    Scopes: !Ref OidcScopes
+              - !Ref AWS::NoValue
+            - !If
+              - HasBootstrapAdmins
+              - Name: FATHOM_BOOTSTRAP_ADMIN_EMAILS
+                Value: !Ref BootstrapAdminEmails
+              - !Ref AWS::NoValue
+            - !If
+              - TokenMintingOff
+              - Name: FATHOM_DISABLE_API_TOKEN_MINTING
+                Value: "true"
+              - !Ref AWS::NoValue
           Secrets:
             - Name: FATHOM_DATABASE_PASSWORD
               ValueFrom: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/fathom/${AWS::StackName}/database/password:${DatabasePasswordVersion}
+            - !If
+              - OidcOn
+              - Name: FATHOM_OIDC_CLIENT_SECRET
+                ValueFrom: !Sub arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter${OidcClientSecretParameter}
+              - !Ref AWS::NoValue
           LogConfiguration:
             LogDriver: awslogs
             Options:
@@ -1422,7 +1530,8 @@ Outputs:
       SSM prefix. The database password is database/password. With TLS on the
       task, put the PEM certificate at tls/certificate and the key at
       tls/private-key. A model key, when used, is model/api-key. Harness values
-      are under harness/.
+      are under harness/. The OIDC client secret lives wherever
+      OidcClientSecretParameter points.
     Value: !Sub /fathom/${AWS::StackName}
   DatabaseEndpoint:
     Description: PostgreSQL endpoint. The instance accepts connections only from the task security groups.
