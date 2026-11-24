@@ -57,7 +57,7 @@ export default async function SystemsPage({
         title="Systems"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {systems.length} {systems.length === 1 ? "system" : "systems"} · {components.length} components ·{" "}
               {providers.length} provider bundles
             </p>
@@ -71,11 +71,11 @@ export default async function SystemsPage({
         }
       />
 
-      <section className="flex flex-col gap-4 rounded-2xl border bg-card p-6" aria-label="Active system">
+      <section className="flex flex-col gap-4 rounded-xl border bg-card p-6" aria-label="Active system">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex flex-col gap-1">
             <Eyebrow>Program system</Eyebrow>
-            <h2 className="font-display text-2xl tracking-[-0.01em]">{activeSystem.name}</h2>
+            <h2 className="text-2xl font-semibold tracking-tight">{activeSystem.name}</h2>
           </div>
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs text-muted-foreground">{activeSystem.id}</span>
@@ -94,13 +94,13 @@ export default async function SystemsPage({
         <div className="grid gap-4 md:grid-cols-2">
           {activeSystem.function && (
             <div className="flex flex-col gap-1.5 rounded-xl border bg-background/40 p-4">
-              <span className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">Function</span>
+              <span className="text-xs font-medium text-muted-foreground">Function</span>
               <p className="text-sm">{activeSystem.function}</p>
             </div>
           )}
           {activeSystem.boundary && (
             <div className="flex flex-col gap-1.5 rounded-xl border bg-background/40 p-4">
-              <span className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+              <span className="text-xs font-medium text-muted-foreground">
                 Authorization boundary
               </span>
               <p className="text-sm">{activeSystem.boundary}</p>
@@ -110,7 +110,7 @@ export default async function SystemsPage({
 
         {(activeSystem.information_types?.length ?? 0) > 0 && (
           <div className="flex flex-col gap-2">
-            <span className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <span className="text-xs font-medium text-muted-foreground">
               Information types (FIPS 199)
             </span>
             <div className="flex flex-col gap-2">
@@ -133,7 +133,7 @@ export default async function SystemsPage({
 
         {(activeSystem.parties?.length ?? 0) > 0 && (
           <div className="flex flex-col gap-2">
-            <span className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <span className="text-xs font-medium text-muted-foreground">
               System parties & leveraged services
             </span>
             <div className="grid gap-2 sm:grid-cols-3">
@@ -157,7 +157,7 @@ export default async function SystemsPage({
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5" aria-label="Components">
+        <section className="flex flex-col gap-3 rounded-xl border bg-card p-5" aria-label="Components">
           <div className="flex items-center justify-between gap-2">
             <Eyebrow>Components</Eyebrow>
             <div className="flex items-center gap-2">
@@ -206,7 +206,7 @@ export default async function SystemsPage({
           </div>
         </section>
 
-        <section className="flex flex-col gap-3 rounded-2xl border bg-card p-5" aria-label="Provider bundles">
+        <section className="flex flex-col gap-3 rounded-xl border bg-card p-5" aria-label="Provider bundles">
           <div className="flex items-center justify-between">
             <Eyebrow>Imported provider bundles</Eyebrow>
             <Cloud className="size-4 text-muted-foreground" aria-hidden />

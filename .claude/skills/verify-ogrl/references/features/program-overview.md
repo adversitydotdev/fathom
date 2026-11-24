@@ -4,12 +4,12 @@
 
 ## Sub-features
 
-- title: eyebrow `Program · <system>`, h1 with the program name, "Evaluated at <date>", baseline name.
-- control-status: `region "Control status"` with four metric links (Met, Gap, Waived, Out of scope), a segment bar, and a legend. Gap is red when above 0. Met shows a percentage.
-- requirement-coverage: one row per framework on the baseline, with a covered/gap/contribution/unmapped bar and percent covered.
+- title: system name above, h1 with the program name, "Evaluated at <date>", baseline name.
+- control-status: `region "Control status"`, a "Control readiness" card beside "Requirement coverage" (3:2 on wide screens): a ring with percent met, "N gaps to close", "N of M controls met", and inline state links (Met, Gap, Waived, Out of scope) with counts. Gap is red when above 0. "All controls" links to the unfiltered list.
+- requirement-coverage: one row per framework on the baseline, with a bar, percent covered and covered/total, a legend, and the definition behind an info icon (title + sr-only).
 - gaps: up to 6 gap controls, each showing its first failed condition and linking to the control. "+ N more" appears beyond 6. "View all" goes to `controls?state=gap`. With no gaps, a "Every control on the baseline is met…" message.
 - needs-attention: counts for failing tests, expiring evidence, expiring exceptions, open findings, open risks, and agent drafts.
-- recent-jobs: job type, duration, status (failed jobs show the error title), date.
+- recent-jobs: the 3 newest jobs: type, status (failed jobs show the error title) with duration, date. "View all" goes to Jobs.
 
 ## How to get to it (user POV)
 
@@ -29,5 +29,6 @@ pnpm e2e overview
 
 ## Gotchas
 
-- Card titles are CSS-uppercased. The DOM text is "Gaps", not "GAPS".
+- The Gaps card shows its count as a badge beside the title, outside the `CardTitle`, so `getByText("Gaps", { exact: true })` still matches.
 - The 800-53 program shares controls with 800-171, but its counts differ. Do not hardcode 800-171 numbers in a test that covers both.
+- Motion: sections rise in staggered, bars grow, the ring draws, and numbers count up (`CountUp` in `src/components/motion.tsx`; only after in-app navigation, never on the first load). All of it is off under `prefers-reduced-motion`, which the Playwright config sets, so screenshots show final values. To see the motion, drive a context with `reducedMotion: "no-preference"`.

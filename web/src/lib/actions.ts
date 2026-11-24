@@ -729,3 +729,14 @@ export async function updateBaselineControls(
   refresh();
   return { id: data.id };
 }
+
+/** The stored Markdown body of a policy or procedure, for editing. Empty if none. */
+export async function getDocumentBody(kind: "policies" | "procedures", id: string): Promise<{ body: string; error?: string }> {
+  const { data, error, response } =
+    kind === "policies"
+      ? await api.GET("/policies/{id}/content", { params: { path: { id } }, parseAs: "text" })
+      : await api.GET("/procedures/{id}/content", { params: { path: { id } }, parseAs: "text" });
+  if (response.status === 404) return { body: "" };
+  if (error) return { body: "", error: formatError(error, "Couldn't load the current text.") };
+  return { body: (data as string | undefined) ?? "" };
+}

@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
+
+import { useListLocation } from "@/components/shell/side-panel";
 import { useMemo } from "react";
 import { cn } from "cn";
 
@@ -34,8 +36,7 @@ export function RequirementsTable({
   at?: string;
 }) {
   const router = useRouter();
-  const pathname = usePathname();
-  const search = useSearchParams();
+  const { pathname, search } = useListLocation();
   const state = search.get("state") as RequirementState | null;
   const fw = search.get("framework");
   const q = at ? `?at=${at}` : "";
@@ -78,7 +79,7 @@ export function RequirementsTable({
         cell: (r) => (
           <span className="block min-w-0">
             <span className="block truncate">{r.name}</span>
-            <span className="block truncate text-xs text-muted-foreground">{r.frameworkName}</span>
+            {frameworks.length > 1 && <span className="block truncate text-xs text-muted-foreground">{r.frameworkName}</span>}
           </span>
         ),
       },
@@ -114,12 +115,15 @@ export function RequirementsTable({
           ),
       },
     ],
-    [programId, q],
+    [programId, q, frameworks.length],
   );
 
   return (
     <DataTable
       data={visible}
+      density="compact"
+      stickyHeader
+      maxHeight="max(24rem, calc(100dvh - 21rem))"
       columns={columns}
       rowId={(r) => r.id}
       rowLabel={(r) => `${r.displayId} ${r.name}`}

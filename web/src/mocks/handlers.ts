@@ -110,10 +110,12 @@ function crud<T extends MutableObj>(path: string, typeName: string, items: () =>
 }
 
 function contentUpload<T extends MutableObj>(path: string, items: () => T[]) {
-  return http.post(`${V}${path}/:id/content`, ({ params }) => {
+  return http.post(`${V}${path}/:id/content`, async ({ params, request }) => {
     const arr = items();
     const idx = arr.findIndex((i) => i.id === params.id);
     if (idx < 0) return notFound();
+    const file = (await request.formData()).get("file");
+    if (file && typeof file !== "string") db.bodies[String(params.id)] = await file.text();
     const updated = {
       ...arr[idx],
       modified: new Date().toISOString(),
@@ -587,4 +589,9 @@ export const handlers = [
   contentUpload("/evidence", () => db.evidence as unknown as MutableObj[]),
   contentUpload("/policies", () => db.policies as unknown as MutableObj[]),
   contentUpload("/procedures", () => db.procedures as unknown as MutableObj[]),
+  http.get(`${V}/:kind/:id/content`, ({ params }) => {
+    const body = db.bodies[String(params.id)];
+    if (body === undefined) return notFound();
+    return new HttpResponse(body, { headers: { "Content-Type": "application/octet-stream" } });
+  }),
 ];

@@ -104,7 +104,7 @@ export default async function IntegrationsPage({
         title="Integrations"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {integrations.length} installed · {connections.length} connected
             </p>
             <InstallIntegrationDialog />
@@ -116,14 +116,14 @@ export default async function IntegrationsPage({
       <section className="flex flex-col gap-3" aria-label="Connections">
         <Eyebrow>Connections</Eyebrow>
         {connections.length === 0 ? (
-          <div className="rounded-2xl border border-dashed bg-card px-6 py-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed bg-card px-6 py-8 text-sm text-muted-foreground">
             No vendor accounts are connected. Connect one to collect live evidence.
           </div>
         ) : (
-          <div className="overflow-hidden rounded-2xl border bg-card">
+          <div className="overflow-hidden rounded-xl border bg-card">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
-                <thead className="border-b bg-muted/30 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+                <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3 font-medium">Connection</th>
                     <th className="px-4 py-3 font-medium">State</th>
@@ -189,13 +189,13 @@ export default async function IntegrationsPage({
       <section className="flex flex-col gap-3" aria-label="Installed integrations">
         <Eyebrow>Installed integrations</Eyebrow>
         {integrations.length === 0 ? (
-          <div className="rounded-2xl border border-dashed bg-card px-6 py-8 text-sm text-muted-foreground">
+          <div className="rounded-xl border border-dashed bg-card px-6 py-8 text-sm text-muted-foreground">
             No integration packages are installed in this deployment.
           </div>
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {integrations.map((i) => (
-              <article key={i.id} className="flex flex-col gap-4 rounded-2xl border bg-card p-5" aria-label={i.name}>
+              <article key={i.id} className="flex flex-col gap-4 rounded-xl border bg-card p-5" aria-label={i.name}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-2.5">
                     <Plug className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
@@ -211,7 +211,7 @@ export default async function IntegrationsPage({
                 {i.description && <p className="text-sm text-muted-foreground">{i.description}</p>}
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                    <span className="text-xs font-medium text-muted-foreground">
                       Collects
                     </span>
                     <RuleEditorDialog
@@ -237,7 +237,7 @@ export default async function IntegrationsPage({
                 {i.query_model && (
                   <div className="flex flex-col gap-1.5" aria-label={`${i.name} query sources`}>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                      <span className="text-xs font-medium text-muted-foreground">
                         Query sources · {i.query_model === "smithy" ? "AWS models" : "OpenAPI"}
                       </span>
                       <QueryEditorDialog
@@ -269,7 +269,7 @@ export default async function IntegrationsPage({
                 )}
                 {(versionsOf.get(i.id)?.length ?? 0) > 0 && (
                   <div className="flex flex-col gap-1.5" aria-label={`${i.name} versions`}>
-                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                    <span className="text-xs font-medium text-muted-foreground">
                       Installed versions
                     </span>
                     {versionsOf.get(i.id)!.map((v) => (
@@ -293,7 +293,7 @@ export default async function IntegrationsPage({
                     className="flex flex-col gap-2 rounded-xl border border-waived/40 bg-waived-soft/40 p-3"
                     aria-label={`${i.name} template updates`}
                   >
-                    <span className="font-mono text-[11px] tracking-[0.1em] text-waived-ink uppercase">
+                    <span className="text-xs font-medium text-waived-ink">
                       Template updates
                     </span>
                     {updatesOf.get(i.id)!.map((u) => (
@@ -316,7 +316,7 @@ export default async function IntegrationsPage({
                 )}
                 {i.templates.length > 0 && (
                   <div className="flex flex-col gap-2 border-t pt-3">
-                    <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+                    <span className="text-xs font-medium text-muted-foreground">
                       Test templates
                     </span>
                     {i.templates.map((t) => (
@@ -340,10 +340,10 @@ export default async function IntegrationsPage({
 
       <section className="flex flex-col gap-3" aria-label="Recent snapshots">
         <Eyebrow>Recent snapshots</Eyebrow>
-        <div className="overflow-hidden rounded-2xl border bg-card">
+        <div className="overflow-hidden rounded-xl border bg-card">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b bg-muted/30 font-mono text-[11px] tracking-[0.08em] text-muted-foreground uppercase">
+              <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                 <tr>
                   <th className="px-4 py-3 font-medium">Source</th>
                   <th className="px-4 py-3 font-medium">Connection</th>
@@ -364,7 +364,7 @@ export default async function IntegrationsPage({
                   <tr key={s.id} className="hover:bg-muted/20">
                     <td className="px-4 py-3 font-mono text-xs">{s.source}</td>
                     <td className="px-4 py-3 text-xs">{connectionName.get(s.connection_id) ?? s.connection_id}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{isoDate(s.collected)}</td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground tabular-nums">{isoDate(s.collected)}</td>
                     <td className="px-4 py-3 font-mono text-xs tabular-nums">{s.item_count}</td>
                     <td className="px-4 py-3 text-xs">
                       {s.complete ? (

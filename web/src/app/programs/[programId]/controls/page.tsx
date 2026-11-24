@@ -58,7 +58,7 @@ export default async function ControlsPage({ params, searchParams }: PageProps<"
         title="Controls"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} on the baseline · at <span className="text-foreground">{isoDate(status.at)}</span>
             </p>
             <NewControlButton

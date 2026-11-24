@@ -4,13 +4,13 @@
 
 ## Sub-features
 
-- header: the program name eyebrow, and "N on the baseline · at <date>".
+- header: the program name above the title, and "N on the baseline · at <date>".
 - state-chips: "All N", then one chip per state with its count. Labels are lowercase in the DOM: `met 16`, `gap 6`, `waived 1`, `out of scope 2`. They write `?state=`. Clicking the active chip clears it. Pressed state is shown with `aria-pressed`.
 - family-filter: `<select aria-label="Family">` writes `?family=`.
 - search: `searchbox "Search controls"` matches id, name, family, owner, and object id. It is client-side and not in the URL.
 - default order: gaps first, then waived, met, out of scope, then by display id.
 - sort: Id, Control, State, Implementation, and Owner headers are sort buttons.
-- row-click: opens the control detail and keeps `?at`. Rows also expose a button named by display id.
+- row-click: opens the control in the side panel (see control-detail.md) and keeps `?at`. Rows also expose a button named by display id. The open row has `aria-current` and an accent bar. While the panel is open, filters read from the list URL (`useListLocation`), so they persist; changing one navigates to the list and closes the panel. At 1440px the panel covers the filter chips.
 - agent-mark: an "Agent draft" mark on controls whose implementation an agent created.
 - empty-state: "No controls match these filters."
 - responsive: the Failed condition, Implementation, and Owner columns hide below `lg`. The failed text then moves under the name.
@@ -35,3 +35,4 @@ pnpm e2e controls
 - The table streams in after hydration. Wait for the rows (`toHaveCount`) before reading `.count()`.
 - `filter({ hasText: "IAM-03" })` can match more than one row because failed conditions mention other ids. Use the id button.
 - State badges render lowercase text (`gap`), CSS-styled.
+- layout: compact rows with a sticky header in a viewport-high scroll area, so search and filters stay in view. Tests, evidence and requirements tables do the same.

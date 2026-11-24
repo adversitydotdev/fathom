@@ -260,7 +260,7 @@ export function RuleEditorDialog({
         <div className="flex min-w-0 flex-col gap-4">
             <section aria-label="Preview" className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-4">
               <div className="flex items-center justify-between gap-3">
-                <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">Preview</span>
+                <span className="text-xs font-medium text-muted-foreground">Preview</span>
                 <LoadingButton type="button" variant="outline" size="sm" className="h-7 gap-1.5 px-2.5 text-xs" loading={previewing} disabled={previewing || !source} onClick={runPreview}>
                   {!previewing && <Eye className="size-3.5" aria-hidden />}
                   Preview
@@ -284,7 +284,7 @@ export function RuleEditorDialog({
                   {result.subjects.length > 0 && (
                     <div className="overflow-hidden rounded-lg border bg-card">
                       <table className="w-full text-left text-xs" aria-label="Failing items">
-                        <thead className="border-b bg-muted/30 font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+                        <thead className="border-b bg-muted/30 text-xs font-medium text-muted-foreground">
                           <tr>
                             <th className="px-3 py-2 font-medium">Failing item</th>
                             <th className="px-3 py-2 font-medium">Id</th>
@@ -314,7 +314,7 @@ export function RuleEditorDialog({
               )}
             </section>
         <aside aria-label="Fields" className="flex min-w-0 flex-col gap-2">
-          <span className="font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+          <span className="text-xs font-medium text-muted-foreground">
             Fields of {chosen?.resource ?? "the source"}
           </span>
           <p className="text-[11px] text-muted-foreground">

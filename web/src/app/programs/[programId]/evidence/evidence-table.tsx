@@ -110,7 +110,7 @@ export function EvidenceTable({
         width: 112,
         hideBelow: "lg",
         sortable: true,
-        cell: (r) => <span className="font-mono text-xs text-muted-foreground">{isoDate(r.collected)}</span>,
+        cell: (r) => <span className="text-xs text-muted-foreground tabular-nums">{isoDate(r.collected)}</span>,
       },
       {
         id: "validUntil",
@@ -141,6 +141,9 @@ export function EvidenceTable({
   return (
     <DataTable
       data={visible}
+      density="compact"
+      stickyHeader
+      maxHeight="max(24rem, calc(100dvh - 17rem))"
       columns={columns}
       rowId={(r) => r.id}
       rowLabel={(r) => r.name}

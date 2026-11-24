@@ -115,7 +115,7 @@ export function TestsTable({
         hideBelow: "lg",
         sortable: true,
         cell: (r) => (
-          <span className="font-mono text-xs text-muted-foreground">
+          <span className="text-xs text-muted-foreground">
             {r.method}
             {r.interval ? ` · ${r.interval}` : ""}
           </span>
@@ -127,7 +127,7 @@ export function TestsTable({
         width: 112,
         hideBelow: "lg",
         sortable: true,
-        cell: (r) => <span className="font-mono text-xs text-muted-foreground">{isoDate(r.observed)}</span>,
+        cell: (r) => <span className="text-xs text-muted-foreground tabular-nums">{isoDate(r.observed)}</span>,
       },
       {
         id: "action",
@@ -152,6 +152,9 @@ export function TestsTable({
   return (
     <DataTable
       data={visible}
+      density="compact"
+      stickyHeader
+      maxHeight="max(24rem, calc(100dvh - 17rem))"
       columns={columns}
       rowId={(r) => r.id}
       rowLabel={(r) => `${r.controlDisplayId} ${r.name}`}

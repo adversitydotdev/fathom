@@ -250,6 +250,8 @@ export interface DataTableProps<T> {
   emptyState?: React.ReactNode;
 
   onRowClick?: (row: T) => void;
+  /** Highlights the row shown in a side panel. */
+  isRowActive?: (row: T) => boolean;
 
   /**
    * Arrow-key row cursor, Shift range selection and the ⌘A / ⌘C / Space
@@ -338,7 +340,7 @@ interface Surface {
 const SURFACE: Record<DataTableVariant, Surface> = {
   default: {
     frame:
-      'rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950',
+      'rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950',
     head: 'bg-neutral-50 dark:bg-neutral-900',
     headRule: 'border-b border-neutral-200 dark:border-neutral-800',
     divider: 'border-t border-neutral-100 dark:border-neutral-900',
@@ -348,7 +350,7 @@ const SURFACE: Record<DataTableVariant, Surface> = {
   },
   bordered: {
     frame:
-      'rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950',
+      'rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950',
     head: 'bg-neutral-50 dark:bg-neutral-900',
     headRule: 'border-b border-neutral-200 dark:border-neutral-800',
     divider: 'border-t border-neutral-200 dark:border-neutral-800',
@@ -358,7 +360,7 @@ const SURFACE: Record<DataTableVariant, Surface> = {
   },
   striped: {
     frame:
-      'rounded-2xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950',
+      'rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950',
     head: 'bg-white dark:bg-neutral-950',
     headRule: 'border-b border-neutral-200 dark:border-neutral-800',
     divider: '',
@@ -379,7 +381,7 @@ const SURFACE: Record<DataTableVariant, Surface> = {
   },
   panel: {
     frame:
-      'rounded-2xl bg-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.06),0_2px_4px_0_rgba(0,0,0,0.04)] ring-1 ring-neutral-950/8 dark:bg-neutral-950 dark:shadow-none dark:ring-white/10',
+      'rounded-xl bg-white shadow-[0_1px_2px_-1px_rgba(0,0,0,0.06),0_2px_4px_0_rgba(0,0,0,0.04)] ring-1 ring-neutral-950/8 dark:bg-neutral-950 dark:shadow-none dark:ring-white/10',
     head: 'bg-neutral-50 dark:bg-neutral-900',
     headRule: 'border-b border-neutral-200 dark:border-neutral-800',
     divider: 'border-t border-neutral-100 dark:border-neutral-900',
@@ -731,6 +733,7 @@ export function DataTable<T>({
   skeletonRows = 5,
   emptyState,
   onRowClick,
+  isRowActive,
   keyboardNavigation = true,
   clipboard = true,
   totals,
@@ -1606,6 +1609,8 @@ export function DataTable<T>({
                               : SPRING_FLUID
                           }
                           data-selected={isSelected || undefined}
+                          data-active={isRowActive?.(row) || undefined}
+                          aria-current={isRowActive?.(row) || undefined}
                           onPointerDown={() => setCursor(index)}
                           onClick={
                             onRowClick
@@ -1625,6 +1630,7 @@ export function DataTable<T>({
                             surface.rowFill,
                             index % 2 === 1 && surface.stripe,
                             onRowClick && 'cursor-pointer',
+                            'data-[active]:bg-primary/8 data-[active]:shadow-[inset_3px_0_0_var(--primary)]',
                           )}
                         >
                           {renderDetail && (

@@ -10,7 +10,6 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-heading: var(--font-geist-sans);
-  --font-display: var(--font-spectral), Georgia, serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -54,7 +53,7 @@
   --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
+  --primary: oklch(0.51 0.2 277);
   --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.97 0 0);
   --secondary-foreground: oklch(0.205 0 0);
@@ -65,22 +64,23 @@
   --destructive: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --ring: oklch(0.51 0.2 277 / 60%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
+  --sidebar: oklch(1 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.51 0.2 277);
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-accent: oklch(0.935 0.025 277);
+  --sidebar-accent-foreground: oklch(0.42 0.2 277);
   --sidebar-border: oklch(0.922 0 0);
   --sidebar-ring: oklch(0.708 0 0);
-  --background: oklch(1 0 0);
+  /* A faintly tinted canvas, so white cards sit on it with some depth. */
+  --background: oklch(0.982 0.003 277);
   --foreground: oklch(0.145 0 0);
 }
 
@@ -91,8 +91,8 @@
   --card-foreground: oklch(0.985 0 0);
   --popover: oklch(0.18 0 0);
   --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.68 0.16 277);
+  --primary-foreground: oklch(0.985 0 0);
   --secondary: oklch(0.235 0 0);
   --secondary-foreground: oklch(0.985 0 0);
   --muted: oklch(0.235 0 0);
@@ -102,18 +102,18 @@
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 9%);
   --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.68 0.16 277 / 60%);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.145 0 0);
+  --sidebar: oklch(0.17 0.004 277);
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.985 0 0);
-  --sidebar-primary-foreground: oklch(0.205 0 0);
-  --sidebar-accent: oklch(0.235 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.68 0.16 277);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.68 0.16 277 / 0.14);
+  --sidebar-accent-foreground: oklch(0.85 0.08 277);
   --sidebar-border: oklch(1 0 0 / 9%);
   --sidebar-ring: oklch(0.556 0 0);
 }
@@ -124,9 +124,6 @@
   }
   body {
     @apply bg-background text-foreground;
-    /* Spectrum's dotted canvas, kept faint: structure, not decoration. */
-    background-image: radial-gradient(var(--canvas-dot) 1px, transparent 1px);
-    background-size: 24px 24px;
   }
   html {
     @apply font-sans;
@@ -138,7 +135,6 @@
  * Each state has a solid (bars, dots), a soft fill, and an ink for text on it.
  */
 :root {
-  --canvas-dot: oklch(0 0 0 / 7%);
   --met: oklch(0.62 0.13 155);
   --met-soft: oklch(0.96 0.035 155);
   --met-ink: oklch(0.42 0.1 155);
@@ -158,7 +154,6 @@
 }
 
 .dark {
-  --canvas-dot: oklch(1 0 0 / 6%);
   --met: oklch(0.7 0.14 155);
   --met-soft: oklch(0.7 0.14 155 / 0.13);
   --met-ink: oklch(0.83 0.12 155);
@@ -194,4 +189,148 @@
   --color-contribution-soft: var(--contribution-soft);
   --color-contribution-ink: var(--contribution-ink);
   --color-agent: var(--agent);
+}
+
+/*
+ * Motion. Small and quick: content rises in, bars grow, rings draw. All of it
+ * is off under prefers-reduced-motion (Playwright runs with it on).
+ */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes grow-x {
+  from {
+    transform: scaleX(0);
+  }
+}
+@keyframes draw {
+  from {
+    stroke-dashoffset: var(--ring-length);
+  }
+}
+
+@layer utilities {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Stagger with style={{ "--i": n }}. */
+    .motion-rise {
+      animation: rise 420ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-delay: calc(var(--i, 0) * 55ms);
+    }
+    .motion-fade {
+      animation: fade 240ms ease-out both;
+    }
+    .motion-grow-x {
+      transform-origin: left;
+      animation: grow-x 700ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-delay: calc(120ms + var(--i, 0) * 55ms);
+    }
+    .motion-draw {
+      animation: draw 900ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+      animation-delay: 120ms;
+    }
+  }
+}
+
+/* Rich text editor (components/rich-text-editor.tsx): mirrors components/markdown.tsx. */
+@layer components {
+  .rich-text {
+    line-height: 1.65;
+  }
+  .rich-text > * + * {
+    margin-top: 0.6em;
+  }
+  .rich-text h1 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .rich-text h2 {
+    font-size: 1.0625rem;
+    font-weight: 600;
+    margin-top: 1em;
+  }
+  .rich-text h3 {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    margin-top: 0.9em;
+  }
+  .rich-text ul {
+    list-style: disc;
+    padding-left: 1.25rem;
+  }
+  .rich-text ol {
+    list-style: decimal;
+    padding-left: 1.25rem;
+  }
+  .rich-text li + li {
+    margin-top: 0.2em;
+  }
+  .rich-text li > p {
+    margin: 0;
+  }
+  .rich-text blockquote {
+    border-left: 2px solid var(--border);
+    padding-left: 0.75rem;
+    color: var(--muted-foreground);
+  }
+  .rich-text a {
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .rich-text code {
+    border-radius: 0.25rem;
+    background: var(--muted);
+    padding: 0.1em 0.35em;
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+  }
+  .rich-text pre {
+    border-radius: 0.5rem;
+    background: var(--muted);
+    padding: 0.6rem 0.75rem;
+    font-size: 0.75rem;
+  }
+  .rich-text pre code {
+    background: none;
+    padding: 0;
+  }
+  .rich-text hr {
+    border-color: var(--border);
+  }
+  .rich-text table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.75rem;
+  }
+  .rich-text th,
+  .rich-text td {
+    border: 1px solid var(--border);
+    padding: 0.3rem 0.5rem;
+    text-align: left;
+    vertical-align: top;
+  }
+  .rich-text th {
+    background: var(--muted);
+    font-weight: 500;
+  }
+  .rich-text p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: var(--muted-foreground);
+  }
 }

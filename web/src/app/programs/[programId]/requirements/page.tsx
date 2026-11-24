@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 
 import { AskAgentButton } from "@/components/agent/assistant-drawer";
-import { Legend, SegmentBar, requirementSegments } from "@/components/status";
+import { SegmentBar, requirementSegments } from "@/components/status";
 import { PageTitle } from "@/components/typography";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { RequirementState } from "@/lib/api/types";
 import {
   evaluationInstant,
@@ -92,7 +91,7 @@ export default async function RequirementsPage({
         title="Requirements"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} in scope · at <span className="text-foreground">{isoDate(status.at)}</span>
             </p>
             <AskAgentButton
@@ -104,23 +103,17 @@ export default async function RequirementsPage({
         }
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Framework coverage</CardTitle>
-          <CardAction>
-            <Legend kind="requirement" />
-          </CardAction>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {perFramework.map(({ fw, counts, total }) => (
-            <div key={fw.id} className="grid grid-cols-[14rem_minmax(0,1fr)_3.5rem] items-center gap-3 text-sm">
-              <span className="truncate">{fw.name}</span>
-              <SegmentBar segments={requirementSegments(counts)} />
-              <span className="text-right font-mono text-xs">{percent(counts.covered, total)}</span>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <section aria-label="Framework coverage" className="flex flex-col gap-2 rounded-xl border bg-card px-4 py-3 shadow-xs">
+        {perFramework.map(({ fw, counts, total }) => (
+          <div key={fw.id} className="grid grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto] items-center gap-4 text-sm">
+            <span className="truncate font-medium">{fw.name}</span>
+            <SegmentBar segments={requirementSegments(counts)} />
+            <span className="text-muted-foreground tabular-nums">
+              <span className="font-semibold text-foreground">{percent(counts.covered, total)}</span> covered
+            </span>
+          </div>
+        ))}
+      </section>
 
       <RequirementsTable
         rows={rows}

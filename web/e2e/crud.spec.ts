@@ -30,7 +30,7 @@ test("full CRUD on policies: create adopted policy with markdown and revoke", as
   await page.getByRole("button", { name: "New policy" }).click();
   await page.getByLabel(/Name/).fill("Data Classification Policy");
   await page.getByLabel(/Status/).selectOption("adopted");
-  await page.getByLabel(/Policy body/).fill("# Data Classification Policy\n\nClassify all customer data.");
+  await page.getByRole("textbox", { name: "Policy text" }).fill("Classify all customer data.");
   await page.getByRole("button", { name: "Create policy" }).click();
 
   const row = page.locator("tbody tr", { hasText: "Data Classification Policy" });

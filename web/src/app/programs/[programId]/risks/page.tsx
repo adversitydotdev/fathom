@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Eyebrow, PageTitle } from "@/components/typography";
+import { PageTitle } from "@/components/typography";
 import {
   evaluationInstant,
   getControls,
@@ -65,10 +65,6 @@ export default async function RisksPage({
   const partyOptions = [...parties.values()].map((p) => ({ id: p.id, label: p.name ?? p.id }));
   const controlOptions = controls.map((c) => ({ id: c.id, label: `${c.display_id ?? c.id} · ${c.name ?? ""}`.trim() }));
 
-  const open = rows.filter((r) => r.status === "open").length;
-  const treating = rows.filter((r) => r.status === "treating").length;
-  const acceptedOrClosed = rows.filter((r) => r.status === "accepted" || r.status === "closed").length;
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
@@ -76,20 +72,13 @@ export default async function RisksPage({
         title="Risks"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} risks · at <span className="text-foreground">{isoDate(summary.at)}</span>
             </p>
             <RiskCrudDialog systemId={program.system_ref} parties={partyOptions} controls={controlOptions} />
           </div>
         }
       />
-
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="Total risks" value={rows.length} />
-        <StatCard label="Open" value={open} tone={open > 0 ? "gap" : undefined} />
-        <StatCard label="Treating" value={treating} tone={treating > 0 ? "waived" : undefined} />
-        <StatCard label="Accepted / Closed" value={acceptedOrClosed} tone={acceptedOrClosed > 0 ? "met" : undefined} />
-      </div>
 
       <RisksView
         rows={rows}
@@ -99,23 +88,6 @@ export default async function RisksPage({
         programId={programId}
         at={atParam}
       />
-    </div>
-  );
-}
-
-function StatCard({ label, value, tone }: { label: string; value: number; tone?: "met" | "gap" | "waived" }) {
-  const cls =
-    tone === "gap"
-      ? "text-gap-ink"
-      : tone === "met"
-        ? "text-met-ink"
-        : tone === "waived"
-          ? "text-waived-ink"
-          : "";
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
-      <Eyebrow>{label}</Eyebrow>
-      <span className={`text-3xl font-medium tabular-nums ${cls}`}>{value}</span>
     </div>
   );
 }

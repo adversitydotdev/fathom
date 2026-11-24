@@ -3,7 +3,7 @@ import { PROGRAM_171, expect, test } from "./fixtures";
 test("AI assistant drawer opens, streams tool trace and gap analysis", async ({ page, shot }) => {
   await page.goto(`/programs/${PROGRAM_171}`);
 
-  await page.getByRole("button", { name: "AI", exact: true }).click();
+  await page.getByRole("button", { name: "Ask AI", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "OGRL AI Assistant" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("claude-sonnet-4-5")).toBeVisible();

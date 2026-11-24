@@ -1,21 +1,13 @@
 import { cn } from "cn";
 
-/** Mono uppercase label with a corner bracket, as Spectrum marks sections. */
+import { CountUp } from "@/components/motion";
+
+/** Small muted label above a title or value. */
 export function Eyebrow({ className, children }: { className?: string; children: React.ReactNode }) {
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2 font-mono text-[11px] leading-none font-medium tracking-[0.14em] text-muted-foreground uppercase",
-        "before:size-2 before:shrink-0 before:border-t before:border-l before:border-foreground/50 before:content-['']",
-        className,
-      )}
-    >
-      {children}
-    </div>
-  );
+  return <div className={cn("text-xs leading-none font-medium text-muted-foreground", className)}>{children}</div>;
 }
 
-/** Display-serif page title with an optional eyebrow and supporting line. */
+/** Page title with an optional breadcrumb line above and supporting content below. */
 export function PageTitle({
   eyebrow,
   title,
@@ -28,13 +20,25 @@ export function PageTitle({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col gap-3">
-      {eyebrow && <Eyebrow>{eyebrow}</Eyebrow>}
-      <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
-        <h1 className="font-display text-4xl leading-[1.05] tracking-[-0.02em]">{title}</h1>
+    <div className="flex flex-col gap-1.5">
+      {eyebrow && <Eyebrow className="font-normal">{eyebrow}</Eyebrow>}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <h1 className="text-2xl leading-tight font-semibold tracking-tight">{title}</h1>
         {aside}
       </div>
       {children}
+    </div>
+  );
+}
+
+const statTone = { met: "text-met-ink", gap: "text-gap-ink", waived: "text-waived-ink" } as const;
+
+/** A labelled count, used in the stat row at the top of list pages. */
+export function StatCard({ label, value, tone }: { label: string; value: number; tone?: keyof typeof statTone }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 rounded-xl border bg-card px-4 py-3 shadow-xs">
+      <Eyebrow className="leading-tight">{label}</Eyebrow>
+      <CountUp value={value} className={cn("text-xl leading-none font-semibold tabular-nums", value > 0 && tone && statTone[tone])} />
     </div>
   );
 }

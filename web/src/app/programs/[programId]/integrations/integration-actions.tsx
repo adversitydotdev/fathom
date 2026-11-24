@@ -293,7 +293,7 @@ export function NewConnectionDialog({ integrations, bindings }: { integrations: 
           </Field>
         ))}
         <fieldset className="flex flex-col gap-1.5">
-          <legend className="pb-1.5 font-mono text-[11px] tracking-[0.1em] text-muted-foreground uppercase">
+          <legend className="pb-1.5 text-xs font-medium text-muted-foreground">
             Bound to
           </legend>
           {bindings.map((b) => (

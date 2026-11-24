@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Eyebrow, PageTitle } from "@/components/typography";
+import { PageTitle } from "@/components/typography";
 import {
   getImplementations,
   getParties,
@@ -54,11 +54,6 @@ export default async function PartiesPage({
     ownedPolicies: policyCounts.get(p.id) ?? 0,
   }));
 
-  const people = rows.filter((r) => r.kind === "person").length;
-  const teams = rows.filter((r) => r.kind === "team").length;
-  const roles = rows.filter((r) => r.kind === "role").length;
-  const orgs = rows.filter((r) => r.kind === "organization").length;
-
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageTitle
@@ -66,7 +61,7 @@ export default async function PartiesPage({
         title="Parties"
         aside={
           <div className="flex flex-wrap items-center gap-3">
-            <p className="font-mono text-[11px] tracking-[0.12em] text-muted-foreground uppercase">
+            <p className="text-xs font-medium text-muted-foreground">
               {rows.length} parties
             </p>
             <PartyCrudDialog />
@@ -74,23 +69,7 @@ export default async function PartiesPage({
         }
       />
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard label="People" value={people} />
-        <StatCard label="Teams" value={teams} />
-        <StatCard label="Roles & agents" value={roles} />
-        <StatCard label="Organizations" value={orgs} />
-      </div>
-
       <PartiesTable rows={rows} />
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border bg-card px-4 py-4">
-      <Eyebrow>{label}</Eyebrow>
-      <span className="text-3xl font-medium tabular-nums">{value}</span>
     </div>
   );
 }
