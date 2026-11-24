@@ -2,14 +2,14 @@
 
 import asyncio
 
-from ogrl.adapters.library import GitLibrary
-from ogrl.kernel import bundles
-from ogrl.kernel.ids import is_reserved, split
-from ogrl.kernel.models import Requirement, parse, readable_spec_version
-from ogrl.operations.library import check_library
+from fathom.adapters.library import GitLibrary
+from fathom.kernel import bundles
+from fathom.kernel.ids import is_reserved, split
+from fathom.kernel.models import Requirement, parse, readable_spec_version
+from fathom.operations.library import check_library
 from tests.conftest import STAMP
 
-OGRL_LIBRARY = "https://github.com/adversitydotdev/ogrl-library"
+FATHOM_LIBRARY = "https://github.com/adversitydotdev/ogrl-library"
 
 
 def test_readable_spec_version_accepts_0_1_and_0_2_patches():
@@ -53,11 +53,11 @@ def test_parse_spec_0_2_objects_with_section_6_3_ids():
     assert is_reserved(mapping.id)
 
 
-def test_ogrl_library_main_passes_kernel_and_ogrl_rs_checks():
+def test_fathom_library_main_passes_kernel_and_fathom_rs_checks():
     """ogrl-library main after the §6.3 ID rename (spec 0.2.0); needs network."""
 
     async def pull() -> list:
-        lib = GitLibrary(OGRL_LIBRARY)
+        lib = GitLibrary(FATHOM_LIBRARY)
         revision = await lib.checkout(None, "HEAD")
         _, objects = bundles.read_directory(revision.root)
         check_library(objects)

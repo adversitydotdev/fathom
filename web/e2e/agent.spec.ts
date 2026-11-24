@@ -4,7 +4,7 @@ test("AI assistant drawer opens, streams tool trace and gap analysis", async ({ 
   await page.goto(`/programs/${PROGRAM_171}`);
 
   await page.getByRole("button", { name: "Ask AI", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "OGRL AI Assistant" });
+  const dialog = page.getByRole("dialog", { name: "Fathom AI Assistant" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("claude-sonnet-4-5")).toBeVisible();
 
@@ -21,7 +21,7 @@ test("contextual Draft with AI on policies streams and creates a real draft poli
   await page.goto(`/programs/${PROGRAM_171}/policies`);
 
   await page.getByRole("button", { name: "Draft with AI" }).click();
-  const dialog = page.getByRole("dialog", { name: "OGRL AI Assistant" });
+  const dialog = page.getByRole("dialog", { name: "Fathom AI Assistant" });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("draft_policy")).toBeVisible();
   await expect(dialog.getByText("Draft policy: AI-Drafted Acceptable Use Policy")).toBeVisible();

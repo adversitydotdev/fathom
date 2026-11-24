@@ -432,6 +432,79 @@ wheels = [
 ]
 
 [[package]]
+name = "fathom"
+version = "0.1.0"
+source = { editable = "." }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "authlib" },
+    { name = "boto3" },
+    { name = "common-expression-language" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "jsonschema" },
+    { name = "ogrl-integration" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform == 'linux'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
+    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
+    { name = "pydantic-ai-slim", extra = ["anthropic", "openai"] },
+    { name = "python-multipart" },
+    { name = "pyyaml" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "uvicorn" },
+]
+
+[package.optional-dependencies]
+telemetry = [
+    { name = "logfire", extra = ["fastapi", "httpx", "sqlalchemy"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "pyyaml" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.20.1" },
+    { name = "asyncpg", specifier = ">=0.32.0" },
+    { name = "authlib", specifier = ">=1.6.0" },
+    { name = "boto3", specifier = ">=1.43.127" },
+    { name = "common-expression-language", specifier = ">=0.10,<0.11" },
+    { name = "fastapi", specifier = ">=0.162.2" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "jsonschema", specifier = ">=4.23" },
+    { name = "logfire", extras = ["fastapi", "sqlalchemy", "httpx"], marker = "extra == 'telemetry'", specifier = ">=3.0.0" },
+    { name = "ogrl-integration", git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a12" },
+    { name = "ogrl-rs", marker = "(platform_machine != 'AMD64' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64') or (platform_machine == 'AMD64' and sys_platform == 'darwin') or (platform_machine == 'aarch64' and sys_platform == 'darwin') or (platform_machine == 'AMD64' and sys_platform == 'linux') or (platform_machine == 'arm64' and sys_platform == 'linux') or (platform_machine == 'aarch64' and sys_platform == 'win32') or (platform_machine == 'arm64' and sys_platform == 'win32') or (platform_machine == 'x86_64' and sys_platform == 'win32') or (sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32')", specifier = "==0.4.0" },
+    { name = "ogrl-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" },
+    { name = "ogrl-rs", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" },
+    { name = "pydantic-ai-slim", extras = ["anthropic", "openai"], specifier = ">=1.0.0" },
+    { name = "python-multipart", specifier = ">=0.0.33" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
+    { name = "uvicorn", specifier = ">=0.54.0" },
+]
+provides-extras = ["telemetry"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=9.2.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
+    { name = "ruff", specifier = ">=0.17.4" },
+]
+
+[[package]]
 name = "genai-prices"
 version = "0.2.5"
 source = { registry = "https://pypi.org/simple" }
@@ -842,79 +915,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/d6/54/cfe61301667036ec958cb99bd3efefba235e65cdeb9c84d24a8293ba1d90/mdurl-0.1.2.tar.gz", hash = "sha256:bb413d29f5eea38f31dd4754dd7377d4465116fb207585f97bf925588687c1ba", size = 8729, upload-time = "2022-08-14T12:40:10.846Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b3/38/89ba8ad64ae25be8de66a6d463314cf1eb366222074cfda9ee839c56a4b4/mdurl-0.1.2-py3-none-any.whl", hash = "sha256:84008a41e51615a49fc9966191ff91509e3c40b939176e643fd50a5c2196b8f8", size = 9979, upload-time = "2022-08-14T12:40:09.779Z" },
-]
-
-[[package]]
-name = "ogrl"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "alembic" },
-    { name = "asyncpg" },
-    { name = "authlib" },
-    { name = "boto3" },
-    { name = "common-expression-language" },
-    { name = "fastapi" },
-    { name = "httpx" },
-    { name = "jsonschema" },
-    { name = "ogrl-integration" },
-    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform != 'linux' and sys_platform != 'win32'" },
-    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" }, marker = "platform_machine != 'x86_64' and sys_platform == 'linux'" },
-    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" }, marker = "platform_machine == 'x86_64' and sys_platform == 'linux'" },
-    { name = "ogrl-rs", version = "0.3.0", source = { url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" }, marker = "sys_platform == 'win32'" },
-    { name = "pydantic-ai-slim", extra = ["anthropic", "openai"] },
-    { name = "python-multipart" },
-    { name = "pyyaml" },
-    { name = "sqlalchemy", extra = ["asyncio"] },
-    { name = "uvicorn" },
-]
-
-[package.optional-dependencies]
-telemetry = [
-    { name = "logfire", extra = ["fastapi", "httpx", "sqlalchemy"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
-    { name = "pytest" },
-    { name = "pyyaml" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "alembic", specifier = ">=1.20.1" },
-    { name = "asyncpg", specifier = ">=0.32.0" },
-    { name = "authlib", specifier = ">=1.6.0" },
-    { name = "boto3", specifier = ">=1.43.127" },
-    { name = "common-expression-language", specifier = ">=0.10,<0.11" },
-    { name = "fastapi", specifier = ">=0.162.2" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "jsonschema", specifier = ">=4.23" },
-    { name = "logfire", extras = ["fastapi", "sqlalchemy", "httpx"], marker = "extra == 'telemetry'", specifier = ">=3.0.0" },
-    { name = "ogrl-integration", git = "https://github.com/adversitydotdev/ogrl-integration-sdk?tag=v0.1.0a12" },
-    { name = "ogrl-rs", marker = "platform_machine != 'AMD64' and platform_machine != 'aarch64' and platform_machine != 'arm64' and platform_machine != 'x86_64' or platform_machine == 'AMD64' and (sys_platform == 'darwin' or sys_platform == 'linux') or platform_machine == 'aarch64' and (sys_platform == 'darwin' or sys_platform == 'win32') or platform_machine == 'arm64' and (sys_platform == 'linux' or sys_platform == 'win32') or platform_machine == 'x86_64' and sys_platform == 'win32' or sys_platform != 'darwin' and sys_platform != 'linux' and sys_platform != 'win32'", specifier = "==0.4.0" },
-    { name = "ogrl-rs", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_11_0_arm64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'darwin'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-macosx_10_12_x86_64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'aarch64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_aarch64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'x86_64' and sys_platform == 'linux'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-manylinux_2_28_x86_64.whl" },
-    { name = "ogrl-rs", marker = "platform_machine == 'AMD64' and sys_platform == 'win32'", url = "https://github.com/adversitydotdev/ogrl-rs/releases/download/v0.4.0/ogrl_rs-0.3.0-cp313-abi3-win_amd64.whl" },
-    { name = "pydantic-ai-slim", extras = ["anthropic", "openai"], specifier = ">=1.0.0" },
-    { name = "python-multipart", specifier = ">=0.0.33" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0" },
-    { name = "uvicorn", specifier = ">=0.54.0" },
-]
-provides-extras = ["telemetry"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "pytest", specifier = ">=9.2.0" },
-    { name = "pyyaml", specifier = ">=6.0.3" },
-    { name = "ruff", specifier = ">=0.17.4" },
 ]
 
 [[package]]

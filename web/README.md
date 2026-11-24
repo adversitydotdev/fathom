@@ -1,4 +1,4 @@
-# OGRL web
+# Fathom web
 
 The web frontend from [RFC 0003 section 8](https://tools.adversity.dev/rfcs/0003-application/#8-web-application). Next.js, TypeScript, Tailwind v4, [Spectrum UI](https://ui.spectrumhq.in/) components, and shadcn/ui on Radix underneath them. It renders what the API returns and never computes status itself.
 
@@ -11,17 +11,17 @@ pnpm install
 pnpm dev:mock
 ```
 
-`OGRL_API_MOCKING=enabled` routes every API call to the [MSW](https://mswjs.io/) handlers in `src/mocks`. Server components resolve them in-process (`getResponse`), and `/v1/*` on the web origin serves the same handlers, so `curl localhost:3000/v1/programs` works too. Set `OGRL_MOCK_LATENCY_MS=600` to see loading states.
+`FATHOM_API_MOCKING=enabled` routes every API call to the [MSW](https://mswjs.io/) handlers in `src/mocks`. Server components resolve them in-process (`getResponse`), and `/v1/*` on the web origin serves the same handlers, so `curl localhost:3000/v1/programs` works too. Set `FATHOM_MOCK_LATENCY_MS=600` to see loading states.
 
 The fixture program is Acme's `acme-platform` system under NIST 800-171 and an 800-53 subset, with at least one control in each computed state. Control state is canned in `src/mocks/fixtures/program.ts`. Requirement coverage and the summary counts are derived from the fixtures in `src/mocks/kernel.ts` so the numbers agree with the mappings. The mock does not vary data by `?at=`; it echoes the date back.
 
 ## Run against the API
 
 ```
-OGRL_API_ORIGIN=http://127.0.0.1:8080 OGRL_API_TOKEN=... pnpm dev
+FATHOM_API_ORIGIN=http://127.0.0.1:8080 FATHOM_API_TOKEN=... pnpm dev
 ```
 
-`/v1` and `/health` are proxied to `OGRL_API_ORIGIN`, as the web process does in production.
+`/v1` and `/health` are proxied to `FATHOM_API_ORIGIN`, as the web process does in production.
 
 ## The contract
 

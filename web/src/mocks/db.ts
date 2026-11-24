@@ -39,11 +39,11 @@ function createDb() {
 
 type MockDb = ReturnType<typeof createDb>;
 
-const g = globalThis as typeof globalThis & { __ogrlMockDb?: MockDb };
+const g = globalThis as typeof globalThis & { __fathomMockDb?: MockDb };
 
 /**
  * In-memory store behind the mock handlers, pinned to `globalThis` so route
  * handlers (`/api/agent/stream`, `/v1/*`) and Server Components share one
  * instance across Next.js bundle chunks.
  */
-export const db: MockDb = (g.__ogrlMockDb ??= createDb());
+export const db: MockDb = (g.__fathomMockDb ??= createDb());

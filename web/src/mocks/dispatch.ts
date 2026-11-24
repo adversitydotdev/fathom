@@ -2,7 +2,7 @@ import { delay, getResponse } from "msw";
 
 import { handlers, problem } from "./handlers";
 
-const latency = Number(process.env.OGRL_MOCK_LATENCY_MS ?? 0);
+const latency = Number(process.env.FATHOM_MOCK_LATENCY_MS ?? 0);
 
 /**
  * Resolves a request against the MSW handlers in-process. Used as the API

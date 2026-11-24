@@ -1,7 +1,7 @@
 import pytest
 
-from ogrl.access import ActorKind, Permission, Principal, Role, StaticPolicy
-from ogrl.access.roles import RoleDefinition
+from fathom.access import ActorKind, Permission, Principal, Role, StaticPolicy
+from fathom.access.roles import RoleDefinition
 
 policy = StaticPolicy()
 

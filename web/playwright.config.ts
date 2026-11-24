@@ -36,7 +36,7 @@ export default defineConfig({
     ? undefined
     : {
         command: `pnpm build && pnpm start --port ${port}`,
-        env: { NEXT_DIST_DIR: ".next-e2e", OGRL_API_MOCKING: "enabled" },
+        env: { NEXT_DIST_DIR: ".next-e2e", FATHOM_API_MOCKING: "enabled" },
         url: `${baseURL}/v1/programs`,
         reuseExistingServer: !process.env.CI,
         timeout: 240_000,

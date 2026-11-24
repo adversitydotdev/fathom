@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
 # ruff: noqa: E501
-"""Idempotent local development seeder for the OGRL Docker Compose stack.
+"""Idempotent local development seeder for the Fathom Docker Compose stack.
 
 Pulls `ogrl-library` (default v0.4.1) and populates a starter organization ("Acme Platform")
 with two live programs (NIST 800-171 r3 & SOC 2), implementations, results,
 evidence, risks, an exception, a finding, policies, and procedures so the UI
 opens straight into real Postgres + ogrl-rs kernel data.
 
-Set OGRL_SKIP_SEED=true to boot an empty workspace instead.
-Set OGRL_SEED_LIBRARY_COMMIT to pull by git revision (e.g. main) before a library-v* tag
-exists for spec 0.2.0; otherwise OGRL_SEED_LIBRARY_VERSION selects a tagged release.
+Set FATHOM_SKIP_SEED=true to boot an empty workspace instead.
+Set FATHOM_SEED_LIBRARY_COMMIT to pull by git revision (e.g. main) before a library-v* tag
+exists for spec 0.2.0; otherwise FATHOM_SEED_LIBRARY_VERSION selects a tagged release.
 """
 
 from __future__ import annotations
@@ -22,10 +22,10 @@ import urllib.error
 import urllib.request
 from datetime import UTC, datetime, timedelta
 
-API = os.environ.get("OGRL_API_ORIGIN", "http://api:8080").rstrip("/")
-TOKEN = os.environ.get("OGRL_API_TOKEN", "ogrl_pat_local_dev_admin")
-LIB_VERSION = os.environ.get("OGRL_SEED_LIBRARY_VERSION", "0.4.1")
-LIB_COMMIT = os.environ.get("OGRL_SEED_LIBRARY_COMMIT")
+API = os.environ.get("FATHOM_API_ORIGIN", "http://api:8080").rstrip("/")
+TOKEN = os.environ.get("FATHOM_API_TOKEN", "fathom_pat_local_dev_admin")
+LIB_VERSION = os.environ.get("FATHOM_SEED_LIBRARY_VERSION", "0.4.1")
+LIB_COMMIT = os.environ.get("FATHOM_SEED_LIBRARY_COMMIT")
 
 
 def req(method: str, path: str, body: dict | None = None, *, if_match: str | None = None) -> dict:
@@ -142,7 +142,7 @@ INTEGRATIONS = [
 
 def install_integrations() -> None:
     """Install each release not already installed. A failure is reported, not fatal."""
-    if os.environ.get("OGRL_SEED_INTEGRATIONS", "true").lower() in {"0", "false", "no"}:
+    if os.environ.get("FATHOM_SEED_INTEGRATIONS", "true").lower() in {"0", "false", "no"}:
         return
     installed = {(i["id"], i["version"]) for i in req("GET", "/v1/integrations").get("data", [])}
     for integration_id, version, url, digest in INTEGRATIONS:
@@ -158,8 +158,8 @@ def install_integrations() -> None:
 
 
 def main() -> int:
-    if os.environ.get("OGRL_SKIP_SEED", "").lower() in {"1", "true", "yes"}:
-        print("seed: OGRL_SKIP_SEED is set; skipping local seed.")
+    if os.environ.get("FATHOM_SKIP_SEED", "").lower() in {"1", "true", "yes"}:
+        print("seed: FATHOM_SKIP_SEED is set; skipping local seed.")
         return 0
 
     wait_for_health()

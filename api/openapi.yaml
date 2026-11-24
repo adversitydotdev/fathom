@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
-  title: OGRL API
+  title: Fathom API
   version: 0.1.0
-  summary: HTTP API for one organization's OGRL program.
+  summary: HTTP API for one organization's Fathom program.
   description: |
     Resources are the objects in RFC 0001. Computed routes return views the
     kernel derives and does not store. The design notes, including how Vanta,
@@ -3004,7 +3004,7 @@ paths:
       description: |
         RFC 0005 section 4. The archive is unpacked and validated, stored in
         object storage, and (with `enable`, the default) enabled. Unsigned
-        archives install only with `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A
+        archives install only with `FATHOM_ALLOW_LOCAL_INTEGRATIONS=true`. A
         version is immutable: reinstalling it with other bytes is refused.
       requestBody:
         required: true
@@ -3394,7 +3394,7 @@ paths:
       operationId: startConnectionOAuth
       summary: "Begin bring-your-own OAuth: the vendor URL to send the operator to."
       description: |
-        RFC 0005 section 5. Needs `OGRL_PUBLIC_URL`, and the connection's
+        RFC 0005 section 5. Needs `FATHOM_PUBLIC_URL`, and the connection's
         `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` secrets. The returned URL
         carries a single-use `state` that expires after ten minutes, and a
         PKCE challenge when the integration asks for one.
@@ -3899,8 +3899,8 @@ components:
       properties:
         type:
           type: string
-          description: A URN such as `urn:ogrl:problem:library-object`.
-          examples: ["urn:ogrl:problem:bad-request"]
+          description: A URN such as `urn:fathom:problem:library-object`.
+          examples: ["urn:fathom:problem:bad-request"]
         title:
           type: string
         status:

@@ -336,7 +336,7 @@ export function AgentProvider({
           />
           <aside
             role="dialog"
-            aria-label="OGRL AI Assistant"
+            aria-label="Fathom AI Assistant"
             className="relative z-10 flex h-dvh w-[min(96vw,29rem)] flex-col border-l bg-card shadow-2xl"
           >
             <div className="flex items-center justify-between gap-2 border-b px-5 py-3.5">
@@ -395,7 +395,7 @@ export function AgentProvider({
                 <div className="flex flex-col gap-3 py-4">
                   <p className="text-xs text-muted-foreground">
                     Ask about your program&apos;s computed status, gaps, risks, or have the agent draft implementations
-                    and policies directly into OGRL for your review.
+                    and policies directly into Fathom for your review.
                   </p>
                   <div className="flex flex-col gap-2">
                     {starters.map((s) => (
@@ -505,7 +505,7 @@ export function AgentProvider({
                   placeholder={
                     status?.enabled === false
                       ? "Configure ANTHROPIC_API_KEY or OPENAI_API_KEY…"
-                      : "Ask OGRL AI to inspect gaps or draft a control/policy…"
+                      : "Ask Fathom AI to inspect gaps or draft a control/policy…"
                   }
                   disabled={streaming || status?.enabled === false}
                   rows={2}

@@ -1,10 +1,10 @@
-# Multi-stage production image for the OGRL Next.js frontend (RFC 0003 §8 & §9).
+# Multi-stage production image for the Fathom Next.js frontend (RFC 0003 §8 & §9).
 
 FROM node:24-alpine AS builder
 RUN corepack enable
 
-ARG OGRL_API_ORIGIN=http://127.0.0.1:8080
-ENV OGRL_API_ORIGIN=${OGRL_API_ORIGIN}
+ARG FATHOM_API_ORIGIN=http://127.0.0.1:8080
+ENV FATHOM_API_ORIGIN=${FATHOM_API_ORIGIN}
 
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -21,7 +21,7 @@ RUN corepack enable \
 
 WORKDIR /app
 ENV NODE_ENV=production \
-    OGRL_API_ORIGIN="http://127.0.0.1:8080" \
+    FATHOM_API_ORIGIN="http://127.0.0.1:8080" \
     PORT=3000 \
     HOSTNAME="0.0.0.0"
 

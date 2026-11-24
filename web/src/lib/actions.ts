@@ -46,7 +46,7 @@ async function uploadMultipart(path: string, ifMatch: string, file: File | { nam
   if (apiMocking) {
     const { handleMockRequest } = await import("@/mocks/dispatch");
     res = await handleMockRequest(
-      new Request(`http://ogrl.mock/v1${path}`, { method: "POST", headers, body: form }),
+      new Request(`http://fathom.mock/v1${path}`, { method: "POST", headers, body: form }),
     );
   } else {
     res = await fetch(`${apiOrigin}/v1${path}`, { method: "POST", headers, body: form });
@@ -78,7 +78,7 @@ export async function triggerRender(
 export async function triggerGitExport(): Promise<ActionState> {
   const { data, error, response } = await api.POST("/exports/git");
   if (response.status === 404) {
-    return { error: "Git export is disabled (set OGRL_EXPORT_REMOTE to enable)." };
+    return { error: "Git export is disabled (set FATHOM_EXPORT_REMOTE to enable)." };
   }
   if (error || !data) return { error: formatError(error, "Couldn't queue Git export.") };
   refresh();

@@ -1634,7 +1634,7 @@ export interface paths {
          * Install an integration archive from a URL. Returns a job.
          * @description RFC 0005 section 4. The archive is unpacked and validated, stored in
          *     object storage, and (with `enable`, the default) enabled. Unsigned
-         *     archives install only with `OGRL_ALLOW_LOCAL_INTEGRATIONS=true`. A
+         *     archives install only with `FATHOM_ALLOW_LOCAL_INTEGRATIONS=true`. A
          *     version is immutable: reinstalling it with other bytes is refused.
          */
         post: operations["installIntegration"];
@@ -1891,7 +1891,7 @@ export interface paths {
         put?: never;
         /**
          * Begin bring-your-own OAuth: the vendor URL to send the operator to.
-         * @description RFC 0005 section 5. Needs `OGRL_PUBLIC_URL`, and the connection's
+         * @description RFC 0005 section 5. Needs `FATHOM_PUBLIC_URL`, and the connection's
          *     `OAUTH_CLIENT_ID` and `OAUTH_CLIENT_SECRET` secrets. The returned URL
          *     carries a single-use `state` that expires after ten minutes, and a
          *     PKCE challenge when the integration asks for one.
@@ -2159,8 +2159,8 @@ export interface components {
     schemas: {
         Problem: {
             /**
-             * @description A URN such as `urn:ogrl:problem:library-object`.
-             * @example urn:ogrl:problem:bad-request
+             * @description A URN such as `urn:fathom:problem:library-object`.
+             * @example urn:fathom:problem:bad-request
              */
             type: string;
             title: string;

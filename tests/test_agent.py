@@ -10,14 +10,14 @@ from fastapi.testclient import TestClient
 from pydantic_ai.messages import ModelMessage, ModelResponse, TextPart, ToolCallPart
 from pydantic_ai.models.function import AgentInfo, DeltaToolCall, FunctionModel
 
-from ogrl import container
-from ogrl.access import ActorKind, Principal, Role
-from ogrl.agent import AgentConfig, agent_principal, draft_gap_remediation
-from ogrl.api.app import create_app
-from ogrl.errors import Forbidden
-from ogrl.kernel.models import parse
-from ogrl.operations import types as t
-from ogrl.persistence.memory import MemoryStore
+from fathom import container
+from fathom.access import ActorKind, Principal, Role
+from fathom.agent import AgentConfig, agent_principal, draft_gap_remediation
+from fathom.api.app import create_app
+from fathom.errors import Forbidden
+from fathom.kernel.models import parse
+from fathom.operations import types as t
+from fathom.persistence.memory import MemoryStore
 from tests.conftest import C1, LIB_BASELINE, library_objects
 
 
@@ -185,7 +185,7 @@ def test_agent_config_env_detection():
     assert oai.model_name == "openai:gpt-4o"
 
     local = AgentConfig.from_env(
-        {"OGRL_AI_BASE_URL": "http://localhost:11434/v1", "OGRL_AI_MODEL": "openai:llama3.2"}
+        {"FATHOM_AI_BASE_URL": "http://localhost:11434/v1", "FATHOM_AI_MODEL": "openai:llama3.2"}
     )
     assert local.enabled
     assert local.provider == "openai"

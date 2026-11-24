@@ -1,7 +1,7 @@
 /**
  * A tiny CEL subset for the mock API only: `item.field`, string/number/bool/null
  * literals, lists, `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `!`, `&&`, `||`, and
- * parentheses. The real rule runner is CEL in the server (ogrl/kernel/rules.py);
+ * parentheses. The real rule runner is CEL in the server (fathom/kernel/rules.py);
  * this exists so the rule editor can be driven in mock mode.
  */
 

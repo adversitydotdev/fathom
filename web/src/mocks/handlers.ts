@@ -17,7 +17,7 @@ type Filters<T> = Record<string, (item: T, value: string) => boolean>;
 
 export function problem(status: number, slug: string, title: string, detail?: string) {
   return HttpResponse.json(
-    { type: `urn:ogrl:problem:${slug}`, title, status, detail },
+    { type: `urn:fathom:problem:${slug}`, title, status, detail },
     { status, headers: { "Content-Type": "application/problem+json" } },
   );
 }
@@ -120,7 +120,7 @@ function contentUpload<T extends MutableObj>(path: string, items: () => T[]) {
       ...arr[idx],
       modified: new Date().toISOString(),
       resource: {
-        uri: `s3://acme-ogrl-evidence/${params.id}`,
+        uri: `s3://acme-fathom-evidence/${params.id}`,
         media_type: "text/markdown",
         digest: { algorithm: "sha-256", value: "a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90" },
       },
@@ -295,7 +295,7 @@ export const handlers = [
     }
     return HttpResponse.json(
       {
-        type: "urn:ogrl:problem:invalid",
+        type: "urn:fathom:problem:invalid",
         title: "the query source does not validate",
         status: 400,
         errors: check.errors.map((e) => ({ pointer: e.pointer, detail: e.detail })),

@@ -9,7 +9,7 @@ test("integrations page lists connections, installed packages, and snapshots", a
   const connections = page.getByRole("region", { name: "Connections" });
   const okta = connections.locator("tr", { hasText: "Okta production" });
   await expect(okta.getByText("active")).toBeVisible();
-  await expect(okta.getByText("acme.okta.com as svc-ogrl")).toBeVisible();
+  await expect(okta.getByText("acme.okta.com as svc-fathom")).toBeVisible();
   await expect(okta.getByText("Okta Workforce Identity")).toBeVisible();
   const github = connections.locator("tr", { hasText: "GitHub acme-eng" });
   await expect(github.getByText("failing")).toBeVisible();

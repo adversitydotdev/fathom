@@ -2,13 +2,13 @@
 
 from datetime import UTC, datetime
 
-from ogrl import container
-from ogrl.adapters.library import DirectoryLibrary, GitLibrary
-from ogrl.importer.oscal_component import OscalComponentImporter
-from ogrl.kernel.graph import Graph
-from ogrl.kernel.models import parse
-from ogrl.plugins.ports import RenderRequest
-from ogrl.renderer.oscal import OscalRenderer
+from fathom import container
+from fathom.adapters.library import DirectoryLibrary, GitLibrary
+from fathom.importer.oscal_component import OscalComponentImporter
+from fathom.kernel.graph import Graph
+from fathom.kernel.models import parse
+from fathom.plugins.ports import RenderRequest
+from fathom.renderer.oscal import OscalRenderer
 from tests.conftest import C1, LIB_BASELINE, library_objects
 
 SAMPLE_OSCAL_XML = b"""<?xml version="1.0" encoding="UTF-8"?>

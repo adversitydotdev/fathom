@@ -275,7 +275,7 @@ export function NewConnectionDialog({ integrations, bindings }: { integrations: 
               />
             </Field>
             <p className="rounded-xl border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-              Tag the role <code className="font-mono text-foreground">ogrl-integration=true</code> and trust the OGRL
+              Tag the role <code className="font-mono text-foreground">ogrl-integration=true</code> and trust the Fathom
               task role. After saving, require the connection&apos;s external ID in the trust policy.
             </p>
           </>
@@ -349,7 +349,7 @@ export function InstallIntegrationDialog() {
         open={open}
         onOpenChange={setOpen}
         title="Install integration"
-        description="Install a packed integration archive. Unsigned archives need OGRL_ALLOW_LOCAL_INTEGRATIONS."
+        description="Install a packed integration archive. Unsigned archives need FATHOM_ALLOW_LOCAL_INTEGRATIONS."
         trigger={
           <Button variant="outline" size="sm" className="h-8 gap-1.5 px-3 text-xs">
             <Download className="size-3.5" aria-hidden />

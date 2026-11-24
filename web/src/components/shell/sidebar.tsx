@@ -20,7 +20,7 @@ import { MotionConfig, motion } from "motion/react";
 import Link from "next/link";
 import { useParams, usePathname, useSearchParams } from "next/navigation";
 import { cn } from "cn";
-import { OgrlMark } from "@/components/brand-mark";
+import { FathomMark } from "@/components/brand-mark";
 
 type Item = { label: string; icon: React.ComponentType<{ className?: string }>; href: string };
 
@@ -69,8 +69,8 @@ export function Sidebar({ footer }: { footer?: React.ReactNode }) {
     <MotionConfig reducedMotion="user">
     <nav className="flex h-full flex-col gap-1 px-3 py-4 text-sm" aria-label="Main">
       <Link href={withAt(base)} className="mb-3 flex h-8 items-center gap-2 px-2">
-        <OgrlMark className="size-5 shrink-0 text-primary" aria-hidden />
-        <span className="text-base font-semibold tracking-tight">OGRL</span>
+        <FathomMark className="size-5 shrink-0 text-primary" aria-hidden />
+        <span className="text-base font-semibold tracking-tight">Fathom</span>
       </Link>
       {sections.map((section, i) => (
         <div key={i} className="flex flex-col gap-0.5">
