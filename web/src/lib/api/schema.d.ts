@@ -874,6 +874,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/programs/{id}/sprs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * SPRS score, POA&M eligibility, and CMMC reminders.
+         * @description For a program on a CMMC Level 2 baseline (`extensions["dev.ogrl.cmmc"].level`
+         *     is 2). The score is 110 minus the weight of every NOT MET requirement
+         *     (32 CFR 170.24; weights in `fathom/kernel/data/cmmc_l2_scoring.json`).
+         *     A requirement is MET only when RFC 0001 section 8 computes it `covered`;
+         *     `contribution`, `gap`, and `unmapped` are NOT MET. POA&M eligibility is
+         *     32 CFR 170.21. `assessable` is false when CA.L2-3.12.4 (the SSP) is not
+         *     met; the score is then indicative only.
+         *
+         *     Inputs outside RFC 0001 are read from the program's
+         *     `extensions["dev.ogrl.cmmc"]`: `assessment_date`,
+         *     `conditional_status_date`, `last_affirmation_date` (ISO dates) and
+         *     `partial_credit` (practice IDs IA.L2-3.5.3 and SC.L2-3.13.11 that an
+         *     assessor attests are partially effective). Clients display the result.
+         *     They do not recompute it.
+         *
+         *     404 when the program is not on a CMMC Level 2 baseline.
+         */
+        get: operations["getProgramSprs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/programs/{id}/renders": {
         parameters: {
             query?: never;
@@ -3050,6 +3085,80 @@ export interface components {
             state: components["schemas"]["RequirementState"];
             mapping_ids?: string[];
         };
+        SprsReason: {
+            /** @description One of `no-ssp`, `score-below-threshold`, `ineligible-items`, `never-on-poam`, `points-exceed-limit`. */
+            code: string;
+            detail: string;
+        };
+        /** @description One NOT MET requirement, which needs a POA&M line. */
+        PoamItem: {
+            requirement_id: string;
+            /** @example AC.L2-3.1.1 */
+            practice_id: string;
+            /** @description The requirement's coverage state, or `not-in-baseline`. */
+            state: string;
+            /** @description Points the requirement costs, with attested partial credit applied. */
+            points: number;
+            partial: boolean;
+            eligible: boolean;
+            /** @description Why the item may not be on a POA&M. Empty when eligible. */
+            reasons: components["schemas"]["SprsReason"][];
+            /**
+             * Format: date
+             * @description Closeout deadline, 180 days after the conditional status date. Absent until one is set.
+             */
+            due?: string;
+            /** @description Open risks on the controls that do not yet meet this requirement. */
+            risk_ids: string[];
+        };
+        SprsReminder: {
+            /** @enum {string} */
+            kind: "reassessment" | "affirmation";
+            /** @enum {string} */
+            state: "unscheduled" | "ok" | "due-soon" | "overdue";
+            /** Format: date */
+            due?: string;
+            days_until?: number;
+            /** Format: date */
+            last?: string;
+        };
+        SprsReport: {
+            program_id: string;
+            /** Format: date-time */
+            at: string;
+            /** @example 110 */
+            max_score: number;
+            /** @description May be negative, down to -203. */
+            score: number;
+            assessable: boolean;
+            assessable_reason?: string;
+            met: number;
+            not_met: number;
+            poam: {
+                /** @description True when any requirement is NOT MET. */
+                required: boolean;
+                /** @description Conditional status is possible under 32 CFR 170.21. */
+                eligible: boolean;
+                reasons: components["schemas"]["SprsReason"][];
+                items: components["schemas"]["PoamItem"][];
+                conditional?: {
+                    /** Format: date */
+                    status_date: string;
+                    /** Format: date */
+                    expires: string;
+                    expired: boolean;
+                    days_remaining: number;
+                };
+            };
+            reminders: {
+                reassessment: components["schemas"]["SprsReminder"];
+                affirmation: components["schemas"]["SprsReminder"];
+                affirming_official?: string;
+                assessment_type?: string;
+                assessment_cadence?: string;
+            };
+            notes: string[];
+        };
         Gap: {
             program_id: string;
             control_id: string;
@@ -5175,6 +5284,33 @@ export interface operations {
                     "application/json": components["schemas"]["ProgramStatus"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getProgramSprs: {
+        parameters: {
+            query?: {
+                at?: string;
+            };
+            header?: never;
+            path: {
+                id: components["parameters"]["id"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The report. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SprsReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
         };

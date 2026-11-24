@@ -23,7 +23,7 @@ import { CountUp } from "@/components/motion";
 import { PanelSequence } from "@/components/shell/side-panel";
 import { Legend, Ring, SegmentBar, requirementSegments } from "@/components/status";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { Job, RequirementState } from "@/lib/api/types";
+import type { Job, RequirementState, SprsReport } from "@/lib/api/types";
 import {
   evaluationInstant,
   getBaseline,
@@ -34,6 +34,7 @@ import {
   getParties,
   getProgram,
   getProgramStatus,
+  getProgramSprs,
   getProgramSummary,
   getSystem,
   getSystemGaps,
@@ -51,8 +52,9 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
   const q = atParam ? `?at=${atParam}` : "";
 
   const program = await getProgram(programId);
-  const [summary, baseline, system, controls, frameworks, gaps, jobs, impls, parties] = await Promise.all([
+  const [summary, sprs, baseline, system, controls, frameworks, gaps, jobs, impls, parties] = await Promise.all([
     getProgramSummary(programId, instant),
+    getProgramSprs(programId, instant),
     getBaseline(program.baseline_ref),
     getSystem(program.system_ref),
     getControls(),
@@ -167,6 +169,8 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         </Card>
       </div>
 
+      {sprs && <SprsCard report={sprs} />}
+
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <Card className="motion-rise" style={{ ["--i" as string]: 3 }}>
           <CardHeader>
@@ -267,6 +271,72 @@ export default async function OverviewPage({ params, searchParams }: PageProps<"
         </div>
       </div>
     </div>
+  );
+}
+
+const REMINDER_LABEL: Record<SprsReport["reminders"]["affirmation"]["state"], string> = {
+  unscheduled: "Not scheduled",
+  ok: "On track",
+  "due-soon": "Due soon",
+  overdue: "Overdue",
+};
+
+/** Renders the API's CMMC report as is. Score, eligibility, and due dates are never computed here. */
+function SprsCard({ report }: { report: SprsReport }) {
+  const { poam, reminders } = report;
+  const eligibleItems = poam.items.filter((i) => i.eligible).length;
+  return (
+    <section aria-label="CMMC score" className="motion-rise" style={{ ["--i" as string]: 3 }}>
+      <Card>
+        <CardHeader>
+          <CardTitle>CMMC Level 2 score</CardTitle>
+          <CardAction className="text-sm text-muted-foreground">SPRS, 32 CFR 170.24</CardAction>
+        </CardHeader>
+        <CardContent className="grid gap-6 md:grid-cols-3">
+          <div>
+            <div className="text-3xl font-semibold tracking-tight tabular-nums">
+              {report.score}
+              <span className="text-lg font-normal text-muted-foreground"> / {report.max_score}</span>
+            </div>
+            <p className="mt-0.5 text-sm text-muted-foreground">
+              {report.met} met, {report.not_met} not met
+            </p>
+            {!report.assessable && <p className="mt-1 text-xs text-gap-ink">{report.assessable_reason}</p>}
+          </div>
+          <div className="text-sm">
+            <div className="font-medium">
+              POA&amp;M {poam.eligible ? "eligible" : "not eligible"}
+            </div>
+            <p className="mt-0.5 text-muted-foreground">
+              {report.not_met} NOT MET, {eligibleItems} allowed on a POA&amp;M
+            </p>
+            {poam.reasons.map((r) => (
+              <p key={r.code} className="mt-0.5 text-xs text-gap-ink">
+                {r.detail}
+              </p>
+            ))}
+            {poam.conditional && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Conditional status {poam.conditional.expired ? "expired" : "expires"}{" "}
+                <span className="tabular-nums">{isoDate(poam.conditional.expires)}</span>
+                {poam.conditional.expired ? "" : ` (${poam.conditional.days_remaining} days)`}
+              </p>
+            )}
+          </div>
+          <ul className="flex flex-col gap-2 text-sm">
+            {[reminders.affirmation, reminders.reassessment].map((r) => (
+              <li key={r.kind} className="flex items-baseline justify-between gap-3">
+                <span>{r.kind === "affirmation" ? "Annual affirmation" : "Three-year reassessment"}</span>
+                <span className={r.state === "overdue" ? "text-gap-ink" : "text-muted-foreground"}>
+                  {REMINDER_LABEL[r.state]}
+                  {r.due ? <span className="tabular-nums"> · {isoDate(r.due)}</span> : null}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </CardContent>
+      </Card>
+    </section>
   );
 }
 

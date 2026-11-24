@@ -1,14 +1,15 @@
 """Computed views: shapes the kernel derives and the store never holds.
 
-`EffectiveBaseline`, `ProgramStatus`, `ProgramSummary`, and `Gap` in
+`EffectiveBaseline`, `ProgramStatus`, `ProgramSummary`, `SprsReport`, and `Gap` in
 api/openapi.yaml. Clients display these. They do not recompute them.
 """
 
-from datetime import datetime
+from dataclasses import asdict
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
-from fathom.kernel import baselines, status
+from fathom.kernel import baselines, sprs, status
 
 
 class EffectiveBaseline(BaseModel):
@@ -94,6 +95,72 @@ class ProgramSummary(BaseModel):
                 "requirements": RequirementCounts(**value.requirements),
             }
         )
+
+
+class SprsReason(BaseModel):
+    code: str
+    detail: str
+
+
+class PoamItem(BaseModel):
+    requirement_id: str
+    practice_id: str
+    state: str
+    points: int
+    partial: bool
+    eligible: bool
+    reasons: list[SprsReason]
+    due: date | None = None
+    risk_ids: list[str]
+
+
+class Conditional(BaseModel):
+    status_date: date
+    expires: date
+    expired: bool
+    days_remaining: int
+
+
+class Poam(BaseModel):
+    required: bool
+    eligible: bool
+    reasons: list[SprsReason]
+    items: list[PoamItem]
+    conditional: Conditional | None = None
+
+
+class Reminder(BaseModel):
+    kind: str
+    state: str
+    due: date | None = None
+    days_until: int | None = None
+    last: date | None = None
+
+
+class Reminders(BaseModel):
+    reassessment: Reminder
+    affirmation: Reminder
+    affirming_official: str | None = None
+    assessment_type: str | None = None
+    assessment_cadence: str | None = None
+
+
+class SprsReport(BaseModel):
+    program_id: str
+    at: datetime
+    max_score: int
+    score: int
+    assessable: bool
+    assessable_reason: str | None = None
+    met: int
+    not_met: int
+    poam: Poam
+    reminders: Reminders
+    notes: list[str]
+
+    @classmethod
+    def of(cls, value: sprs.SprsReport) -> "SprsReport":
+        return cls.model_validate(asdict(value))
 
 
 class Gap(BaseModel):

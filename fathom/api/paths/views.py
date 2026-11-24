@@ -69,6 +69,18 @@ GET_PROGRAM_SUMMARY = Endpoint(
     permission=P.PROGRAMS_READ,
     response=views.ProgramSummary,
 )
+GET_PROGRAM_SPRS = Endpoint(
+    id="getProgramSprs",
+    summary="SPRS score, POA&M eligibility, and CMMC reminders.",
+    method=GET,
+    path="/programs/{id}/sprs",
+    tag="Programs",
+    permission=P.PROGRAMS_READ,
+    response=views.SprsReport,
+    description=(
+        "32 CFR 170.24 score and 170.21 POA&M rules for a program on a CMMC Level 2 baseline."
+    ),
+)
 GET_PROGRAM_STATUS = Endpoint(
     id="getProgramStatus",
     summary="Computed status for the program at an instant.",
@@ -225,6 +237,7 @@ ALL = (
     LIST_SYSTEM_GAPS,
     GET_PROGRAM_SUMMARY,
     GET_PROGRAM_STATUS,
+    GET_PROGRAM_SPRS,
     CREATE_PROGRAM_RENDER,
     GET_EVIDENCE_CONTENT,
     UPLOAD_EVIDENCE_CONTENT,

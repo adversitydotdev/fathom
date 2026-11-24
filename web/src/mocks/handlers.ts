@@ -4,7 +4,7 @@ import type { Connection, Job, Test } from "@/lib/api/types";
 
 import { CelError, evaluate as evaluateCel } from "./cel";
 import { db } from "./db";
-import { snapshotItems } from "./fixtures/program";
+import { snapshotItems, sprsReports } from "./fixtures/program";
 import { programStatus, programSummary, systemGaps } from "./kernel";
 import { checkQuery, describe, dryRun, findOperation, saveQuery, schemaFields, searchOperations, sourceOf, withQueries } from "./queries";
 import { queryModels } from "./fixtures/queries";
@@ -185,6 +185,10 @@ export const handlers = [
   http.get(`${V}/programs/:id/summary`, ({ params, request }) => {
     const s = programSummary(params.id as string, new URL(request.url).searchParams.get("at"));
     return s ? HttpResponse.json(s) : notFound();
+  }),
+  http.get(`${V}/programs/:id/sprs`, ({ params }) => {
+    const report = sprsReports[params.id as string];
+    return report ? HttpResponse.json(report) : notFound();
   }),
   http.get(`${V}/programs/:id/status`, ({ params, request }) => {
     const sp = new URL(request.url).searchParams;
