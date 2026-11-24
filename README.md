@@ -1,4 +1,10 @@
-# Fathom
+<p align="left">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/fathom-wordmark-light.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/fathom-wordmark-dark.svg" />
+    <img alt="Fathom" src="docs/brand/fathom-wordmark-dark.svg" height="36" />
+  </picture>
+</p>
 
 Fathom is a self-hosted application for running a security program. It speaks [OGRL](https://ogrl.adversity.dev) (Open Governance Reference Language), an open language for describing one.
 
@@ -6,10 +12,100 @@ A company runs one program. SOC 2, ISO 27001, HIPAA, NIST, and CMMC ask overlapp
 
 People author YAML they can review. Status is computed from implementations, parameters, fresh results, and unexpired evidence, so two dashboards reading the same bundle reach the same answer. A mapping that covers only part of a requirement says so.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/overview-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/overview-light.png" />
+  <img alt="Fathom program overview showing control readiness, NIST SP 800-171 requirement coverage, open gaps, and recent jobs" src="docs/screenshots/overview-light.png" width="100%" />
+</picture>
+
+## What's inside
+
+### Controls & computed status
+
+Every control's state (`met`, `gap`, `waived`, `out of scope`) is computed by the kernel from required tests, parameter values, and evidence expiry dates. Open any control in the slide-over panel to inspect failing checks, record manual attestations, or review parameters without leaving the list.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/controls-panel-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/controls-panel-light.png" />
+  <img alt="Controls list with the slide-over detail panel open on IAM-02 showing failing MFA check, evidence freshness dates, and control statement" src="docs/screenshots/controls-panel-light.png" width="100%" />
+</picture>
+
+### Transparent requirement coverage
+
+Map your controls once and see how they satisfy NIST SP 800-171, NIST SP 800-53, SOC 2, and other frameworks. Partial mappings report `contribution` rather than pretending a requirement is fully `covered`, and unmapped gaps stand out immediately.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/requirements-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/requirements-light.png" />
+  <img alt="Requirements view showing NIST SP 800-171 Revision 3 coverage across covered, gap, contribution, and unmapped states" src="docs/screenshots/requirements-light.png" width="100%" />
+</picture>
+
+### Live integrations, query sources & CEL rules
+
+Connect AWS, Okta, and GitHub read-only to collect verifiable snapshots as evidence. Need data a built-in integration does not collect yet? Define a read-only **query source** directly from the vendor's Smithy or OpenAPI model—validate the schema and dry-run a live sample with zero code—then write a **CEL rule test** with instant preview against the latest snapshot.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/integrations-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/integrations-light.png" />
+  <img alt="Integrations view showing connected AWS, GitHub, and Okta accounts, installed integration packages, and template updates" src="docs/screenshots/integrations-light.png" width="100%" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/query-source-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/query-source-light.png" />
+  <img alt="New AWS query source editor showing ec2.DescribeSecurityGroups operation, validated schema, and live dry-run sample items" src="docs/screenshots/query-source-light.png" width="100%" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/rule-editor-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/rule-editor-light.png" />
+  <img alt="CEL rule test editor previewing Okta strong MFA rule against the latest snapshot and listing failing users" src="docs/screenshots/rule-editor-light.png" width="100%" />
+</picture>
+
+### Markdown policies & guarded AI assistant
+
+Author policies and procedures in a rich-text editor that reads and writes plain Markdown with SHA-256 digests on adoption. An optional AI assistant inspects live computed status and drafts policies, controls, or query sources—always behind explicit human review gates ([RFC 0003 §4](https://tools.adversity.dev/rfcs/0003-application/#4-agents)).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/policy-editor-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/policy-editor-light.png" />
+  <img alt="Policy rich-text editor backed by Markdown showing Information Security Policy with headings, lists, and responsibility table" src="docs/screenshots/policy-editor-light.png" width="100%" />
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/assistant-dark.png" />
+  <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/assistant-light.png" />
+  <img alt="AI Assistant drawer summarizing open control gaps via live kernel tool calls" src="docs/screenshots/assistant-light.png" width="100%" />
+</picture>
+
+## Quick start
+
+Run the full local stack (PostgreSQL, SeaweedFS S3, API, seeder with starter Acme Platform data, and Next.js web UI) with Docker Compose:
+
+```bash
+docker compose up --build
+open http://localhost:3000
+```
+
+Or explore the web UI in seconds against built-in fixture data (no database, API, or AWS account required):
+
+```bash
+cd web
+pnpm install
+pnpm dev:mock
+```
+
+See the [self-hosting guide](https://tools.adversity.dev/docs/self-hosting/) for environment variables, OIDC setup, Git snapshot export, and production deployment.
+
+## Architecture & specifications
+
 The shared standard library lives in [`adversitydotdev/ogrl-library`](https://github.com/adversitydotdev/ogrl-library) (browsable at [ogrl.adversity.dev/library](https://ogrl.adversity.dev/library/)). Once an organization pulls a pinned library revision, their database is the source of truth for their program. A scheduled export writes a git snapshot, and the running tool does not read it back. A provider can publish what a service inherits, and a customer does not retype it. The same program renders to OSCAL when a government customer needs that package.
 
 The language specifications are published at [ogrl.adversity.dev](https://ogrl.adversity.dev) from [`ogrl-rfcs`](https://github.com/adversitydotdev/ogrl-rfcs). Fathom's design docs and operator documentation are published at [tools.adversity.dev](https://tools.adversity.dev) from [`ogrl-tooling`](https://github.com/adversitydotdev/ogrl-tooling):
 
+- [Self-hosting guide](https://tools.adversity.dev/docs/self-hosting/)
+- [Live evidence: integrations, query sources, and tests](https://tools.adversity.dev/docs/live-evidence/)
+- [First-party integrations (Okta, GitHub, AWS)](https://tools.adversity.dev/docs/integrations/)
 - [RFC 0001: OGRL Object Model](https://ogrl.adversity.dev/rfcs/0001-object-model/)
 - [RFC 0002: Tooling and Sources of Truth](https://ogrl.adversity.dev/rfcs/0002-tooling/)
 - [RFC 0003: Application Architecture](https://tools.adversity.dev/rfcs/0003-application/) (draft)
@@ -17,7 +113,6 @@ The language specifications are published at [ogrl.adversity.dev](https://ogrl.a
 - [RFC 0005: Integrations](https://tools.adversity.dev/rfcs/0005-integrations/) (draft)
 - [RFC 0006: Query Sources](https://tools.adversity.dev/rfcs/0006-query-sources/) (draft)
 - [RFC 0007: Smithy Query Sources](https://tools.adversity.dev/rfcs/0007-smithy-query-sources/) (draft)
-- [Self-hosting guide](https://tools.adversity.dev/docs/self-hosting/)
 
 ## Estimated monthly cost
 
@@ -52,7 +147,7 @@ That account is [deploy/aws/template.yaml](deploy/aws/template.yaml). The first 
 
 `TaskSize` and `DatabaseInstanceClass` move the two lines already in the table. `medium` is the next task size, 0.5 vCPU and 2 GB.
 
-```
+```bash
 aws ssm put-parameter \
   --name /fathom/fathom/database/password \
   --type SecureString \
@@ -68,7 +163,7 @@ The password cannot contain a slash, an at-sign, a quote, or a space. The stack 
 
 ## Standard Library & CLI Toolchain
 
-Catalog import, strict YAML 1.2 linting/formatting, bundle packing, and OSCAL 1.2.3 rendering are provided by [`adversitydotdev/ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) (consumed in-process via the `ogrl-rs` Python wheel and available as the standalone `fathom` CLI).
+Catalog import, strict YAML 1.2 linting/formatting, bundle packing, and OSCAL 1.2.3 rendering are provided by [`adversitydotdev/ogrl-rs`](https://github.com/adversitydotdev/ogrl-rs) (consumed in-process via the `ogrl-rs` Python wheel and available as the standalone `ogrl` CLI).
 
 ```bash
 # Regenerate pinned NIST SP 800-53 Rev 5 and SP 800-171 Rev 3 catalogs (with assessment objectives)
