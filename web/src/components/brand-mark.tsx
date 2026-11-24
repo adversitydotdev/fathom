@@ -3,13 +3,11 @@ import type { SVGProps } from "react";
 export function FathomMark(props: SVGProps<SVGSVGElement>) {
   return (
     <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
-      <path
-        d="M26.2 16V20.2C26.2 23.51 23.51 26.2 20.2 26.2H11.8C8.49 26.2 5.8 23.51 5.8 20.2V11.8C5.8 8.49 8.49 5.8 11.8 5.8H20.2C22.4 5.8 24.32 6.98 25.36 8.75"
-        stroke="currentColor"
-        strokeWidth="3.8"
-        strokeLinecap="butt"
+      <polygon
+        points="9.3,5 26.5,5 20.9,10.6 11.1,10.6 11.1,13.4 21.5,13.4 15.9,19 5.5,19 5.5,8.8"
+        fill="currentColor"
       />
-      <path d="M15.2 16H28.1" stroke="currentColor" strokeWidth="3.8" strokeLinecap="butt" />
+      <polygon points="5.5,21.4 15.5,21.4 9.9,27 5.5,27" fill="currentColor" />
     </svg>
   );
 }
