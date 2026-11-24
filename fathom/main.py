@@ -26,6 +26,10 @@ FATHOM_S3_ACCESS_KEY_ID / FATHOM_S3_SECRET_ACCESS_KEY   That server's keys. They
                          for the credentials that assume integration roles (RFC 0005).
 FATHOM_S3_PREFIX         Key prefix inside the bucket. Optional.
 FATHOM_BLOB_DIR          A directory instead of S3. Unset with no bucket: memory.
+FATHOM_SEED_BUNDLE_URI   Snapshot restored into an empty database at startup (api process only):
+                         an s3://bucket/key, https URL, or git remote. A `.tar.gz` is read as
+                         the repository form. Skipped when the database already holds
+                         organization objects. See fathom/operations/seed.py.
 FATHOM_EXPORT_REMOTE     Git remote for the snapshot. Unset: export is disabled.
 FATHOM_RUN_SCHEDULER     `true` runs the export schedule in this process (RFC 0003 section 2).
 FATHOM_EXPORT_INTERVAL   Seconds between scheduled exports. Default 86400.
@@ -63,6 +67,7 @@ from fastapi import FastAPI
 from fathom import container, telemetry
 from fathom.access import ActorKind, Principal, Role
 from fathom.adapters.blobs import FileBlobs
+from fathom.adapters.fetch import UrlFetcher
 from fathom.adapters.library import GitLibrary
 from fathom.adapters.queue import JobQueue, SqsJobQueue
 from fathom.adapters.s3 import S3Blobs
@@ -95,6 +100,7 @@ from fathom.operations.providers import ProviderImportRequest
 from fathom.operations.records import Job
 from fathom.operations.renders import RenderRequest
 from fathom.operations.restore import RestoreRequest
+from fathom.operations.seed import seed_organization
 from fathom.operations.store import BlobStore, ObjectStore
 from fathom.persistence.memory import MemoryBlobs, MemoryConnections, MemoryStore
 from fathom.persistence.postgres import PostgresConnections, PostgresStore
@@ -206,6 +212,7 @@ def parse_bind(env: Mapping[str, str]) -> tuple[str, int]:
 def build_from_env(environ: dict[str, str] | None = None) -> container.Container:
     env = dict(os.environ if environ is None else environ)
     repo = env.get("FATHOM_LIBRARY_REPO")
+    seed_uri = env.get("FATHOM_SEED_BUNDLE_URI", "")
     database = database_url_from_env(env)
     store: ObjectStore
     auth_store: AuthStore
@@ -296,6 +303,7 @@ def build_from_env(environ: dict[str, str] | None = None) -> container.Container
         executor=executor,
         queue=queue,
         library_source=GitLibrary(repo) if repo else container.default_library_source(),
+        fetcher=UrlFetcher(s3_uris=frozenset({seed_uri} if seed_uri.startswith("s3://") else ())),
         secrets=secrets_port,
         connections=connections,
         vault=vault,
@@ -411,6 +419,12 @@ def app_from_env() -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         tasks: list[asyncio.Task[None]] = []
+        seed_uri = os.environ.get("FATHOM_SEED_BUNDLE_URI", "")
+        if seed_uri and process_mode == "api":
+            try:
+                await seed_organization(c.restore, seed_uri)
+            except Exception:
+                log.exception("seed bundle could not start; the API starts unseeded")
         if scheduler and c.exports is not None and os.environ.get("FATHOM_EXPORT_REMOTE"):
             tasks.append(asyncio.create_task(export_schedule(c, interval)))
         if scheduler:

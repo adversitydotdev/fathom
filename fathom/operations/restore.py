@@ -14,7 +14,9 @@ records where the copy lives, so the content route still serves it.
 """
 
 import asyncio
+import io
 import shutil
+import tarfile
 import tempfile
 from collections.abc import Callable
 from datetime import datetime
@@ -54,6 +56,26 @@ def is_git(url: str) -> bool:
         or url.startswith(("git@", "ssh://", "git://"))
         or (urlparse(url).scheme in ("", "file") and path.is_dir())
     )
+
+
+ARCHIVE_SUFFIXES = (".tar.gz", ".tgz")
+
+
+def extract_archive(content: bytes, into: Path) -> Path:
+    """A repository-form snapshot as a gzip tarball. Returns the directory holding bundle.yaml.
+
+    Members that would land outside `into`, and links, devices, and the like, are refused.
+    """
+    into.mkdir(parents=True, exist_ok=True)
+    try:
+        with tarfile.open(fileobj=io.BytesIO(content), mode="r:gz") as tar:
+            tar.extractall(into, filter="data")  # noqa: S202
+    except (tarfile.TarError, OSError, EOFError) as exc:
+        raise Invalid(f"the snapshot archive is refused: {exc}") from exc
+    for root in (into, *sorted(p for p in into.iterdir() if p.is_dir())):
+        if (root / "bundle.yaml").is_file():
+            return root
+    raise Invalid("the snapshot archive has no bundle.yaml at its top level")
 
 
 class Snapshot:
@@ -173,6 +195,9 @@ class RestoreService:
             content = await self._fetcher.fetch(request.url)
         except ValueError as exc:
             raise Invalid(f"could not read {request.url}: {exc}") from exc
+        if urlparse(request.url).path.endswith(ARCHIVE_SUFFIXES):
+            root = await asyncio.to_thread(extract_archive, content, workdir / "snapshot")
+            return await asyncio.to_thread(read_tree, root)
         return read_exchange(content)
 
     async def _restore(
