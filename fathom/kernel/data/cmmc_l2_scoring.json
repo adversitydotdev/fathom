@@ -1,0 +1,477 @@
+{
+  "source": {
+    "primary": "32 CFR 170.24(c)(2), Table 7 and paragraphs (c)(2)(i)(B)(1)-(4), eCFR as of 2024-12-16 (CMMC Scoring Methodology)",
+    "fetched_from": "https://www.ecfr.gov/api/versioner/v1/full/2024-12-16/title-32.xml?part=170&section=170.24",
+    "also": "Values equal those of the DoD Assessment Methodology v1.2.1 (June 2020), which 170.24 adopts for Level 2; the methodology document itself was not fetched.",
+    "poam_rules": "32 CFR 170.21(a)(2) and (b), eCFR as of 2024-12-16"
+  },
+  "max_score": 110,
+  "partial": {
+    "requirement--nist-sp-800-171-r2-3-5-3": {
+      "basis": "170.24(c)(2)(i)(B)(4)(i)",
+      "partial_when": "MFA only for remote and privileged users"
+    },
+    "requirement--nist-sp-800-171-r2-3-13-11": {
+      "basis": "170.24(c)(2)(i)(B)(4)(ii)",
+      "partial_when": "encryption employed but not FIPS-validated"
+    }
+  },
+  "poam": {
+    "conditional_min_ratio": 0.8,
+    "max_item_points": 1,
+    "closeout_days": 180,
+    "partial_exception": "requirement--nist-sp-800-171-r2-3-13-11",
+    "never": [
+      "requirement--nist-sp-800-171-r2-3-1-20",
+      "requirement--nist-sp-800-171-r2-3-1-22",
+      "requirement--nist-sp-800-171-r2-3-12-4",
+      "requirement--nist-sp-800-171-r2-3-10-3",
+      "requirement--nist-sp-800-171-r2-3-10-4",
+      "requirement--nist-sp-800-171-r2-3-10-5"
+    ]
+  },
+  "requirements": {
+    "requirement--nist-sp-800-171-r2-3-1-1": {
+      "practice_id": "AC.L2-3.1.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-2": {
+      "practice_id": "AC.L2-3.1.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-3": {
+      "practice_id": "AC.L2-3.1.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-4": {
+      "practice_id": "AC.L2-3.1.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-5": {
+      "practice_id": "AC.L2-3.1.5",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-1-6": {
+      "practice_id": "AC.L2-3.1.6",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-7": {
+      "practice_id": "AC.L2-3.1.7",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-8": {
+      "practice_id": "AC.L2-3.1.8",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-9": {
+      "practice_id": "AC.L2-3.1.9",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-10": {
+      "practice_id": "AC.L2-3.1.10",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-11": {
+      "practice_id": "AC.L2-3.1.11",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-12": {
+      "practice_id": "AC.L2-3.1.12",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-13": {
+      "practice_id": "AC.L2-3.1.13",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-14": {
+      "practice_id": "AC.L2-3.1.14",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-15": {
+      "practice_id": "AC.L2-3.1.15",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-16": {
+      "practice_id": "AC.L2-3.1.16",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-17": {
+      "practice_id": "AC.L2-3.1.17",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-18": {
+      "practice_id": "AC.L2-3.1.18",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-1-19": {
+      "practice_id": "AC.L2-3.1.19",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-1-20": {
+      "practice_id": "AC.L2-3.1.20",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-21": {
+      "practice_id": "AC.L2-3.1.21",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-1-22": {
+      "practice_id": "AC.L2-3.1.22",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-2-1": {
+      "practice_id": "AT.L2-3.2.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-2-2": {
+      "practice_id": "AT.L2-3.2.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-2-3": {
+      "practice_id": "AT.L2-3.2.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-3-1": {
+      "practice_id": "AU.L2-3.3.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-3-2": {
+      "practice_id": "AU.L2-3.3.2",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-3-3": {
+      "practice_id": "AU.L2-3.3.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-3-4": {
+      "practice_id": "AU.L2-3.3.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-3-5": {
+      "practice_id": "AU.L2-3.3.5",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-3-6": {
+      "practice_id": "AU.L2-3.3.6",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-3-7": {
+      "practice_id": "AU.L2-3.3.7",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-3-8": {
+      "practice_id": "AU.L2-3.3.8",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-3-9": {
+      "practice_id": "AU.L2-3.3.9",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-4-1": {
+      "practice_id": "CM.L2-3.4.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-4-2": {
+      "practice_id": "CM.L2-3.4.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-4-3": {
+      "practice_id": "CM.L2-3.4.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-4-4": {
+      "practice_id": "CM.L2-3.4.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-4-5": {
+      "practice_id": "CM.L2-3.4.5",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-4-6": {
+      "practice_id": "CM.L2-3.4.6",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-4-7": {
+      "practice_id": "CM.L2-3.4.7",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-4-8": {
+      "practice_id": "CM.L2-3.4.8",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-4-9": {
+      "practice_id": "CM.L2-3.4.9",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-1": {
+      "practice_id": "IA.L2-3.5.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-5-2": {
+      "practice_id": "IA.L2-3.5.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-5-3": {
+      "practice_id": "IA.L2-3.5.3",
+      "points": 5,
+      "partial_points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-5-4": {
+      "practice_id": "IA.L2-3.5.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-5": {
+      "practice_id": "IA.L2-3.5.5",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-6": {
+      "practice_id": "IA.L2-3.5.6",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-7": {
+      "practice_id": "IA.L2-3.5.7",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-8": {
+      "practice_id": "IA.L2-3.5.8",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-9": {
+      "practice_id": "IA.L2-3.5.9",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-5-10": {
+      "practice_id": "IA.L2-3.5.10",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-5-11": {
+      "practice_id": "IA.L2-3.5.11",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-6-1": {
+      "practice_id": "IR.L2-3.6.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-6-2": {
+      "practice_id": "IR.L2-3.6.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-6-3": {
+      "practice_id": "IR.L2-3.6.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-7-1": {
+      "practice_id": "MA.L2-3.7.1",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-7-2": {
+      "practice_id": "MA.L2-3.7.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-7-3": {
+      "practice_id": "MA.L2-3.7.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-7-4": {
+      "practice_id": "MA.L2-3.7.4",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-7-5": {
+      "practice_id": "MA.L2-3.7.5",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-7-6": {
+      "practice_id": "MA.L2-3.7.6",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-8-1": {
+      "practice_id": "MP.L2-3.8.1",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-8-2": {
+      "practice_id": "MP.L2-3.8.2",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-8-3": {
+      "practice_id": "MP.L2-3.8.3",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-8-4": {
+      "practice_id": "MP.L2-3.8.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-8-5": {
+      "practice_id": "MP.L2-3.8.5",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-8-6": {
+      "practice_id": "MP.L2-3.8.6",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-8-7": {
+      "practice_id": "MP.L2-3.8.7",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-8-8": {
+      "practice_id": "MP.L2-3.8.8",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-8-9": {
+      "practice_id": "MP.L2-3.8.9",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-9-1": {
+      "practice_id": "PS.L2-3.9.1",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-9-2": {
+      "practice_id": "PS.L2-3.9.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-10-1": {
+      "practice_id": "PE.L2-3.10.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-10-2": {
+      "practice_id": "PE.L2-3.10.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-10-3": {
+      "practice_id": "PE.L2-3.10.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-10-4": {
+      "practice_id": "PE.L2-3.10.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-10-5": {
+      "practice_id": "PE.L2-3.10.5",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-10-6": {
+      "practice_id": "PE.L2-3.10.6",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-11-1": {
+      "practice_id": "RA.L2-3.11.1",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-11-2": {
+      "practice_id": "RA.L2-3.11.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-11-3": {
+      "practice_id": "RA.L2-3.11.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-12-1": {
+      "practice_id": "CA.L2-3.12.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-12-2": {
+      "practice_id": "CA.L2-3.12.2",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-12-3": {
+      "practice_id": "CA.L2-3.12.3",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-12-4": {
+      "practice_id": "CA.L2-3.12.4",
+      "ssp_required": true
+    },
+    "requirement--nist-sp-800-171-r2-3-13-1": {
+      "practice_id": "SC.L2-3.13.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-13-2": {
+      "practice_id": "SC.L2-3.13.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-13-3": {
+      "practice_id": "SC.L2-3.13.3",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-4": {
+      "practice_id": "SC.L2-3.13.4",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-5": {
+      "practice_id": "SC.L2-3.13.5",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-13-6": {
+      "practice_id": "SC.L2-3.13.6",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-13-7": {
+      "practice_id": "SC.L2-3.13.7",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-8": {
+      "practice_id": "SC.L2-3.13.8",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-13-9": {
+      "practice_id": "SC.L2-3.13.9",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-10": {
+      "practice_id": "SC.L2-3.13.10",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-11": {
+      "practice_id": "SC.L2-3.13.11",
+      "points": 5,
+      "partial_points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-13-12": {
+      "practice_id": "SC.L2-3.13.12",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-13": {
+      "practice_id": "SC.L2-3.13.13",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-14": {
+      "practice_id": "SC.L2-3.13.14",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-13-15": {
+      "practice_id": "SC.L2-3.13.15",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-13-16": {
+      "practice_id": "SC.L2-3.13.16",
+      "points": 1
+    },
+    "requirement--nist-sp-800-171-r2-3-14-1": {
+      "practice_id": "SI.L2-3.14.1",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-14-2": {
+      "practice_id": "SI.L2-3.14.2",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-14-3": {
+      "practice_id": "SI.L2-3.14.3",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-14-4": {
+      "practice_id": "SI.L2-3.14.4",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-14-5": {
+      "practice_id": "SI.L2-3.14.5",
+      "points": 3
+    },
+    "requirement--nist-sp-800-171-r2-3-14-6": {
+      "practice_id": "SI.L2-3.14.6",
+      "points": 5
+    },
+    "requirement--nist-sp-800-171-r2-3-14-7": {
+      "practice_id": "SI.L2-3.14.7",
+      "points": 3
+    }
+  }
+}

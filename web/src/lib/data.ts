@@ -2,8 +2,8 @@ import "server-only";
 
 import { cache } from "react";
 
-import { api, unwrap } from "./api/client";
-import type { Party } from "./api/types";
+import { ApiError, api, unwrap } from "./api/client";
+import type { Party, Problem } from "./api/types";
 
 type Paged<T> = { data: T[]; page: { next_cursor?: string } };
 
@@ -47,6 +47,16 @@ export const getBaselines = cache(() =>
 export const getProgramSummary = cache((id: string, at?: string) =>
   unwrap(api.GET("/programs/{id}/summary", { params: { path: { id }, query: { at } } })),
 );
+
+/** The CMMC score card's data. A program off CMMC Level 2 answers 404, which is not an error here. */
+export const getProgramSprs = cache(async (id: string, at?: string) => {
+  const { data, error, response } = await api.GET("/programs/{id}/sprs", {
+    params: { path: { id }, query: { at } },
+  });
+  if (response.status === 404) return null;
+  if (error !== undefined || data === undefined) throw new ApiError(response.status, error as Problem | undefined);
+  return data;
+});
 
 export const getProgramStatus = cache((id: string, at?: string, framework_id?: string) =>
   unwrap(api.GET("/programs/{id}/status", { params: { path: { id }, query: { at, framework_id } } })),

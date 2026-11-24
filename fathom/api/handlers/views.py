@@ -50,6 +50,10 @@ def register(registrar: Registrar, c: Container) -> None:
     ):
         return await c.status.program_status(principal, id, at, framework_id)
 
+    async def program_sprs(id: str, principal: CurrentPrincipal, at: At = None):
+        return await c.status.program_sprs(principal, id, at)
+
+    registrar.handle(v.GET_PROGRAM_SPRS, program_sprs)
     registrar.handle(v.GET_EFFECTIVE_BASELINE, effective_baseline)
     registrar.handle(v.LIST_SYSTEM_GAPS, system_gaps)
     registrar.handle(v.GET_PROGRAM_SUMMARY, program_summary)

@@ -10,7 +10,7 @@ from datetime import datetime
 
 from fathom.access import Authorizer, Permission, Principal, require
 from fathom.errors import FieldError, Invalid, NotFound
-from fathom.kernel import baselines, status
+from fathom.kernel import baselines, sprs, status
 from fathom.kernel.graph import Graph
 from fathom.kernel.models import Baseline, Program, System
 from fathom.kernel.timeutil import now, utc
@@ -82,6 +82,19 @@ class StatusService:
         graph, at = await self.graph_at(at)
         program = await self._program(graph, program_id)
         return views.ProgramSummary.of(status.summarize(graph, program, at))
+
+    async def program_sprs(
+        self, principal: Principal, program_id: str, at: datetime | None = None
+    ) -> views.SprsReport:
+        require(self._authorizer, principal, Permission.PROGRAMS_READ)
+        graph, at = await self.graph_at(at)
+        program = await self._program(graph, program_id)
+        try:
+            return views.SprsReport.of(sprs.compute(graph, program, at))
+        except sprs.NotCmmcLevel2 as exc:
+            raise NotFound(str(exc)) from exc
+        except sprs.InvalidInput as exc:
+            raise Invalid(str(exc), errors=[FieldError(str(exc), "/extensions")]) from exc
 
     async def system_gaps(
         self, principal: Principal, system_id: str, at: datetime | None = None

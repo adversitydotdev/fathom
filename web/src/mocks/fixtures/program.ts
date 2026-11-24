@@ -30,6 +30,7 @@ import type {
   Result,
   Risk,
   Snapshot,
+  SprsReport,
   System,
   TemplateUpdate,
   Test,
@@ -558,6 +559,53 @@ export const programs: Program[] = [
   { ...envelope("program", "acme-platform-800-171", at(-180)), name: "NIST 800-171", system_ref: SYSTEM_ID, baseline_ref: "baseline--acme-800-171" },
   { ...envelope("program", "acme-platform-800-53", at(-180)), name: "NIST 800-53 moderate", system_ref: SYSTEM_ID, baseline_ref: "baseline--acme-800-53-moderate" },
 ];
+
+/**
+ * Canned `/programs/{id}/sprs` output. The real endpoint answers only for CMMC Level 2
+ * programs; this mock lets the 800-171 program stand in for one so the score card renders.
+ * The 800-53 program has none, so it covers the 404 path (no card).
+ */
+export const sprsReports: Record<string, SprsReport> = {
+  "program--acme-platform-800-171": {
+    program_id: "program--acme-platform-800-171",
+    at: FIXTURE_NOW,
+    max_score: 110,
+    score: 86,
+    assessable: true,
+    met: 98,
+    not_met: 12,
+    poam: {
+      required: true,
+      eligible: false,
+      reasons: [
+        { code: "score-below-threshold", detail: "score 86/110 is below 80% of the maximum" },
+        { code: "ineligible-items", detail: "2 NOT MET requirements may not be on a POA&M (see items)" },
+      ],
+      items: [
+        {
+          requirement_id: "requirement--nist-sp-800-171-r2-3-1-1",
+          practice_id: "AC.L2-3.1.1",
+          state: "gap",
+          points: 5,
+          partial: false,
+          eligible: false,
+          reasons: [{ code: "points-exceed-limit", detail: "AC.L2-3.1.1 is worth 5 points; a POA&M item may be worth at most 1" }],
+          due: day(70),
+          risk_ids: [],
+        },
+      ],
+      conditional: { status_date: day(-110), expires: day(70), expired: false, days_remaining: 70 },
+    },
+    reminders: {
+      reassessment: { kind: "reassessment", state: "ok", due: day(900), days_until: 900, last: day(-195) },
+      affirmation: { kind: "affirmation", state: "due-soon", due: day(21), days_until: 21, last: day(-344) },
+      affirming_official: "the Chief Information Security Officer",
+      assessment_type: "Level 2 self-assessment",
+      assessment_cadence: "every three years",
+    },
+    notes: [],
+  },
+};
 
 /** Canned kernel output: control id → state and failed conditions. */
 export const controlStates = new Map(

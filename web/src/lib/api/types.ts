@@ -32,6 +32,7 @@ export type TemplateUpdate = S["TemplateUpdate"];
 
 export type ProgramSummary = S["ProgramSummary"];
 export type ProgramStatus = S["ProgramStatus"];
+export type SprsReport = S["SprsReport"];
 export type ControlStatus = S["ControlStatus"];
 export type ControlState = S["ControlState"];
 export type RequirementCoverage = S["RequirementCoverage"];

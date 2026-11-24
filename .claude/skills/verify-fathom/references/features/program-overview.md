@@ -8,6 +8,7 @@
 - control-status: `region "Control status"`, a "Control readiness" card beside "Requirement coverage" (3:2 on wide screens): a ring with percent met, "N gaps to close", "N of M controls met", and inline state links (Met, Gap, Waived, Out of scope) with counts. Gap is red when above 0. "All controls" links to the unfiltered list.
 - requirement-coverage: one row per framework on the baseline, with a bar, percent covered and covered/total, a legend, and the definition behind an info icon (title + sr-only).
 - gaps: up to 6 gap controls, each showing its first failed condition and linking to the control. "+ N more" appears beyond 6. "View all" goes to `controls?state=gap`. With no gaps, a "Every control on the baseline is met…" message.
+- cmmc-score: `region "CMMC score"` between the top cards and Gaps, only when `GET /programs/{id}/sprs` answers (a CMMC Level 2 program; 404 hides it). Shows "score / 110" with met and not-met counts, "POA&M eligible" or "not eligible" with the API's reasons and the conditional-status expiry, and the annual affirmation and three-year reassessment reminders with their due dates. All values come from the API.
 - needs-attention: counts for failing tests, expiring evidence, expiring exceptions, open findings, open risks, and agent drafts.
 - recent-jobs: the 3 newest jobs: type, status (failed jobs show the error title) with duration, date. "View all" goes to Jobs.
 
@@ -28,6 +29,8 @@ pnpm e2e overview
 - Fixture expectations for 800-171 today: 16 met, 6 gap, 1 waived, 2 out of scope (25 total).
 
 ## Gotchas
+
+- Mock mode only: `sprsReports` in `web/src/mocks/fixtures/program.ts` gives the 800-171 program a canned CMMC report so the card renders; the 800-53 program has none and shows no card (`pnpm e2e overview`, shot `overview-cmmc`).
 
 - The Gaps card shows its count as a badge beside the title, outside the `CardTitle`, so `getByText("Gaps", { exact: true })` still matches.
 - The 800-53 program shares controls with 800-171, but its counts differ. Do not hardcode 800-171 numbers in a test that covers both.

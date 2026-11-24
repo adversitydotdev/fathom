@@ -1,4 +1,4 @@
-import { PROGRAM_171, expect, test } from "./fixtures";
+import { PROGRAM_171, PROGRAM_53, expect, test } from "./fixtures";
 
 test("overview shows metrics, coverage, gaps, attention, jobs", async ({ page, shot }) => {
   await page.goto(`/programs/${PROGRAM_171}`);
@@ -36,4 +36,25 @@ test("a gap row opens the control in the side panel", async ({ page }) => {
 test("?at re-evaluates and is shown", async ({ page }) => {
   await page.goto(`/programs/${PROGRAM_171}?at=2026-09-01`);
   await expect(page.getByText("Evaluated at")).toContainText("2026-09-01");
+});
+
+test("CMMC score card renders the API report", async ({ page, shot }) => {
+  await page.goto(`/programs/${PROGRAM_171}`);
+  const card = page.getByRole("region", { name: "CMMC score" });
+  await expect(card.getByText("CMMC Level 2 score")).toBeVisible();
+  await expect(card).toContainText("86 / 110");
+  await expect(card).toContainText("98 met, 12 not met");
+  await expect(card).toContainText("POA&M not eligible");
+  await expect(card).toContainText("score 86/110 is below 80% of the maximum");
+  await expect(card).toContainText("Conditional status expires");
+  await expect(card).toContainText("Annual affirmation");
+  await expect(card).toContainText("Due soon");
+  await expect(card).toContainText("Three-year reassessment");
+  await shot("overview-cmmc");
+});
+
+test("a program off CMMC Level 2 shows no score card", async ({ page }) => {
+  await page.goto(`/programs/${PROGRAM_53}`);
+  await expect(page.getByRole("region", { name: "Control status" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "CMMC score" })).toHaveCount(0);
 });

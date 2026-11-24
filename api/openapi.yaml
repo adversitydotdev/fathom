@@ -1520,6 +1520,48 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "404":
           $ref: "#/components/responses/NotFound"
+  /programs/{id}/sprs:
+    get:
+      tags: [Programs]
+      operationId: getProgramSprs
+      summary: SPRS score, POA&M eligibility, and CMMC reminders.
+      description: |
+        For a program on a CMMC Level 2 baseline (`extensions["dev.ogrl.cmmc"].level`
+        is 2). The score is 110 minus the weight of every NOT MET requirement
+        (32 CFR 170.24; weights in `fathom/kernel/data/cmmc_l2_scoring.json`).
+        A requirement is MET only when RFC 0001 section 8 computes it `covered`;
+        `contribution`, `gap`, and `unmapped` are NOT MET. POA&M eligibility is
+        32 CFR 170.21. `assessable` is false when CA.L2-3.12.4 (the SSP) is not
+        met; the score is then indicative only.
+
+        Inputs outside RFC 0001 are read from the program's
+        `extensions["dev.ogrl.cmmc"]`: `assessment_date`,
+        `conditional_status_date`, `last_affirmation_date` (ISO dates) and
+        `partial_credit` (practice IDs IA.L2-3.5.3 and SC.L2-3.13.11 that an
+        assessor attests are partially effective). Clients display the result.
+        They do not recompute it.
+
+        404 when the program is not on a CMMC Level 2 baseline.
+      parameters:
+        - $ref: "#/components/parameters/id"
+        - name: at
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: The report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SprsReport"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
   /programs/{id}/renders:
     post:
       tags: [Programs]
@@ -5616,6 +5658,140 @@ components:
         state:
           $ref: "#/components/schemas/RequirementState"
         mapping_ids:
+          type: array
+          items:
+            type: string
+    SprsReason:
+      type: object
+      required: [code, detail]
+      properties:
+        code:
+          type: string
+          description: One of `no-ssp`, `score-below-threshold`, `ineligible-items`, `never-on-poam`, `points-exceed-limit`.
+        detail:
+          type: string
+    PoamItem:
+      type: object
+      description: One NOT MET requirement, which needs a POA&M line.
+      required: [requirement_id, practice_id, state, points, partial, eligible, reasons, risk_ids]
+      properties:
+        requirement_id:
+          type: string
+        practice_id:
+          type: string
+          example: AC.L2-3.1.1
+        state:
+          type: string
+          description: The requirement's coverage state, or `not-in-baseline`.
+        points:
+          type: integer
+          description: Points the requirement costs, with attested partial credit applied.
+        partial:
+          type: boolean
+        eligible:
+          type: boolean
+        reasons:
+          type: array
+          description: Why the item may not be on a POA&M. Empty when eligible.
+          items:
+            $ref: "#/components/schemas/SprsReason"
+        due:
+          type: string
+          format: date
+          description: Closeout deadline, 180 days after the conditional status date. Absent until one is set.
+        risk_ids:
+          type: array
+          description: Open risks on the controls that do not yet meet this requirement.
+          items:
+            type: string
+    SprsReminder:
+      type: object
+      required: [kind, state]
+      properties:
+        kind:
+          type: string
+          enum: [reassessment, affirmation]
+        state:
+          type: string
+          enum: [unscheduled, ok, due-soon, overdue]
+        due:
+          type: string
+          format: date
+        days_until:
+          type: integer
+        last:
+          type: string
+          format: date
+    SprsReport:
+      type: object
+      required: [program_id, at, max_score, score, assessable, met, not_met, poam, reminders, notes]
+      properties:
+        program_id:
+          type: string
+        at:
+          type: string
+          format: date-time
+        max_score:
+          type: integer
+          example: 110
+        score:
+          type: integer
+          description: May be negative, down to -203.
+        assessable:
+          type: boolean
+        assessable_reason:
+          type: string
+        met:
+          type: integer
+        not_met:
+          type: integer
+        poam:
+          type: object
+          required: [required, eligible, reasons, items]
+          properties:
+            required:
+              type: boolean
+              description: True when any requirement is NOT MET.
+            eligible:
+              type: boolean
+              description: Conditional status is possible under 32 CFR 170.21.
+            reasons:
+              type: array
+              items:
+                $ref: "#/components/schemas/SprsReason"
+            items:
+              type: array
+              items:
+                $ref: "#/components/schemas/PoamItem"
+            conditional:
+              type: object
+              required: [status_date, expires, expired, days_remaining]
+              properties:
+                status_date:
+                  type: string
+                  format: date
+                expires:
+                  type: string
+                  format: date
+                expired:
+                  type: boolean
+                days_remaining:
+                  type: integer
+        reminders:
+          type: object
+          required: [reassessment, affirmation]
+          properties:
+            reassessment:
+              $ref: "#/components/schemas/SprsReminder"
+            affirmation:
+              $ref: "#/components/schemas/SprsReminder"
+            affirming_official:
+              type: string
+            assessment_type:
+              type: string
+            assessment_cadence:
+              type: string
+        notes:
           type: array
           items:
             type: string
